@@ -223,14 +223,22 @@ export default function AdminPage() {
 
   const handleToggleVip = async (userId: string, currentVip: boolean) => {
     try {
+      const userObj = users.find((u) => u.id === userId);
+      const newVip = !currentVip;
       const res = await fetch("/api/admin/users", {
         method: "PUT",
         headers: getAuthHeaders(),
-        body: JSON.stringify({ userId, isVip: !currentVip }),
+        body: JSON.stringify({ 
+          userId, 
+          email: userObj?.email,
+          isVip: newVip,
+          tier: newVip ? "vip" : "free",
+          subscriptionDays: newVip ? 30 : 0,
+        }),
       });
       if (res.ok) {
         setUsers((prev) =>
-          prev.map((u) => (u.id === userId ? { ...u, isVip: !currentVip } : u))
+          prev.map((u) => (u.id === userId ? { ...u, isVip: newVip, tier: newVip ? "vip" : "free" } : u))
         );
       }
     } catch {
@@ -270,6 +278,7 @@ export default function AdminPage() {
         headers: getAuthHeaders(),
         body: JSON.stringify({
           userId: editingUser.id,
+          email: editingUser.email,
           tier: editUserTier,
           isVip: editUserTier === "vip",
           subscriptionDays: Number(editUserDays),

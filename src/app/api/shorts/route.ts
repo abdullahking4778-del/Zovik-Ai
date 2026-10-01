@@ -3,12 +3,24 @@ import fs from "fs";
 import path from "path";
 import { verifyAdminRequest } from "@/lib/adminAuth";
 
-const SHORTS_FILE = path.join(process.cwd(), "src", "data", "shorts.json");
+function getShortsFilePath(): string {
+  if (process.env.VERCEL) {
+    return path.join("/tmp", "zovik_shorts.json");
+  }
+  return path.join(process.cwd(), "src", "data", "shorts.json");
+}
 
 function getShorts() {
   try {
-    if (!fs.existsSync(SHORTS_FILE)) return [];
-    const data = fs.readFileSync(SHORTS_FILE, "utf-8");
+    const filePath = getShortsFilePath();
+    if (!fs.existsSync(filePath)) {
+      const fallback = path.join(process.cwd(), "src", "data", "shorts.json");
+      if (fs.existsSync(fallback)) {
+        return JSON.parse(fs.readFileSync(fallback, "utf-8") || "[]");
+      }
+      return [];
+    }
+    const data = fs.readFileSync(filePath, "utf-8");
     return JSON.parse(data || "[]");
   } catch {
     return [];
@@ -16,12 +28,13 @@ function getShorts() {
 }
 
 function saveShorts(shorts: any[]) {
-  const tmpPath = `${SHORTS_FILE}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`;
+  const filePath = getShortsFilePath();
+  const tmpPath = `${filePath}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`;
   try {
-    const dir = path.dirname(SHORTS_FILE);
+    const dir = path.dirname(filePath);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(tmpPath, JSON.stringify(shorts, null, 2), "utf-8");
-    fs.renameSync(tmpPath, SHORTS_FILE);
+    fs.renameSync(tmpPath, filePath);
   } catch (err) {
     console.error("Failed to save shorts:", err);
     try {

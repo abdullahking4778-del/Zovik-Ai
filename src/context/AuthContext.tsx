@@ -80,6 +80,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     if (typeof window !== "undefined") {
       const savedLogin = localStorage.getItem("zovik_logged_in") === "true";
       setIsLocallyLoggedIn(savedLogin);
+      const savedTier = localStorage.getItem("zovik_tier");
+      if (savedTier) setTier(savedTier);
       const savedUserStr = localStorage.getItem("zovik_user_cache");
       if (savedUserStr) {
         try {
@@ -138,7 +140,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
               setTier(currentTier);
 
               if (typeof window !== "undefined") {
+                localStorage.setItem("zovik_tier", currentTier);
+                localStorage.setItem("zovik_is_vip", (currentTier === "vip" || currentTier === "plus") ? "true" : "false");
                 localStorage.setItem("zovik_user_cache", JSON.stringify(data));
+                window.dispatchEvent(new CustomEvent("zovik_tier_changed", { detail: { tier: currentTier } }));
               }
             } else {
               // Create document if doesn't exist
@@ -155,10 +160,44 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
               setUserData(initialData);
               setTier("free");
               if (typeof window !== "undefined") {
+                localStorage.setItem("zovik_tier", "free");
+                localStorage.setItem("zovik_is_vip", "false");
                 localStorage.setItem("zovik_user_cache", JSON.stringify(initialData));
               }
             }
           });
+
+          // Check authoritative server status for instant VIP / Plus grants
+          fetch(`/api/user/status?email=${encodeURIComponent(currentUser.email || "")}&uid=${currentUser.uid}`)
+            .then((res) => res.json())
+            .then(async (statusData) => {
+              if (statusData && statusData.tier && statusData.tier !== "free") {
+                setTier(statusData.tier);
+                setUserData((prev) => ({
+                  ...(prev || { email: currentUser.email, zovik_tier: statusData.tier }),
+                  zovik_tier: statusData.tier,
+                  subscriptionEndsAt: statusData.subscriptionEndsAt,
+                  storageRetentionDays: statusData.storageRetentionDays,
+                }));
+
+                if (typeof window !== "undefined") {
+                  localStorage.setItem("zovik_tier", statusData.tier);
+                  localStorage.setItem("zovik_is_vip", (statusData.tier === "vip" || statusData.tier === "plus") ? "true" : "false");
+                  window.dispatchEvent(new CustomEvent("zovik_tier_changed", { detail: { tier: statusData.tier } }));
+                }
+
+                // Client-side self-sync to Firestore (authorized under user's own auth token)
+                try {
+                  const uRef = doc(db, "users", currentUser.uid);
+                  await updateDoc(uRef, {
+                    zovik_tier: statusData.tier,
+                    subscriptionEndsAt: statusData.subscriptionEndsAt,
+                    storageRetentionDays: statusData.storageRetentionDays,
+                  });
+                } catch {}
+              }
+            })
+            .catch(() => {});
         } catch (error) {
           console.error("Error setting up user snapshot in Firestore:", error);
         }
@@ -169,6 +208,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         if (typeof window !== "undefined") {
           localStorage.removeItem("zovik_logged_in");
           localStorage.removeItem("zovik_user_cache");
+          localStorage.removeItem("zovik_tier");
+          localStorage.removeItem("zovik_is_vip");
+          window.dispatchEvent(new CustomEvent("zovik_tier_changed", { detail: { tier: "free" } }));
         }
       }
       setLoading(false);

@@ -1,1 +1,30 @@
-[]
+[
+  {
+    "id": "testvip@zovik.ai",
+    "email": "testvip@zovik.ai",
+    "name": "testvip",
+    "photoURL": null,
+    "tier": "vip",
+    "isVip": true,
+    "subscriptionDays": 30,
+    "subscriptionStart": "2026-10-01T09:00:44.118Z",
+    "subscriptionEndsAt": "2026-10-31T09:00:44.118Z",
+    "storageRetentionDays": 35,
+    "createdAt": "2026-10-01T09:00:44.119Z",
+    "lastLoginAt": "2026-10-01T09:00:44.119Z"
+  },
+  {
+    "id": "usr_plus_123",
+    "email": "testplus@zovik.ai",
+    "name": "testplus",
+    "photoURL": null,
+    "tier": "plus",
+    "isVip": false,
+    "subscriptionDays": 30,
+    "subscriptionStart": "2026-10-01T09:01:05.698Z",
+    "subscriptionEndsAt": "2026-10-31T09:01:05.698Z",
+    "storageRetentionDays": 30,
+    "createdAt": "2026-10-01T09:01:05.698Z",
+    "lastLoginAt": "2026-10-01T09:01:05.704Z"
+  }
+]

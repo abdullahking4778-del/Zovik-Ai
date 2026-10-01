@@ -26,6 +26,7 @@ import {
 import { Character, Message } from "@/types";
 import { getSafeStreamUrl, fetchVideoBlobUrl } from "@/lib/videoHelper";
 import { auth } from "@/lib/firebase";
+import { useAuth } from "@/context/AuthContext";
 
 interface ChatModalProps {
   character: Character | null;
@@ -157,6 +158,7 @@ export default function ChatModal({
   onStartCall,
   openPremiumModal,
 }: ChatModalProps) {
+  const { tier: authTier } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState("");
   const [isTyping, setIsTyping] = useState(false);
@@ -186,17 +188,17 @@ export default function ChatModal({
   const [copiedMsgIdx, setCopiedMsgIdx] = useState<number | null>(null);
 
   useEffect(() => {
-    const savedUser = localStorage.getItem("zovik_user");
-    const directTier = localStorage.getItem("zovik_tier");
-    const directVip = localStorage.getItem("zovik_is_vip");
+    const directTier = typeof window !== "undefined" ? localStorage.getItem("zovik_tier") : null;
+    const directVip = typeof window !== "undefined" ? localStorage.getItem("zovik_is_vip") : null;
     
     let tier: "free" | "plus" | "vip" = "free";
-    if (directTier === "vip" || directVip === "true") {
+    if (authTier === "vip" || directTier === "vip" || directVip === "true") {
       tier = "vip";
-    } else if (directTier === "plus") {
+    } else if (authTier === "plus" || directTier === "plus") {
       tier = "plus";
     }
 
+    const savedUser = typeof window !== "undefined" ? localStorage.getItem("zovik_user") : null;
     if (savedUser) {
       try {
         const u = JSON.parse(savedUser);
@@ -235,7 +237,7 @@ export default function ChatModal({
     const hoursLeft = Math.floor(msLeft / (1000 * 60 * 60));
     const minsLeft = Math.floor((msLeft % (1000 * 60 * 60)) / (1000 * 60));
     setTimeUntilReset(`${hoursLeft}h ${minsLeft}m`);
-  }, []);
+  }, [authTier]);
 
   // Load chat history from localStorage or greeting (Candy.ai style companion introductory video)
   useEffect(() => {
@@ -611,7 +613,7 @@ export default function ChatModal({
     if (isTyping) return;
 
     // Free users cannot view private selfies - guide them to upgrade
-    if (userTier === "free" || !isVipUser) {
+    if (userTier === "free" && !isVipUser) {
       openPremiumModal();
       return;
     }

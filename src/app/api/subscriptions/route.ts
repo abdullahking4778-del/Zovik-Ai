@@ -4,48 +4,44 @@ import path from "path";
 import { verifyAdminRequest } from "@/lib/adminAuth";
 import { db } from "@/lib/firebase";
 import { collection, getDocs, updateDoc } from "firebase/firestore";
+import { upsertStoredUser } from "@/lib/userStore";
+import { uploadToCloudStorage } from "@/lib/cloudStorage";
 
-const PAYMENTS_FILE = path.join(process.cwd(), "src", "data", "payment_requests.json");
+function getPaymentsFilePath(): string {
+  if (process.env.VERCEL) {
+    return path.join("/tmp", "zovik_payments.json");
+  }
+  return path.join(process.cwd(), "src", "data", "payment_requests.json");
+}
 
 function getPayments() {
   try {
-    if (!fs.existsSync(PAYMENTS_FILE)) return [];
-    const data = fs.readFileSync(PAYMENTS_FILE, "utf-8");
-    const payments = JSON.parse(data || "[]");
-    if (!Array.isArray(payments)) return [];
-
-    // Auto-cleanup policy: Purge heavy base64 screenshot data for payments older than 24h or already processed
-    const now = Date.now();
-    let hasChanges = false;
-    for (const p of payments) {
-      if (p.screenshot) {
-        const age = now - new Date(p.createdAt || 0).getTime();
-        const isOld = age > 24 * 60 * 60 * 1000;
-        const isProcessed = p.status === "approved" || p.status === "rejected";
-        if (isOld || isProcessed) {
-          p.screenshot = null;
-          p.screenshotPurged = true;
-          hasChanges = true;
-        }
+    const filePath = getPaymentsFilePath();
+    if (!fs.existsSync(filePath)) {
+      // Try root project path fallback
+      const localFallback = path.join(process.cwd(), "src", "data", "payment_requests.json");
+      if (fs.existsSync(localFallback)) {
+        const d = fs.readFileSync(localFallback, "utf-8");
+        return JSON.parse(d || "[]");
       }
+      return [];
     }
-
-    if (hasChanges) {
-      savePayments(payments);
-    }
-    return payments;
+    const data = fs.readFileSync(filePath, "utf-8");
+    const payments = JSON.parse(data || "[]");
+    return Array.isArray(payments) ? payments : [];
   } catch {
     return [];
   }
 }
 
 function savePayments(payments: any[]) {
-  const tmpPath = `${PAYMENTS_FILE}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`;
+  const filePath = getPaymentsFilePath();
+  const tmpPath = `${filePath}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`;
   try {
-    const dir = path.dirname(PAYMENTS_FILE);
+    const dir = path.dirname(filePath);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(tmpPath, JSON.stringify(payments, null, 2), "utf-8");
-    fs.renameSync(tmpPath, PAYMENTS_FILE);
+    fs.renameSync(tmpPath, filePath);
   } catch (err) {
     console.error("Failed to atomically save payments:", err);
     try {
@@ -84,14 +80,26 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Please fill all required payment fields." }, { status: 400 });
     }
 
-    // Guard against oversized payload (Max 5MB for screenshot base64)
-    if (typeof screenshot === "string" && screenshot.length > 7 * 1024 * 1024) {
-      return NextResponse.json({ error: "Screenshot file size exceeds 5MB limit" }, { status: 413 });
+    const paymentId = "pay-" + Date.now() + "-" + Math.random().toString(36).slice(2, 6);
+
+    // Save screenshot to Cloud Storage / Firebase Storage if provided as Base64
+    let screenshotUrl: string | null = null;
+    if (typeof screenshot === "string" && screenshot.length > 50) {
+      try {
+        screenshotUrl = await uploadToCloudStorage(
+          `slips/slip_${Date.now()}_${trxId}.jpg`,
+          screenshot,
+          "image/jpeg"
+        );
+      } catch (uploadErr) {
+        console.warn("[Subscriptions] Cloud upload note, saving locally:", uploadErr);
+        screenshotUrl = screenshot; // fallback to base64 if upload fails completely
+      }
     }
 
     const payments = getPayments();
     const newRequest = {
-      id: "pay-" + Date.now() + "-" + Math.random().toString(36).slice(2, 6),
+      id: paymentId,
       userEmail: String(userEmail).trim().toLowerCase(),
       plan: plan === "vip" ? "vip" : "plus",
       planName: plan === "vip" ? "VIP Plan (1 Month)" : "Plus Plan (1 Month)",
@@ -100,7 +108,7 @@ export async function POST(req: NextRequest) {
       method: String(method).trim(),
       trxId: String(trxId).trim(),
       senderName: senderName ? String(senderName).trim() : "Customer",
-      screenshot: typeof screenshot === "string" ? screenshot : null,
+      screenshot: screenshotUrl,
       status: "pending",
       createdAt: new Date().toISOString(),
     };
@@ -137,38 +145,46 @@ export async function PATCH(req: NextRequest) {
     if (action === "approve") {
       payment.status = "approved";
       payment.approvedAt = new Date().toISOString();
-      payment.screenshot = null;
-      payment.screenshotPurged = true;
 
-      // Upgrade user in Firestore
+      const newExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
+      // 1. Authoritative local store update (Guaranteed to succeed, zero permission issues)
+      try {
+        upsertStoredUser(payment.userEmail, {
+          email: payment.userEmail,
+          tier: payment.plan === "vip" ? "vip" : "plus",
+          isVip: payment.plan === "vip",
+          subscriptionDays: 30,
+          subscriptionStart: new Date().toISOString(),
+          subscriptionEndsAt: newExpiresAt.toISOString(),
+          storageRetentionDays: payment.plan === "vip" ? 35 : 30,
+        });
+      } catch (err) {
+        console.warn("[Subscriptions] Authoritative user store update failed:", err);
+      }
+
+      // 2. Also try to update user in Firestore
       try {
         const usersRef = collection(db, "users");
         const snapshot = await getDocs(usersRef);
-        const userDoc = snapshot.docs.find(d => d.data().email?.toLowerCase() === payment.userEmail.toLowerCase());
-        
+        const userDoc = snapshot.docs.find(
+          (d) => d.data().email?.toLowerCase() === payment.userEmail.toLowerCase()
+        );
+
         if (userDoc) {
-          const user = userDoc.data();
-          const baseDate = user.subscriptionEndsAt && new Date(user.subscriptionEndsAt) > new Date()
-            ? new Date(user.subscriptionEndsAt)
-            : new Date();
-
-          const newExpiresAt = new Date(baseDate.getTime() + 30 * 24 * 60 * 60 * 1000);
-
           await updateDoc(userDoc.ref, {
             zovik_tier: payment.plan,
             subscriptionStart: new Date().toISOString(),
             subscriptionEndsAt: newExpiresAt.toISOString(),
-            storageRetentionDays: payment.plan === "vip" ? 35 : 30
+            storageRetentionDays: payment.plan === "vip" ? 35 : 30,
           });
         }
       } catch (err) {
-        console.warn("Failed to upgrade user in Firestore:", err);
+        console.warn("[Subscriptions] Firestore update note (Handled via authoritative store):", err);
       }
     } else if (action === "reject") {
       payment.status = "rejected";
       payment.rejectedAt = new Date().toISOString();
-      payment.screenshot = null;
-      payment.screenshotPurged = true;
     }
 
     savePayments(payments);

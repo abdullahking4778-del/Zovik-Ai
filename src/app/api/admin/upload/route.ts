@@ -4,23 +4,39 @@ import path from "path";
 import sharp from "sharp";
 import AdmZip from "adm-zip";
 import { verifyAdminRequest } from "@/lib/adminAuth";
+import { uploadToCloudStorage } from "@/lib/cloudStorage";
 
-const SHORTS_FILE = path.join(process.cwd(), "src", "data", "shorts.json");
+function getShortsFilePath(): string {
+  if (process.env.VERCEL) {
+    return path.join("/tmp", "zovik_shorts.json");
+  }
+  return path.join(process.cwd(), "src", "data", "shorts.json");
+}
 
 function getShorts() {
   try {
-    if (!fs.existsSync(SHORTS_FILE)) return [];
-    return JSON.parse(fs.readFileSync(SHORTS_FILE, "utf-8"));
+    const filePath = getShortsFilePath();
+    if (!fs.existsSync(filePath)) {
+      const fallback = path.join(process.cwd(), "src", "data", "shorts.json");
+      if (fs.existsSync(fallback)) {
+        return JSON.parse(fs.readFileSync(fallback, "utf-8") || "[]");
+      }
+      return [];
+    }
+    return JSON.parse(fs.readFileSync(filePath, "utf-8") || "[]");
   } catch {
     return [];
   }
 }
 
 function saveShorts(shorts: any[]) {
-  const tmpPath = `${SHORTS_FILE}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`;
+  const filePath = getShortsFilePath();
+  const tmpPath = `${filePath}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`;
   try {
+    const dir = path.dirname(filePath);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(tmpPath, JSON.stringify(shorts, null, 2), "utf-8");
-    fs.renameSync(tmpPath, SHORTS_FILE);
+    fs.renameSync(tmpPath, filePath);
   } catch (err) {
     console.error("Failed to save shorts:", err);
     try {
@@ -49,12 +65,6 @@ export async function POST(req: NextRequest) {
     const buffer = Buffer.from(await file.arrayBuffer());
     const originalName = file.name.toLowerCase();
 
-    // Prepare destination directories
-    const shortsDir = path.join(process.cwd(), "public", "videos", "shorts");
-    const charsDir = path.join(process.cwd(), "public", "characters");
-    if (!fs.existsSync(shortsDir)) fs.mkdirSync(shortsDir, { recursive: true });
-    if (!fs.existsSync(charsDir)) fs.mkdirSync(charsDir, { recursive: true });
-
     const results: { url: string; type: "video" | "image"; name: string }[] = [];
 
     // ================= 1. HANDLE ZIP ARCHIVE =================
@@ -74,9 +84,11 @@ export async function POST(req: NextRequest) {
         // Video inside ZIP
         if (entryName.endsWith(".mp4") || entryName.endsWith(".webm") || entryName.endsWith(".mov")) {
           const fileName = `reel_${Date.now()}_${safeBaseName}`;
-          const destPath = path.join(shortsDir, fileName);
-          fs.writeFileSync(destPath, entry.getData());
-          const videoUrl = `/videos/shorts/${fileName}`;
+          const videoUrl = await uploadToCloudStorage(
+            `videos/shorts/${fileName}`,
+            entry.getData(),
+            "video/mp4"
+          );
           results.push({ url: videoUrl, type: "video", name: entry.name });
 
           if (createReel || targetType === "reel") {
@@ -97,25 +109,20 @@ export async function POST(req: NextRequest) {
         // Image inside ZIP
         if (entryName.endsWith(".jpg") || entryName.endsWith(".jpeg") || entryName.endsWith(".png") || entryName.endsWith(".webp")) {
           const fileName = `char_${Date.now()}_${safeBaseName.replace(/\.[^/.]+$/, "")}.webp`;
-          const destPath = path.join(charsDir, fileName);
-          
+          let imgData = entry.getData();
           try {
-            await sharp(entry.getData())
+            imgData = await sharp(entry.getData())
               .resize({ width: 1200, withoutEnlargement: true })
               .webp({ quality: 85 })
-              .toFile(destPath);
+              .toBuffer();
+          } catch {}
 
-            results.push({
-              url: `/characters/${fileName}`,
-              type: "image",
-              name: entry.name,
-            });
-          } catch {
-            // Fallback raw copy if sharp fails on corrupt format
-            const rawPath = path.join(charsDir, fileName);
-            fs.writeFileSync(rawPath, entry.getData());
-            results.push({ url: `/characters/${fileName}`, type: "image", name: entry.name });
-          }
+          const imageUrl = await uploadToCloudStorage(
+            `characters/${fileName}`,
+            imgData,
+            "image/webp"
+          );
+          results.push({ url: imageUrl, type: "image", name: entry.name });
         }
       }
 
@@ -139,9 +146,11 @@ export async function POST(req: NextRequest) {
       originalName.endsWith(".m4v")
     ) {
       const safeName = `reel_${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
-      const destPath = path.join(shortsDir, safeName);
-      fs.writeFileSync(destPath, buffer);
-      const videoUrl = `/videos/shorts/${safeName}`;
+      const videoUrl = await uploadToCloudStorage(
+        `videos/shorts/${safeName}`,
+        buffer,
+        file.type || "video/mp4"
+      );
 
       if (createReel || targetType === "reel") {
         const shortsList = getShorts();
@@ -183,18 +192,20 @@ export async function POST(req: NextRequest) {
     ) {
       const safeBase = file.name.replace(/\.[^/.]+$/, "").replace(/[^a-zA-Z0-9_-]/g, "_");
       const fileName = `char_${Date.now()}_${safeBase}.webp`;
-      const destPath = path.join(charsDir, fileName);
-
+      let imgData = buffer;
       try {
-        await sharp(buffer)
+        imgData = await sharp(buffer)
           .resize({ width: 1200, withoutEnlargement: true })
           .webp({ quality: 85 })
-          .toFile(destPath);
-      } catch {
-        fs.writeFileSync(destPath, buffer);
-      }
+          .toBuffer();
+      } catch {}
 
-      const imageUrl = `/characters/${fileName}`;
+      const imageUrl = await uploadToCloudStorage(
+        `characters/${fileName}`,
+        imgData,
+        "image/webp"
+      );
+
       return NextResponse.json({
         success: true,
         type: "image",

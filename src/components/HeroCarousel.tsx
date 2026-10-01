@@ -2,7 +2,8 @@
 
 import React, { useState } from "react";
 import Image from "next/image";
-import { ChevronLeft, ChevronRight, Sparkles, Flame, ShieldCheck, Heart } from "lucide-react";
+import { ChevronLeft, ChevronRight, Sparkles, Flame, ShieldCheck, Heart, Crown } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
 
 interface HeroCarouselProps {
   genderFilter?: "female" | "male" | "anime";
@@ -16,6 +17,10 @@ export default function HeroCarousel({
   openCreateModal,
 }: HeroCarouselProps) {
   const [currentSlide, setCurrentSlide] = useState(0);
+  const { tier: authTier } = useAuth();
+  const isVip = authTier === "vip";
+  const isPlus = authTier === "plus";
+  const isSubscriber = isVip || isPlus;
 
   const heroImage =
     genderFilter === "male"
@@ -43,13 +48,17 @@ export default function HeroCarousel({
       action: "explore",
     },
     {
-      title: "Exclusive Private Vault & Photos",
-      subtitle: "Unlock HD uncensored photos, private albums, and personal video messages.",
-      badge: "VIP CONTENT",
-      bgGradient: "from-[#1b1035] via-[#150f25] to-[#0d0a0f]",
+      title: isSubscriber ? "Your Exclusive VIP Private Vault" : "Exclusive Private Vault & Photos",
+      subtitle: isSubscriber
+        ? "Your VIP status gives you full access to HD uncensored photos and private albums."
+        : "Unlock HD uncensored photos, private albums, and personal video messages.",
+      badge: isVip ? "VIP UNLOCKED 👑" : isPlus ? "PLUS ACTIVE ⭐" : "VIP CONTENT",
+      bgGradient: isSubscriber
+        ? "from-[#291708] via-[#1a0f25] to-[#0d0a0f]"
+        : "from-[#1b1035] via-[#150f25] to-[#0d0a0f]",
       image: "/characters/zovik_02.jpg",
-      cta: "Unlock VIP -70%",
-      action: "vip",
+      cta: isSubscriber ? "VIP Sanctuary Active 👑" : "Unlock VIP -70%",
+      action: isSubscriber ? "explore" : "vip",
     },
     {
       title: "Create Your Custom AI Girl or Guy",
