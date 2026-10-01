@@ -135,8 +135,9 @@ export async function PUT(req: NextRequest) {
         storageRetentionDays: retention,
       },
     });
-  } catch (e: any) {
-    return NextResponse.json({ error: e?.message || "Failed to update user" }, { status: 500 });
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : "Failed to update user";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
@@ -170,7 +171,8 @@ export async function DELETE(req: NextRequest) {
     }
 
     return NextResponse.json({ success: true, message: "User deleted successfully" });
-  } catch (e: any) {
-    return NextResponse.json({ error: e?.message || "Failed to delete user" }, { status: 500 });
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : "Failed to delete user";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

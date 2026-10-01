@@ -20,7 +20,7 @@ import ShortsModal from "@/components/ShortsModal";
 import PwaInstallModal from "@/components/PwaInstallModal";
 import UserProfileModal from "@/components/UserProfileModal";
 import rawCharacters from "@/data/characters.json";
-import { Character } from "@/types";
+import { Character, Message, SavedPhoto } from "@/types";
 import Image from "next/image";
 import { useAuth } from "@/context/AuthContext";
 import {
@@ -61,8 +61,8 @@ export default function Home() {
   } = useAuth();
 
   // Private VIP Gallery states
-  const [generatedPhotos, setGeneratedPhotos] = useState<any[]>([]);
-  const [viewingPhoto, setViewingPhoto] = useState<any | null>(null);
+  const [generatedPhotos, setGeneratedPhotos] = useState<SavedPhoto[]>([]);
+  const [viewingPhoto, setViewingPhoto] = useState<SavedPhoto | null>(null);
 
   // Liked/Collection Characters ID state
   const [likedIds, setLikedIds] = useState<string[]>([]);
@@ -242,7 +242,7 @@ export default function Home() {
       if (savedPhotosStr) {
         const photos = JSON.parse(savedPhotosStr);
         if (Array.isArray(photos)) {
-          const freshPhotos = photos.filter((p: any) => {
+          const freshPhotos = photos.filter((p: SavedPhoto) => {
             const created = p.createdAt || now;
             return now - created <= maxAgeMs;
           });
@@ -262,7 +262,7 @@ export default function Home() {
             if (rawChat) {
               const msgs = JSON.parse(rawChat);
               if (Array.isArray(msgs)) {
-                const freshMsgs = msgs.filter((m: any) => {
+                const freshMsgs = msgs.filter((m: Message) => {
                   if (!m.timestamp) return true; // keep initial greeting
                   return now - m.timestamp <= maxAgeMs;
                 });
@@ -398,7 +398,7 @@ export default function Home() {
           if (raw) {
             const msgs = JSON.parse(raw);
             if (Array.isArray(msgs) && msgs.length > 0) {
-              const hasUserMsg = msgs.some((m: any) => m.sender === "user");
+              const hasUserMsg = msgs.some((m: Message) => m.sender === "user");
               if (!hasUserMsg && msgs.length <= 1) continue;
 
               const char = charMap.get(charId);
@@ -428,7 +428,7 @@ export default function Home() {
         try {
           const msgs = JSON.parse(saved);
           if (Array.isArray(msgs) && msgs.length > 0) {
-            const hasUserMsg = msgs.some((m: any) => m.sender === "user");
+            const hasUserMsg = msgs.some((m: Message) => m.sender === "user");
             if (!hasUserMsg && msgs.length <= 1) return;
 
             processedIds.add(char.id);
@@ -554,7 +554,7 @@ export default function Home() {
       const stored = localStorage.getItem("zovik_generated_photos");
       if (stored) {
         const photos = JSON.parse(stored);
-        const updated = photos.filter((p: any) => p.id !== photoId);
+        const updated = photos.filter((p: SavedPhoto) => p.id !== photoId);
         localStorage.setItem("zovik_generated_photos", JSON.stringify(updated));
         setGeneratedPhotos(updated);
       }
@@ -1095,7 +1095,7 @@ export default function Home() {
                       </button>
 
                       <Image
-                        src={photo.photoUrl}
+                        src={photo.photoUrl || photo.url || "/characters/zovik_01.jpg"}
                         alt={photo.characterName || "Private photo"}
                         fill
                         className={`object-cover object-top transition-all duration-300 ${
@@ -1274,8 +1274,8 @@ export default function Home() {
 
             <div className="relative aspect-[3/4] w-full rounded-2xl overflow-hidden mb-3.5 shadow-lg border border-white/10">
               <Image
-                src={viewingPhoto.photoUrl}
-                alt={viewingPhoto.characterName}
+                src={viewingPhoto.photoUrl || viewingPhoto.url || "/characters/zovik_01.jpg"}
+                alt={viewingPhoto.characterName || "Private photo"}
                 fill
                 className="object-cover object-top"
                 unoptimized
@@ -1283,7 +1283,7 @@ export default function Home() {
             </div>
 
             <div className="flex items-center justify-between mb-1.5">
-              <h4 className="text-lg font-bold text-white">{viewingPhoto.characterName}</h4>
+              <h4 className="text-lg font-bold text-white">{viewingPhoto.characterName || "Zovik AI"}</h4>
               <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 text-[10px] font-black uppercase">
                 VIP Uncensored HD
               </span>
@@ -1291,8 +1291,8 @@ export default function Home() {
             <p className="text-xs text-[#ccc] mb-4">{viewingPhoto.caption}</p>
             <div className="flex items-center space-x-2 w-full">
               <a
-                href={viewingPhoto.photoUrl}
-                download={`${viewingPhoto.characterName}_exclusive.jpg`}
+                href={viewingPhoto.photoUrl || viewingPhoto.url || "#"}
+                download={`${viewingPhoto.characterName || "exclusive"}_exclusive.jpg`}
                 target="_blank"
                 rel="noreferrer"
                 className="flex-1 text-center py-2.5 rounded-xl bg-gradient-to-r from-[#f53b70] to-[#8b5cf6] text-white font-bold text-xs shadow-lg shadow-pink-600/30 hover:brightness-110 transition-all"

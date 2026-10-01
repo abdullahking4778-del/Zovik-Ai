@@ -33,7 +33,8 @@ export async function POST(req: NextRequest) {
       { error: "Invalid Master Password! Access Denied." },
       { status: 401 }
     );
-  } catch (error: any) {
-    return NextResponse.json({ error: error?.message || "Server error" }, { status: 500 });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Server error";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

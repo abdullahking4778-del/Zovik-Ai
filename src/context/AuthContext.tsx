@@ -13,6 +13,7 @@ import {
   User 
 } from "firebase/auth";
 import { doc, getDoc, setDoc, updateDoc, onSnapshot } from "firebase/firestore";
+import { safeLocalStorage } from "@/lib/storage";
 
 export interface UserFirestoreData {
   email: string | null;
@@ -77,21 +78,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   // Instant hydration from local storage on mount (prevents "Log In" button flicker on page refresh)
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const savedLogin = localStorage.getItem("zovik_logged_in") === "true";
-      setIsLocallyLoggedIn(savedLogin);
-      const savedTier = localStorage.getItem("zovik_tier");
-      if (savedTier) setTier(savedTier);
-      const savedUserStr = localStorage.getItem("zovik_user_cache");
-      if (savedUserStr) {
-        try {
-          const cached = JSON.parse(savedUserStr);
-          if (cached && typeof cached === "object") {
-            setUserData(cached);
-            if (cached.zovik_tier) setTier(cached.zovik_tier);
-          }
-        } catch {}
-      }
+    const savedLogin = safeLocalStorage.getItem<string>("zovik_logged_in") === "true";
+    setIsLocallyLoggedIn(savedLogin);
+    const savedTier = safeLocalStorage.getRawItem("zovik_tier");
+    if (savedTier) setTier(savedTier);
+    const cached = safeLocalStorage.getItem<UserFirestoreData>("zovik_user_cache");
+    if (cached && typeof cached === "object") {
+      setUserData(cached);
+      if (cached.zovik_tier) setTier(cached.zovik_tier);
     }
   }, []);
 
@@ -118,9 +112,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       if (currentUser) {
         setIsLocallyLoggedIn(true);
-        if (typeof window !== "undefined") {
-          localStorage.setItem("zovik_logged_in", "true");
-        }
+        safeLocalStorage.setItem("zovik_logged_in", "true");
 
         try {
           const userDocRef = doc(db, "users", currentUser.uid);
@@ -139,10 +131,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
               }
               setTier(currentTier);
 
+              safeLocalStorage.setItem("zovik_tier", currentTier);
+              safeLocalStorage.setItem("zovik_is_vip", (currentTier === "vip" || currentTier === "plus") ? "true" : "false");
+              safeLocalStorage.setItem("zovik_user_cache", data);
               if (typeof window !== "undefined") {
-                localStorage.setItem("zovik_tier", currentTier);
-                localStorage.setItem("zovik_is_vip", (currentTier === "vip" || currentTier === "plus") ? "true" : "false");
-                localStorage.setItem("zovik_user_cache", JSON.stringify(data));
                 window.dispatchEvent(new CustomEvent("zovik_tier_changed", { detail: { tier: currentTier } }));
               }
             } else {
@@ -159,11 +151,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
               await setDoc(userDocRef, initialData);
               setUserData(initialData);
               setTier("free");
-              if (typeof window !== "undefined") {
-                localStorage.setItem("zovik_tier", "free");
-                localStorage.setItem("zovik_is_vip", "false");
-                localStorage.setItem("zovik_user_cache", JSON.stringify(initialData));
-              }
+              safeLocalStorage.setItem("zovik_tier", "free");
+              safeLocalStorage.setItem("zovik_is_vip", "false");
+              safeLocalStorage.setItem("zovik_user_cache", initialData);
             }
           });
 
@@ -180,9 +170,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                   storageRetentionDays: statusData.storageRetentionDays,
                 }));
 
+                safeLocalStorage.setItem("zovik_tier", statusData.tier);
+                safeLocalStorage.setItem("zovik_is_vip", (statusData.tier === "vip" || statusData.tier === "plus") ? "true" : "false");
                 if (typeof window !== "undefined") {
-                  localStorage.setItem("zovik_tier", statusData.tier);
-                  localStorage.setItem("zovik_is_vip", (statusData.tier === "vip" || statusData.tier === "plus") ? "true" : "false");
                   window.dispatchEvent(new CustomEvent("zovik_tier_changed", { detail: { tier: statusData.tier } }));
                 }
 
@@ -205,11 +195,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setIsLocallyLoggedIn(false);
         setUserData(null);
         setTier("free");
+        safeLocalStorage.removeItem("zovik_logged_in");
+        safeLocalStorage.removeItem("zovik_user_cache");
+        safeLocalStorage.removeItem("zovik_tier");
+        safeLocalStorage.removeItem("zovik_is_vip");
         if (typeof window !== "undefined") {
-          localStorage.removeItem("zovik_logged_in");
-          localStorage.removeItem("zovik_user_cache");
-          localStorage.removeItem("zovik_tier");
-          localStorage.removeItem("zovik_is_vip");
           window.dispatchEvent(new CustomEvent("zovik_tier_changed", { detail: { tier: "free" } }));
         }
       }
@@ -239,9 +229,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       const result = await signInWithPopup(auth, googleProvider);
       if (result.user) {
         setIsLocallyLoggedIn(true);
-        if (typeof window !== "undefined") {
-          localStorage.setItem("zovik_logged_in", "true");
-        }
+        safeLocalStorage.setItem("zovik_logged_in", "true");
         const userDocRef = doc(db, "users", result.user.uid);
         const docSnap = await getDoc(userDocRef);
         if (!docSnap.exists()) {
@@ -273,9 +261,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       const result = await signInWithEmailAndPassword(auth, email.trim(), password);
       if (result.user) {
         setIsLocallyLoggedIn(true);
-        if (typeof window !== "undefined") {
-          localStorage.setItem("zovik_logged_in", "true");
-        }
+        safeLocalStorage.setItem("zovik_logged_in", "true");
         const userDocRef = doc(db, "users", result.user.uid);
         await updateDoc(userDocRef, {
           lastLoginAt: new Date().toISOString(),
@@ -299,9 +285,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         });
 
         setIsLocallyLoggedIn(true);
-        if (typeof window !== "undefined") {
-          localStorage.setItem("zovik_logged_in", "true");
-        }
+        safeLocalStorage.setItem("zovik_logged_in", "true");
 
         const userDocRef = doc(db, "users", result.user.uid);
         const initialData: UserFirestoreData = {
@@ -340,7 +324,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       });
 
       const userDocRef = doc(db, "users", auth.currentUser.uid);
-      const fsUpdates: any = {};
+      const fsUpdates: Partial<UserFirestoreData> = {};
       if (updates.displayName !== undefined) fsUpdates.name = updates.displayName;
       if (updates.photoURL !== undefined) fsUpdates.photoURL = updates.photoURL;
 
@@ -359,10 +343,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setUser(null);
       setUserData(null);
       setTier("free");
-      if (typeof window !== "undefined") {
-        localStorage.removeItem("zovik_logged_in");
-        localStorage.removeItem("zovik_user_cache");
-      }
+      safeLocalStorage.removeItem("zovik_logged_in");
+      safeLocalStorage.removeItem("zovik_user_cache");
     } catch (error) {
       console.error("Error logging out:", error);
     }

@@ -5,6 +5,16 @@ import {
   consumeQuotaOnSuccess,
   getAuthoritativeIdentifier,
 } from "@/lib/quotaManager";
+import { Character, Message } from "@/types";
+
+interface ChatRequestBody {
+  character?: Character;
+  messages?: Message[];
+  token?: string;
+  sessionToken?: string;
+  userTier?: "free" | "plus" | "vip";
+  userId?: string;
+}
 
 // Smart Intimate Cloaker: Translates explicit/raw keywords into passionate descriptive tokens
 // so external LLM safety classifiers never falsely trigger on private roleplay tokens.
@@ -123,7 +133,7 @@ function detectUserLanguage(text: string): "urdu_script" | "arabic" | "english" 
 }
 
 // Intelligent, context-aware fallback generator supporting multiple languages & dynamic lengths
-function generateIntelligentResponse(character: any, lastUserText: string): string {
+function generateIntelligentResponse(character: Partial<Character>, lastUserText: string): string {
   const isMale = character.gender === "male";
   const charName = character.name || (isMale ? "Liam" : "Aria");
   const lower = (lastUserText || "").toLowerCase().trim();
@@ -294,22 +304,22 @@ function generateIntelligentResponse(character: any, lastUserText: string): stri
 }
 
 export async function POST(req: NextRequest) {
-  let reqChar: any = null;
-  let reqMessages: any = null;
+  let reqChar: Character | null = null;
+  let reqMessages: Message[] | null = null;
   let userTier: "free" | "plus" | "vip" = "free";
   let clientId = "";
   let quotaInfo: { limit: number; remaining: number } | null = null;
 
   try {
-    let body: any;
+    let body: ChatRequestBody;
     try {
-      body = await req.json();
+      body = (await req.json()) as ChatRequestBody;
     } catch {
       return NextResponse.json({ error: "Invalid JSON in request body" }, { status: 400 });
     }
 
-    reqChar = body?.character;
-    reqMessages = body?.messages;
+    reqChar = body?.character || null;
+    reqMessages = body?.messages || null;
 
     const character = reqChar;
     const messages = reqMessages;
@@ -453,7 +463,7 @@ CRITICAL RULES (ABSOLUTE PRIORITY):
     // Map conversation messages: expand memory to 16 messages for deep conversational continuity
     const formattedMessages: { role: string; content: string }[] = [
       { role: "system", content: systemPrompt },
-      ...messages.slice(-16).map((m: any) => ({
+      ...messages.slice(-16).map((m: Message) => ({
         role: m.sender === "user" ? "user" : "assistant",
         content: m.sender === "user" ? cloakExplicitTerms(typeof m.text === "string" ? m.text.slice(0, 3000) : "") : typeof m.text === "string" ? m.text : "",
       })),
@@ -530,12 +540,14 @@ CRITICAL RULES (ABSOLUTE PRIORITY):
           const errText = await response.text();
           console.warn(`Model ${model} returned HTTP status ${response.status}:`, errText);
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         clearTimeout(timeoutId);
-        if (err?.name === "AbortError") {
+        const isAbort = err instanceof Error && err.name === "AbortError";
+        const errMsg = err instanceof Error ? err.message : String(err);
+        if (isAbort) {
           console.warn(`Model ${model} timed out after 9s.`);
         } else {
-          console.warn(`Model ${model} fetch failed:`, err?.message || err);
+          console.warn(`Model ${model} fetch failed:`, errMsg);
         }
       }
     }
@@ -553,7 +565,7 @@ CRITICAL RULES (ABSOLUTE PRIORITY):
     quotaInfo = { limit: quotaResult.limit, remaining: quotaResult.remaining };
 
     return NextResponse.json({ reply, quota: quotaInfo });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Chat API fatal error:", error);
     if (reqChar && clientId) {
       const fallback = generateIntelligentResponse(

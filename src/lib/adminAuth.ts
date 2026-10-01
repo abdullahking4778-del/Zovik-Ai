@@ -1,32 +1,12 @@
 import { NextRequest } from "next/server";
 import crypto from "crypto";
-import fs from "fs";
-import path from "path";
 
 export function getAdminPassword(): string {
-  if (process.env.ADMIN_PASSWORD) return process.env.ADMIN_PASSWORD.trim();
-  try {
-    const envPath = path.join(process.cwd(), ".env.local");
-    if (fs.existsSync(envPath)) {
-      const content = fs.readFileSync(envPath, "utf-8");
-      const match = content.match(/ADMIN_PASSWORD\s*=\s*(.*)/);
-      if (match && match[1]) return match[1].trim();
-    }
-  } catch {}
-  return "";
+  return process.env.ADMIN_PASSWORD?.trim() || "";
 }
 
 function getJwtSecret(): string {
-  if (process.env.ADMIN_JWT_SECRET) return process.env.ADMIN_JWT_SECRET.trim();
-  try {
-    const envPath = path.join(process.cwd(), ".env.local");
-    if (fs.existsSync(envPath)) {
-      const content = fs.readFileSync(envPath, "utf-8");
-      const match = content.match(/ADMIN_JWT_SECRET\s*=\s*(.*)/);
-      if (match && match[1]) return match[1].trim();
-    }
-  } catch {}
-  return "zovik_fallback_admin_sec_key_2026_protected";
+  return process.env.ADMIN_JWT_SECRET?.trim() || "zovik_fallback_admin_sec_key_2026_protected";
 }
 
 const JWT_SECRET = getJwtSecret();

@@ -68,8 +68,9 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
     setMode(newMode);
   };
 
-  const getFriendlyError = (err: any) => {
-    const code = err?.code || "";
+  const getFriendlyError = (err: unknown) => {
+    const errorObj = err && typeof err === "object" ? (err as { code?: string; message?: string }) : null;
+    const code = errorObj?.code || "";
     if (
       code === "auth/invalid-credential" || 
       code === "auth/wrong-password" || 
@@ -92,7 +93,7 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
     if (code === "auth/too-many-requests") {
       return "Too many failed attempts. Please wait a few moments or reset your password.";
     }
-    return err?.message || "Authentication failed. Please try again.";
+    return errorObj?.message || "Authentication failed. Please try again.";
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -112,7 +113,7 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
       try {
         await resetPassword(cleanEmail);
         setSuccessMessage("Password reset link has been sent to your email! Please check your inbox (and spam folder).");
-      } catch (err: any) {
+      } catch (err: unknown) {
         setErrorMessage(getFriendlyError(err));
       } finally {
         setLoading(false);
@@ -139,7 +140,7 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
       try {
         await signupWithEmail(cleanEmail, password, displayName.trim());
         handleClose();
-      } catch (err: any) {
+      } catch (err: unknown) {
         setErrorMessage(getFriendlyError(err));
       } finally {
         setLoading(false);
@@ -158,7 +159,7 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
       try {
         await loginWithEmail(cleanEmail, password);
         handleClose();
-      } catch (err: any) {
+      } catch (err: unknown) {
         setErrorMessage(getFriendlyError(err));
       } finally {
         setLoading(false);
@@ -173,7 +174,7 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
     try {
       await loginWithGoogle();
       handleClose();
-    } catch (err: any) {
+    } catch (err: unknown) {
       setErrorMessage(getFriendlyError(err));
     } finally {
       setLoading(false);

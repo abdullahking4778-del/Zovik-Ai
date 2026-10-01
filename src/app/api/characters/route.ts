@@ -1,110 +1,116 @@
 import { NextRequest, NextResponse } from "next/server";
-import fs from "fs";
-import path from "path";
-import defaultCharacters from "@/data/characters.json";
+import defaultCharactersData from "@/data/characters.json";
 import { verifyAdminRequest } from "@/lib/adminAuth";
-
-const customCharsFile = path.join(process.cwd(), "src", "data", "custom_characters.json");
-const charactersFile = path.join(process.cwd(), "src", "data", "characters.json");
-
-function getCustomCharacters() {
-  try {
-    if (fs.existsSync(customCharsFile)) {
-      const data = fs.readFileSync(customCharsFile, "utf-8");
-      return JSON.parse(data || "[]");
-    }
-  } catch (e) {
-    console.error("Error reading custom characters:", e);
-  }
-  return [];
-}
-
-function saveCustomCharacters(chars: any[]) {
-  const tmpPath = `${customCharsFile}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`;
-  try {
-    const dir = path.dirname(customCharsFile);
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(tmpPath, JSON.stringify(chars, null, 2), "utf-8");
-    fs.renameSync(tmpPath, customCharsFile);
-  } catch (e) {
-    console.error("Error saving custom characters:", e);
-    try {
-      if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
-    } catch {}
-  }
-}
+import {
+  getPersistentCustomCharacters,
+  savePersistentCustomCharacter,
+  deletePersistentCustomCharacter,
+  generateUniqueId,
+} from "@/lib/serverDb";
+import { Character } from "@/types";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-function getDefaultCharacters() {
-  try {
-    if (fs.existsSync(charactersFile)) {
-      const data = fs.readFileSync(charactersFile, "utf-8");
-      return JSON.parse(data || "[]");
-    }
-  } catch (e) {
-    console.error("Error reading characters.json:", e);
-  }
-  return defaultCharacters;
-}
+const defaultCharacters: Character[] = defaultCharactersData as Character[];
 
 export async function GET() {
-  const custom = getCustomCharacters();
-  const base = getDefaultCharacters();
-  return NextResponse.json(
-    {
-      characters: [...custom, ...base],
-    },
-    {
-      headers: {
-        "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
-        Pragma: "no-cache",
-        Expires: "0",
+  try {
+    const custom = await getPersistentCustomCharacters();
+    return NextResponse.json(
+      {
+        success: true,
+        characters: [...custom, ...defaultCharacters],
       },
-    }
-  );
+      {
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+          Pragma: "no-cache",
+          Expires: "0",
+        },
+      }
+    );
+  } catch (err: unknown) {
+    console.error("[Characters GET Error]:", err);
+    return NextResponse.json(
+      {
+        success: true,
+        characters: defaultCharacters,
+      },
+      { status: 200 }
+    );
+  }
 }
 
 export async function POST(req: NextRequest) {
   if (!verifyAdminRequest(req)) {
-    return NextResponse.json({ error: "Unauthorized: Admin session required" }, { status: 401 });
+    return NextResponse.json({ success: false, error: "Unauthorized: Admin session required" }, { status: 401 });
   }
 
   try {
-    const newCharacter = await req.json();
-    if (!newCharacter || !newCharacter.name) {
-      return NextResponse.json({ error: "Invalid character data: name is required" }, { status: 400 });
+    let newCharacter: Partial<Character>;
+    try {
+      newCharacter = await req.json();
+    } catch {
+      return NextResponse.json({ success: false, error: "Invalid JSON in request body" }, { status: 400 });
     }
 
-    const current = getCustomCharacters();
-    const updated = [newCharacter, ...current];
-    saveCustomCharacters(updated);
+    if (!newCharacter || !newCharacter.name) {
+      return NextResponse.json({ success: false, error: "Invalid character data: name is required" }, { status: 400 });
+    }
 
-    return NextResponse.json({ success: true, character: newCharacter });
-  } catch (error: any) {
-    return NextResponse.json({ error: error?.message || "Failed to add character" }, { status: 500 });
+    const charId = newCharacter.id || generateUniqueId("char");
+    const formattedChar: Character = {
+      id: charId,
+      slug: newCharacter.slug || charId,
+      name: newCharacter.name.trim(),
+      age: Number(newCharacter.age) || 22,
+      gender: newCharacter.gender || "female",
+      style: newCharacter.style || "realistic",
+      tagline: newCharacter.tagline || `${newCharacter.name} • AI Companion`,
+      desc: newCharacter.desc || "Custom AI Companion created in Zovik AI.",
+      image: newCharacter.image || "/characters/zovik_01.jpg",
+      category: newCharacter.category || "Trending",
+      badge: newCharacter.badge || "NEW",
+      series: false,
+      verified: true,
+      online: true,
+      tags: newCharacter.tags || ["Custom", "VIP"],
+      voice: newCharacter.voice || "Warm, affectionate voice",
+      greeting: newCharacter.greeting || `Hi there! I'm ${newCharacter.name}. Nice to meet you 💕`,
+      videoUrl: newCharacter.videoUrl,
+      gallery: newCharacter.gallery || [newCharacter.image || "/characters/zovik_01.jpg"],
+      messages: newCharacter.messages || [],
+    };
+
+    const saved = await savePersistentCustomCharacter(formattedChar);
+
+    return NextResponse.json({ success: true, character: saved });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Failed to add character";
+    console.error("[Characters POST Error]:", err);
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }
 
 export async function DELETE(req: NextRequest) {
   if (!verifyAdminRequest(req)) {
-    return NextResponse.json({ error: "Unauthorized: Admin session required" }, { status: 401 });
+    return NextResponse.json({ success: false, error: "Unauthorized: Admin session required" }, { status: 401 });
   }
 
   try {
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");
     if (!id) {
-      return NextResponse.json({ error: "Missing character ID" }, { status: 400 });
+      return NextResponse.json({ success: false, error: "Missing character ID" }, { status: 400 });
     }
 
-    let custom = getCustomCharacters();
-    custom = custom.filter((c: any) => c.id !== id);
-    saveCustomCharacters(custom);
+    await deletePersistentCustomCharacter(id);
 
     return NextResponse.json({ success: true, message: "Custom character deleted" });
-  } catch (error: any) {
-    return NextResponse.json({ error: error?.message || "Failed to delete character" }, { status: 500 });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Failed to delete character";
+    console.error("[Characters DELETE Error]:", err);
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }

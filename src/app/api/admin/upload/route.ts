@@ -1,54 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
-import fs from "fs";
-import path from "path";
 import sharp from "sharp";
 import AdmZip from "adm-zip";
 import { verifyAdminRequest } from "@/lib/adminAuth";
 import { uploadToCloudStorage } from "@/lib/cloudStorage";
-
-function getShortsFilePath(): string {
-  if (process.env.VERCEL) {
-    return path.join("/tmp", "zovik_shorts.json");
-  }
-  return path.join(process.cwd(), "src", "data", "shorts.json");
-}
-
-function getShorts() {
-  try {
-    const filePath = getShortsFilePath();
-    if (!fs.existsSync(filePath)) {
-      const fallback = path.join(process.cwd(), "src", "data", "shorts.json");
-      if (fs.existsSync(fallback)) {
-        return JSON.parse(fs.readFileSync(fallback, "utf-8") || "[]");
-      }
-      return [];
-    }
-    return JSON.parse(fs.readFileSync(filePath, "utf-8") || "[]");
-  } catch {
-    return [];
-  }
-}
-
-function saveShorts(shorts: any[]) {
-  const filePath = getShortsFilePath();
-  const tmpPath = `${filePath}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`;
-  try {
-    const dir = path.dirname(filePath);
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(tmpPath, JSON.stringify(shorts, null, 2), "utf-8");
-    fs.renameSync(tmpPath, filePath);
-  } catch (err) {
-    console.error("Failed to save shorts:", err);
-    try {
-      if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
-    } catch {}
-  }
-}
+import { savePersistentShort, generateUniqueId } from "@/lib/serverDb";
+import { ShortReel } from "@/types";
 
 export async function POST(req: NextRequest) {
   try {
     if (!verifyAdminRequest(req)) {
-      return NextResponse.json({ error: "Unauthorized access: Valid admin token required" }, { status: 401 });
+      return NextResponse.json(
+        { error: "Unauthorized access: Valid admin token required" },
+        { status: 401 }
+      );
     }
 
     const formData = await req.formData();
@@ -71,7 +35,6 @@ export async function POST(req: NextRequest) {
     if (originalName.endsWith(".zip")) {
       const zip = new AdmZip(buffer);
       const zipEntries = zip.getEntries();
-      const shortsList = getShorts();
 
       for (const entry of zipEntries) {
         if (entry.isDirectory || entry.entryName.includes("__MACOSX") || entry.name.startsWith(".")) {
@@ -93,21 +56,27 @@ export async function POST(req: NextRequest) {
 
           if (createReel || targetType === "reel") {
             const cleanTitle = entry.name.replace(/\.[^/.]+$/, "").replace(/[_-]/g, " ");
-            shortsList.unshift({
-              id: "short-" + Date.now() + "-" + Math.random().toString(36).substring(2, 6),
-              characterId: "custom-" + Date.now(),
+            const shortItem: ShortReel = {
+              id: generateUniqueId("short"),
+              characterId: generateUniqueId("char"),
               characterName: characterName !== "Zovik AI" ? characterName : cleanTitle,
               characterAge: 22,
               avatar: "/logos/zovik-squircle.svg",
               videoUrl,
               caption: caption || `${cleanTitle} • Exclusive Short Reel`,
               tags: ["ZIP Upload", "VIP Reel"],
-            });
+            };
+            await savePersistentShort(shortItem);
           }
         }
 
         // Image inside ZIP
-        if (entryName.endsWith(".jpg") || entryName.endsWith(".jpeg") || entryName.endsWith(".png") || entryName.endsWith(".webp")) {
+        if (
+          entryName.endsWith(".jpg") ||
+          entryName.endsWith(".jpeg") ||
+          entryName.endsWith(".png") ||
+          entryName.endsWith(".webp")
+        ) {
           const fileName = `char_${Date.now()}_${safeBaseName.replace(/\.[^/.]+$/, "")}.webp`;
           let imgData = entry.getData();
           try {
@@ -124,10 +93,6 @@ export async function POST(req: NextRequest) {
           );
           results.push({ url: imageUrl, type: "image", name: entry.name });
         }
-      }
-
-      if (createReel || targetType === "reel") {
-        saveShorts(shortsList);
       }
 
       return NextResponse.json({
@@ -153,10 +118,9 @@ export async function POST(req: NextRequest) {
       );
 
       if (createReel || targetType === "reel") {
-        const shortsList = getShorts();
-        const newReel = {
-          id: "short-" + Date.now(),
-          characterId: "custom-" + Date.now(),
+        const newReel: ShortReel = {
+          id: generateUniqueId("short"),
+          characterId: generateUniqueId("char"),
           characterName: characterName.trim() || "Zovik AI",
           characterAge: 22,
           avatar: "/logos/zovik-squircle.svg",
@@ -164,8 +128,7 @@ export async function POST(req: NextRequest) {
           caption: caption.trim() || "Exclusive Short Reel 💕",
           tags: ["Direct Upload", "Live Reel"],
         };
-        shortsList.unshift(newReel);
-        saveShorts(shortsList);
+        await savePersistentShort(newReel);
 
         return NextResponse.json({
           success: true,
@@ -217,8 +180,10 @@ export async function POST(req: NextRequest) {
       { error: "Unsupported file type. Please upload MP4, WEBM, JPG, PNG, or a .ZIP archive." },
       { status: 400 }
     );
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Upload processing failed";
     console.error("Upload error:", err);
-    return NextResponse.json({ error: err.message || "Upload failed" }, { status: 500 });
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+

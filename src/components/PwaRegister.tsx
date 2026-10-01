@@ -2,9 +2,18 @@
 
 import { useEffect } from "react";
 
+export interface BeforeInstallPromptEvent extends Event {
+  readonly platforms: string[];
+  readonly userChoice: Promise<{
+    outcome: "accepted" | "dismissed";
+    platform: string;
+  }>;
+  prompt(): Promise<void>;
+}
+
 declare global {
   interface Window {
-    __pwaInstallPrompt?: any;
+    __pwaInstallPrompt?: BeforeInstallPromptEvent | null;
   }
 }
 
@@ -23,7 +32,7 @@ export default function PwaRegister() {
     // Capture install prompt event globally
     const handleBeforeInstall = (e: Event) => {
       e.preventDefault();
-      window.__pwaInstallPrompt = e;
+      window.__pwaInstallPrompt = e as BeforeInstallPromptEvent;
       window.dispatchEvent(new CustomEvent("zovik_pwa_ready"));
     };
 

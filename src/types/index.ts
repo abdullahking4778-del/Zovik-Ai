@@ -14,7 +14,7 @@ export interface Character {
   slug: string;
   name: string;
   age: number;
-  gender: "female" | "male";
+  gender: "female" | "male" | "anime";
   style: "realistic" | "anime";
   tagline: string;
   desc: string;
@@ -30,4 +30,82 @@ export interface Character {
   videoUrl?: string;
   gallery?: string[];
   messages: Message[];
+  likes?: number;
+  isOnline?: boolean;
+  unreadCount?: number;
 }
+
+export interface ShortReel {
+  id: string;
+  characterId: string;
+  characterName: string;
+  characterAge: number;
+  avatar: string;
+  videoUrl: string;
+  caption: string;
+  tags: string[];
+  likes?: number;
+  createdAt?: string;
+}
+
+export interface PaymentRequest {
+  id: string;
+  userEmail: string;
+  plan: "plus" | "vip";
+  planName: string;
+  currency: string;
+  amount: number;
+  method: string;
+  trxId: string;
+  senderName: string;
+  screenshot: string | null;
+  screenshotPurged?: boolean;
+  status: "pending" | "approved" | "rejected";
+  createdAt: string;
+  approvedAt?: string;
+  rejectedAt?: string;
+}
+
+export interface UserAccount {
+  id: string;
+  email: string;
+  name: string;
+  photoURL?: string | null;
+  tier: "free" | "plus" | "vip";
+  isVip: boolean;
+  subscriptionDays: number;
+  subscriptionStart?: string | null;
+  subscriptionEndsAt?: string | null;
+  storageRetentionDays: number;
+  createdAt: string;
+  lastLoginAt?: string | null;
+}
+
+export interface ApiResponse<T = unknown> {
+  success: boolean;
+  data?: T;
+  error?: string;
+  message?: string;
+}
+
+export interface UserStatusResponse {
+  success: boolean;
+  tier: "free" | "plus" | "vip";
+  isVip: boolean;
+  subscriptionEndsAt: string | null;
+  storageRetentionDays: number;
+  error?: string;
+}
+
+export interface SavedPhoto {
+  id: string;
+  url?: string;
+  photoUrl?: string;
+  caption?: string;
+  characterName?: string;
+  characterAvatar?: string;
+  createdAt?: number;
+  time?: string;
+  isUnlocked?: boolean;
+}
+
