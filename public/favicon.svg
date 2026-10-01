@@ -1,0 +1,52 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Background Gradient -->
+    <radialGradient id="bgGrad" cx="50%" cy="30%" r="70%">
+      <stop offset="0%" stop-color="#1f102a" />
+      <stop offset="100%" stop-color="#0a050d" />
+    </radialGradient>
+
+    <!-- Neon Border Gradient -->
+    <linearGradient id="neonBorder" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f53b70" />
+      <stop offset="50%" stop-color="#d946ef" />
+      <stop offset="100%" stop-color="#8b5cf6" />
+    </linearGradient>
+
+    <!-- Monogram 'Z' Gradient -->
+    <linearGradient id="zGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="50%" stop-color="#fdf4ff" />
+      <stop offset="100%" stop-color="#f5d0fe" />
+    </linearGradient>
+
+    <!-- Glow Filter -->
+    <filter id="neonGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="16" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+    
+    <filter id="monogramGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="8" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <!-- Ambient Outer Glow -->
+  <rect x="24" y="24" width="464" height="464" rx="120" fill="url(#neonBorder)" opacity="0.35" filter="url(#neonGlow)" />
+
+  <!-- Base Squircle Background -->
+  <rect x="24" y="24" width="464" height="464" rx="120" fill="url(#bgGrad)" stroke="url(#neonBorder)" stroke-width="12" />
+
+  <!-- Inner Subtle Accent Rim -->
+  <rect x="42" y="42" width="428" height="428" rx="104" fill="none" stroke="white" stroke-width="1.5" stroke-opacity="0.15" />
+
+  <!-- Futuristic Geometric 'Z' Monogram -->
+  <g filter="url(#monogramGlow)">
+    <!-- Top Horizontal Bar with Cyber Cut -->
+    <path d="M148 156 C148 145 157 136 168 136 L344 136 C355 136 364 145 364 156 L364 180 C364 191 355 200 344 200 L242 200 L346 312 C358 325 364 338 364 356 L364 356 C364 367 355 376 344 376 L168 376 C157 376 148 367 148 356 L148 332 C148 321 157 312 168 312 L270 312 L166 200 C154 187 148 174 148 156 Z" fill="url(#zGrad)" />
+
+    <!-- Neon Accent Spark on Diagonal -->
+    <polygon points="256,236 264,256 284,256 268,268 274,288 256,276 238,288 244,268 228,256 248,256" fill="#f53b70" opacity="0.85" />
+  </g>
+</svg>

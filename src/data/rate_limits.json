@@ -1,0 +1,17 @@
+{
+  "ip_::1": {
+    "count": 6,
+    "resetAt": 1790841094136,
+    "tier": "free"
+  },
+  "test_chat_1790756521823": {
+    "count": 1,
+    "resetAt": 1790842921824,
+    "tier": "free"
+  },
+  "ip_127.0.0.1": {
+    "count": 2,
+    "resetAt": 1790843607598,
+    "tier": "free"
+  }
+}
