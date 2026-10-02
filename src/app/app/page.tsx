@@ -83,13 +83,36 @@ export default function Home() {
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [isRouletteOpen, setIsRouletteOpen] = useState(false);
 
-  // Smart Auth Guarded Actions
+  // Check if current user is VIP or Plus subscriber (Both get unrestricted access to VIP companions)
+  const isPaidUser = useMemo(() => {
+    return currentTier === "vip" || currentTier === "plus";
+  }, [currentTier]);
+
+  const isCharacterVip = (char: Character) => {
+    return char.accessTier === "vip" || char.accessTier === "plus" || char.isVipOnly === true;
+  };
+
+  // Smart Auth Guarded Actions with VIP/Plus Access Verification
   const handleStartChatWithAuth = (char: Character) => {
-    requireAuth(() => setActiveChatCharacter(char), `${char.name} ke sath chat shuru karne ke liye pehle login ya create account karein.`);
+    requireAuth(() => {
+      if (isCharacterVip(char) && !isPaidUser) {
+        showNotice(`👑 ${char.name} sirf Plus aur VIP members ke liye unlock hai!`);
+        setIsPremiumOpen(true);
+        return;
+      }
+      setActiveChatCharacter(char);
+    }, `${char.name} ke sath chat shuru karne ke liye pehle login ya create account karein.`);
   };
 
   const handleStartCallWithAuth = (char: Character) => {
-    requireAuth(() => setActiveCallCharacter(char), `${char.name} ke sath live voice call ke liye pehle login ya create account karein.`);
+    requireAuth(() => {
+      if (isCharacterVip(char) && !isPaidUser) {
+        showNotice(`👑 ${char.name} ke sath live voice call sirf Plus aur VIP members ke liye hai!`);
+        setIsPremiumOpen(true);
+        return;
+      }
+      setActiveCallCharacter(char);
+    }, `${char.name} ke sath live voice call ke liye pehle login ya create account karein.`);
   };
   const [isShortsOpen, setIsShortsOpen] = useState(false);
   const [initialReelId, setInitialReelId] = useState<string | null>(null);
@@ -107,11 +130,6 @@ export default function Home() {
       setIsShortsOpen(true);
     }
   }, []);
-
-  // Check if current user is VIP or Plus subscriber
-  const isPaidUser = useMemo(() => {
-    return currentTier === "vip" || currentTier === "plus";
-  }, [currentTier]);
 
   // Load custom characters, and liked characters
   useEffect(() => {
@@ -672,6 +690,7 @@ export default function Home() {
                       onStartCall={handleStartCallWithAuth}
                       likedIds={likedIds}
                       onToggleLike={handleToggleLike}
+                      isPaidUser={isPaidUser}
                     />
                   )}
 
@@ -686,6 +705,7 @@ export default function Home() {
                       onStartCall={handleStartCallWithAuth}
                       likedIds={likedIds}
                       onToggleLike={handleToggleLike}
+                      isPaidUser={isPaidUser}
                     />
                   )}
 
@@ -700,6 +720,7 @@ export default function Home() {
                       onStartCall={handleStartCallWithAuth}
                       likedIds={likedIds}
                       onToggleLike={handleToggleLike}
+                      isPaidUser={isPaidUser}
                     />
                   )}
 
@@ -714,6 +735,7 @@ export default function Home() {
                       onStartCall={handleStartCallWithAuth}
                       likedIds={likedIds}
                       onToggleLike={handleToggleLike}
+                      isPaidUser={isPaidUser}
                     />
                   )}
 
@@ -728,6 +750,7 @@ export default function Home() {
                       onStartCall={handleStartCallWithAuth}
                       likedIds={likedIds}
                       onToggleLike={handleToggleLike}
+                      isPaidUser={isPaidUser}
                     />
                   )}
                 </div>
@@ -745,6 +768,7 @@ export default function Home() {
                           onStartCall={handleStartCallWithAuth}
                           isLiked={likedIds.includes(character.id)}
                           onToggleLike={handleToggleLike}
+                          isPaidUser={isPaidUser}
                         />
                       ))}
                     </div>
@@ -945,6 +969,7 @@ export default function Home() {
                         onStartCall={handleStartCallWithAuth}
                         isLiked={likedIds.includes(character.id)}
                         onToggleLike={handleToggleLike}
+                        isPaidUser={isPaidUser}
                       />
 
                       {/* Delete Custom Companion Button */}
@@ -1001,6 +1026,7 @@ export default function Home() {
                       onStartCall={handleStartCallWithAuth}
                       isLiked={true}
                       onToggleLike={handleToggleLike}
+                      isPaidUser={isPaidUser}
                     />
                   ))}
                 </div>
@@ -1168,6 +1194,8 @@ export default function Home() {
       {selectedCharacter && (
         <CharacterModal
           character={selectedCharacter}
+          isPaidUser={isPaidUser}
+          openPremiumModal={() => setIsPremiumOpen(true)}
           onClose={() => setSelectedCharacter(null)}
           onStartChat={(char) => {
             setSelectedCharacter(null);

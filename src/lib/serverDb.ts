@@ -148,8 +148,61 @@ export async function deletePersistentShort(shortId: string): Promise<boolean> {
 }
 
 // ============================================================================
-// 2. CUSTOM CHARACTERS PERSISTENCE
+// 2. CHARACTERS PERSISTENCE (CUSTOM, EDITED, & DELETED REGISTRY)
 // ============================================================================
+
+export async function getPersistentDeletedCharacterIds(): Promise<string[]> {
+  const deletedSet = new Set<string>();
+
+  // 1. Check Firestore
+  try {
+    const colRef = collection(db, "deleted_characters");
+    const snapshot = await getDocs(colRef);
+    if (!snapshot.empty) {
+      snapshot.forEach((d) => {
+        deletedSet.add(d.id.toLowerCase());
+        const data = d.data();
+        if (data?.slug) deletedSet.add(String(data.slug).toLowerCase());
+      });
+    }
+  } catch (err: unknown) {
+    // Firestore offline fallback
+  }
+
+  // 2. Check local fallback file
+  try {
+    const filePath = getStoragePath("deleted_characters.json");
+    const local = safeReadJsonFile<string[]>(filePath, []);
+    local.forEach((id) => deletedSet.add(id.toLowerCase()));
+  } catch {}
+
+  return Array.from(deletedSet);
+}
+
+export async function recordPersistentDeletedCharacterId(id: string, slug?: string): Promise<void> {
+  const cleanId = id.trim().toLowerCase();
+  const cleanSlug = slug ? slug.trim().toLowerCase() : undefined;
+
+  // 1. Save to Firestore
+  try {
+    const docRef = doc(db, "deleted_characters", cleanId);
+    await setDoc(docRef, { id: cleanId, slug: cleanSlug, deletedAt: new Date().toISOString() });
+    if (cleanSlug && cleanSlug !== cleanId) {
+      const slugDocRef = doc(db, "deleted_characters", cleanSlug);
+      await setDoc(slugDocRef, { id: cleanId, slug: cleanSlug, deletedAt: new Date().toISOString() });
+    }
+  } catch (err: unknown) {
+    console.warn("[ServerDb] Firestore save deleted character note:", err);
+  }
+
+  // 2. Save to local fallback
+  try {
+    const filePath = getStoragePath("deleted_characters.json");
+    const existing = safeReadJsonFile<string[]>(filePath, []);
+    const updated = Array.from(new Set([...existing, cleanId, ...(cleanSlug ? [cleanSlug] : [])]));
+    safeWriteJsonFile(filePath, updated);
+  } catch {}
+}
 
 export async function getPersistentCustomCharacters(): Promise<Character[]> {
   try {
@@ -163,7 +216,7 @@ export async function getPersistentCustomCharacters(): Promise<Character[]> {
       return items;
     }
   } catch (err: unknown) {
-    console.warn("[ServerDb] Firestore custom_characters read failed, using fallback:", err);
+    console.warn("[ServerDb] Firestore custom_characters read note:", err);
   }
 
   const filePath = getStoragePath("custom_characters.json");
@@ -178,7 +231,7 @@ export async function savePersistentCustomCharacter(character: Character): Promi
     const docRef = doc(db, "custom_characters", charId);
     await setDoc(docRef, charWithId);
   } catch (err: unknown) {
-    console.warn("[ServerDb] Firestore save custom_character failed:", err);
+    console.warn("[ServerDb] Firestore save custom_character note:", err);
   }
 
   try {
@@ -188,25 +241,90 @@ export async function savePersistentCustomCharacter(character: Character): Promi
     safeWriteJsonFile(filePath, updated);
   } catch {}
 
+  // If it exists in root characters.json, also sync updates to keep local seed updated
+  try {
+    const rootPath = path.join(process.cwd(), "src", "data", "characters.json");
+    const list = safeReadJsonFile<Character[]>(rootPath, []);
+    if (Array.isArray(list) && list.some((c) => c.id === charId || c.slug === charWithId.slug)) {
+      const updatedList = list.map((c) => (c.id === charId || c.slug === charWithId.slug ? { ...c, ...charWithId } : c));
+      safeWriteJsonFile(rootPath, updatedList);
+    }
+  } catch {}
+
   return charWithId;
 }
 
-export async function deletePersistentCustomCharacter(characterId: string): Promise<boolean> {
+export async function deletePersistentCharacter(characterId: string): Promise<boolean> {
+  const cleanId = characterId.trim();
+
+  // 1. Delete from Firestore custom_characters
   try {
-    const docRef = doc(db, "custom_characters", characterId);
+    const docRef = doc(db, "custom_characters", cleanId);
     await deleteDoc(docRef);
   } catch (err: unknown) {
-    console.warn("[ServerDb] Firestore delete custom_character failed:", err);
+    console.warn("[ServerDb] Firestore delete custom_character note:", err);
   }
 
+  // 2. Delete from custom_characters.json
   try {
     const filePath = getStoragePath("custom_characters.json");
     const existing = await getPersistentCustomCharacters();
-    const updated = existing.filter((c) => c.id !== characterId);
+    const updated = existing.filter((c) => c.id !== cleanId && c.slug !== cleanId);
     safeWriteJsonFile(filePath, updated);
   } catch {}
 
+  // 3. Delete from root characters.json (so local seed never resurrects it)
+  try {
+    const rootPath = path.join(process.cwd(), "src", "data", "characters.json");
+    const list = safeReadJsonFile<Character[]>(rootPath, []);
+    if (Array.isArray(list) && list.length > 0) {
+      const filtered = list.filter((c) => c.id !== cleanId && c.slug !== cleanId);
+      if (filtered.length !== list.length) {
+        safeWriteJsonFile(rootPath, filtered);
+      }
+    }
+  } catch (err: unknown) {
+    console.warn("[ServerDb] Error pruning character from characters.json:", err);
+  }
+
+  // 4. Record in deleted characters registry
+  await recordPersistentDeletedCharacterId(cleanId);
+
   return true;
+}
+
+// Backward-compatible alias
+export const deletePersistentCustomCharacter = deletePersistentCharacter;
+
+export async function getAllPersistentCharacters(): Promise<Character[]> {
+  const [customChars, deletedIds] = await Promise.all([
+    getPersistentCustomCharacters(),
+    getPersistentDeletedCharacterIds(),
+  ]);
+
+  const rootPath = path.join(process.cwd(), "src", "data", "characters.json");
+  const defaultChars = safeReadJsonFile<Character[]>(rootPath, []);
+
+  // Map of characters by id (custom overrides default)
+  const charMap = new Map<string, Character>();
+
+  // Add default characters first (if not deleted)
+  for (const c of defaultChars) {
+    const isDeleted = deletedIds.includes(c.id.toLowerCase()) || (c.slug && deletedIds.includes(c.slug.toLowerCase()));
+    if (!isDeleted) {
+      charMap.set(c.id, c);
+    }
+  }
+
+  // Overlay custom characters (if not deleted)
+  for (const c of customChars) {
+    const isDeleted = deletedIds.includes(c.id.toLowerCase()) || (c.slug && deletedIds.includes(c.slug.toLowerCase()));
+    if (!isDeleted) {
+      charMap.set(c.id, c);
+    }
+  }
+
+  return Array.from(charMap.values());
 }
 
 // ============================================================================

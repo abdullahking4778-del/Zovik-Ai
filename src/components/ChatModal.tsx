@@ -178,6 +178,9 @@ export default function ChatModal({
   // User VIP/Plus Status and Daily Message Limit (Free: 20, Plus: 200, VIP: 500 / 24h)
   const [isVipUser, setIsVipUser] = useState(false);
   const [userTier, setUserTier] = useState<"free" | "plus" | "vip">("free");
+
+  const isCompanionVip = character?.accessTier === "vip" || character?.accessTier === "plus" || character?.isVipOnly === true;
+  const isVipBlocked = isCompanionVip && !isVipUser;
   const [messagesRemaining, setMessagesRemaining] = useState(20);
   const [timeUntilReset, setTimeUntilReset] = useState("");
 
@@ -422,6 +425,11 @@ export default function ChatModal({
     const text = textToSend || inputText;
     if (!text.trim() || isTyping || isStreamingAiText) return;
 
+    if (isVipBlocked) {
+      openPremiumModal();
+      return;
+    }
+
     // Check message quota
     if (messagesRemaining <= 0) {
       if (!isVipUser) {
@@ -614,8 +622,8 @@ export default function ChatModal({
     setHighlightPhotoBtn(false);
     if (isTyping) return;
 
-    // Free users cannot view private selfies - guide them to upgrade
-    if (userTier === "free" && !isVipUser) {
+    // Free users or users blocked by VIP companion cannot request private selfies - guide them to upgrade
+    if (isVipBlocked || (userTier === "free" && !isVipUser)) {
       openPremiumModal();
       return;
     }
@@ -1061,8 +1069,21 @@ export default function ChatModal({
           ))}
         </div>
 
-        {/* Daily Quota Exhausted Banner */}
-        {!isVipUser && messagesRemaining <= 0 && (
+        {/* VIP Companion Locked Banner or Daily Quota Exhausted Banner */}
+        {isVipBlocked ? (
+          <div className="p-3 bg-gradient-to-r from-amber-950/90 via-[#2a1a08] to-amber-950/90 border-t border-amber-500/40 flex items-center justify-between">
+            <div className="flex items-center space-x-2 text-xs text-amber-200">
+              <Crown className="size-4 text-amber-400 shrink-0" />
+              <span>👑 {character.name} sirf Plus aur VIP members ke liye exclusive hai! Upgrade karein.</span>
+            </div>
+            <button
+              onClick={openPremiumModal}
+              className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 text-black text-xs font-black hover:brightness-110 shadow-md shadow-yellow-500/20 shrink-0 uppercase tracking-wider"
+            >
+              Unlock Now
+            </button>
+          </div>
+        ) : !isVipUser && messagesRemaining <= 0 ? (
           <div className="p-3 bg-gradient-to-r from-red-950/80 via-[#260a18] to-red-950/80 border-t border-red-500/30 flex items-center justify-between">
             <div className="flex items-center space-x-2 text-xs text-red-200">
               <AlertCircle className="size-4 text-red-400 shrink-0" />
@@ -1075,7 +1096,7 @@ export default function ChatModal({
               Upgrade Now
             </button>
           </div>
-        )}
+        ) : null}
 
         {/* Input Bar */}
         <div className="p-3 md:p-4 bg-[#130d17] border-t border-white/10 shrink-0">
@@ -1094,11 +1115,12 @@ export default function ChatModal({
                   setHighlightPhotoBtn(false);
                   handleRequestPhoto();
                 }}
+                disabled={isVipBlocked}
                 title="Request Private Selfie (Press for photo)"
                 className={`size-10 rounded-xl flex items-center justify-center transition-all ${
                   highlightPhotoBtn
                     ? "bg-[#f53b70] text-white ring-4 ring-[#f53b70]/50 scale-105 shadow-lg shadow-pink-600/50 animate-pulse"
-                    : "bg-white/5 hover:bg-[#f53b70]/20 border border-white/10 text-[#aeaeae] hover:text-[#f53b70]"
+                    : "bg-white/5 hover:bg-[#f53b70]/20 border border-white/10 text-[#aeaeae] hover:text-[#f53b70] disabled:opacity-40 disabled:cursor-not-allowed"
                 }`}
               >
                 <ImageIcon className="size-5" />
@@ -1115,9 +1137,11 @@ export default function ChatModal({
               type="text"
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
-              disabled={!isVipUser && messagesRemaining <= 0}
+              disabled={isVipBlocked || (!isVipUser && messagesRemaining <= 0)}
               placeholder={
-                !isVipUser && messagesRemaining <= 0
+                isVipBlocked
+                  ? `👑 Upgrade to Plus or VIP to chat with ${character.name}...`
+                  : !isVipUser && messagesRemaining <= 0
                   ? "Daily limit reached. Get VIP for unlimited chat..."
                   : `Message ${character.name}...`
               }
@@ -1127,7 +1151,7 @@ export default function ChatModal({
             {/* Send Button */}
             <button
               type="submit"
-              disabled={!inputText.trim() || isTyping || (!isVipUser && messagesRemaining <= 0)}
+              disabled={!inputText.trim() || isTyping || isVipBlocked || (!isVipUser && messagesRemaining <= 0)}
               className="size-10 rounded-xl bg-gradient-to-r from-[#f53b70] to-[#ff457c] text-white flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition-all shrink-0 shadow-md shadow-pink-600/30"
             >
               {isTyping ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}

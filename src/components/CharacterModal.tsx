@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import Image from "next/image";
-import { X, MessageCircle, Phone, Volume2, VolumeX, CheckCircle2, Sparkles, Heart, Share2, Trash2 } from "lucide-react";
+import { X, MessageCircle, Phone, Volume2, VolumeX, CheckCircle2, Sparkles, Heart, Share2, Trash2, Crown, Lock } from "lucide-react";
 import { Character } from "@/types";
 
 interface CharacterModalProps {
@@ -13,6 +13,8 @@ interface CharacterModalProps {
   onDelete?: (charId: string, charName: string) => void;
   isLiked?: boolean;
   onToggleLike?: (character: Character) => void;
+  isPaidUser?: boolean;
+  openPremiumModal?: () => void;
 }
 
 export default function CharacterModal({
@@ -23,6 +25,8 @@ export default function CharacterModal({
   onDelete,
   isLiked = false,
   onToggleLike,
+  isPaidUser = false,
+  openPremiumModal,
 }: CharacterModalProps) {
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -111,6 +115,9 @@ export default function CharacterModal({
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const isVipChar = character.accessTier === "vip" || character.accessTier === "plus" || character.isVipOnly === true;
+  const isLocked = isVipChar && !isPaidUser;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6 bg-black/80 backdrop-blur-md animate-fadeIn">
       <div className="relative flex flex-col md:flex-row w-full max-w-4xl max-h-[92vh] overflow-y-auto md:overflow-hidden rounded-3xl bg-[#120d16] border border-white/10 shadow-2xl shadow-pink-950/30">
@@ -137,13 +144,24 @@ export default function CharacterModal({
 
         {/* Left Side: High-Res Portrait & Media */}
         <div className="relative w-full md:w-1/2 h-80 md:h-auto min-h-[380px] shrink-0 overflow-hidden bg-black">
-          <Image
-            src={character.image}
-            alt={character.name}
-            fill
-            className="object-cover object-top"
-            unoptimized
-          />
+          {character.videoUrl ? (
+            <video
+              src={character.videoUrl}
+              autoPlay
+              loop
+              muted
+              playsInline
+              className="size-full object-cover object-top"
+            />
+          ) : (
+            <Image
+              src={character.image}
+              alt={character.name}
+              fill
+              className="object-cover object-top"
+              unoptimized
+            />
+          )}
           <div className="absolute inset-0 bg-gradient-to-t from-[#120d16] via-transparent to-transparent md:hidden" />
 
           {/* Voice Note Player Pill */}
@@ -185,9 +203,16 @@ export default function CharacterModal({
             {/* Header info */}
             <div>
               <div className="flex items-center space-x-2 mb-1.5">
-                <span className="px-2.5 py-0.5 rounded-full bg-[#f53b70]/20 text-[#f53b70] text-xs font-black uppercase tracking-wider border border-[#f53b70]/30">
-                  {character.category}
-                </span>
+                {isVipChar ? (
+                  <span className="flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-gradient-to-r from-amber-500 to-yellow-400 text-black text-xs font-black uppercase tracking-wider shadow-md shadow-yellow-500/30">
+                    <Crown className="size-3.5 fill-black text-black" />
+                    <span>VIP & PLUS</span>
+                  </span>
+                ) : (
+                  <span className="px-2.5 py-0.5 rounded-full bg-[#f53b70]/20 text-[#f53b70] text-xs font-black uppercase tracking-wider border border-[#f53b70]/30">
+                    {character.category}
+                  </span>
+                )}
                 {character.verified && (
                   <span className="flex items-center space-x-1 text-xs text-[#8b5cf6] font-bold">
                     <CheckCircle2 className="size-3.5" />
@@ -235,10 +260,14 @@ export default function CharacterModal({
                   handleClose();
                   onStartChat(character);
                 }}
-                className="flex items-center justify-center space-x-2 py-3 rounded-2xl bg-gradient-to-r from-[#f53b70] to-[#ff457c] text-white font-bold text-sm md:text-base shadow-xl shadow-pink-600/30 hover:brightness-110 active:scale-95 transition-all"
+                className={`flex items-center justify-center space-x-2 py-3 rounded-2xl font-bold text-sm md:text-base shadow-xl active:scale-95 transition-all ${
+                  isLocked
+                    ? "bg-gradient-to-r from-amber-500 to-yellow-400 text-black font-black shadow-amber-500/25 hover:brightness-110"
+                    : "bg-gradient-to-r from-[#f53b70] to-[#ff457c] text-white shadow-pink-600/30 hover:brightness-110"
+                }`}
               >
-                <MessageCircle className="size-5" />
-                <span>Chat Now</span>
+                {isLocked ? <Lock className="size-5 text-black" /> : <MessageCircle className="size-5" />}
+                <span>{isLocked ? "Unlock VIP Chat" : "Chat Now"}</span>
               </button>
 
               <button
@@ -246,10 +275,14 @@ export default function CharacterModal({
                   handleClose();
                   onStartCall(character);
                 }}
-                className="flex items-center justify-center space-x-2 py-3 rounded-2xl bg-[#23172e] border border-white/10 hover:bg-[#2d1e3a] text-white font-bold text-sm md:text-base active:scale-95 transition-all"
+                className={`flex items-center justify-center space-x-2 py-3 rounded-2xl font-bold text-sm md:text-base active:scale-95 transition-all ${
+                  isLocked
+                    ? "bg-[#23172e] border border-amber-500/40 text-amber-300 hover:bg-[#2d1e3a]"
+                    : "bg-[#23172e] border border-white/10 hover:bg-[#2d1e3a] text-white"
+                }`}
               >
-                <Phone className="size-5 text-[#f53b70]" />
-                <span>Audio Call</span>
+                {isLocked ? <Crown className="size-5 text-amber-400" /> : <Phone className="size-5 text-[#f53b70]" />}
+                <span>{isLocked ? "Unlock VIP Call" : "Audio Call"}</span>
               </button>
             </div>
 

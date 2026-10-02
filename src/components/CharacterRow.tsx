@@ -14,6 +14,7 @@ interface CharacterRowProps {
   onStartCall: (char: Character) => void;
   likedIds?: string[];
   onToggleLike?: (char: Character, e: React.MouseEvent) => void;
+  isPaidUser?: boolean;
 }
 
 export default function CharacterRow({
@@ -25,6 +26,7 @@ export default function CharacterRow({
   onStartCall,
   likedIds = [],
   onToggleLike,
+  isPaidUser = false,
 }: CharacterRowProps) {
   const scrollerRef = useRef<HTMLDivElement>(null);
 
@@ -92,6 +94,7 @@ export default function CharacterRow({
               onStartCall={onStartCall}
               isLiked={likedIds.includes(char.id)}
               onToggleLike={onToggleLike}
+              isPaidUser={isPaidUser}
             />
           </div>
         ))}
