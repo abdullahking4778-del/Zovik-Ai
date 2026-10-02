@@ -99,18 +99,38 @@ export async function savePersistentShort(short: ShortReel): Promise<void> {
 }
 
 export async function deletePersistentShort(shortId: string): Promise<boolean> {
+  // 1. Delete from Firestore
   try {
     const docRef = doc(db, "shorts", shortId);
     await deleteDoc(docRef);
   } catch (err: unknown) {
-    console.warn("[ServerDb] Firestore delete short failed:", err);
+    console.warn("[ServerDb] Firestore delete short note:", err);
   }
 
+  // 2. Delete from temporary/serverless storage
   try {
     const filePath = getStoragePath("shorts.json");
-    const existing = await getPersistentShorts();
-    const updated = existing.filter((s) => s.id !== shortId);
-    fs.writeFileSync(filePath, JSON.stringify(updated, null, 2), "utf-8");
+    if (fs.existsSync(filePath)) {
+      const raw = fs.readFileSync(filePath, "utf-8");
+      const list = JSON.parse(raw || "[]");
+      if (Array.isArray(list)) {
+        const filtered = list.filter((s) => s.id !== shortId);
+        fs.writeFileSync(filePath, JSON.stringify(filtered, null, 2), "utf-8");
+      }
+    }
+  } catch {}
+
+  // 3. Delete from root seed data (for local dev)
+  try {
+    const rootPath = path.join(process.cwd(), "src", "data", "shorts.json");
+    if (fs.existsSync(rootPath)) {
+      const raw = fs.readFileSync(rootPath, "utf-8");
+      const list = JSON.parse(raw || "[]");
+      if (Array.isArray(list)) {
+        const filtered = list.filter((s) => s.id !== shortId);
+        fs.writeFileSync(rootPath, JSON.stringify(filtered, null, 2), "utf-8");
+      }
+    }
   } catch {}
 
   return true;

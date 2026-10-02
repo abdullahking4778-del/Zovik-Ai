@@ -600,14 +600,21 @@ export default function AdminPage() {
   };
 
   const handleDeleteReel = async (id: string) => {
-    if (!confirm("Delete this reel?")) return;
+    if (!confirm("Are you sure you want to permanently delete this reel?")) return;
     try {
-      const res = await fetch(`/api/shorts?id=${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/shorts?id=${id}`, {
+        method: "DELETE",
+        headers: getAuthHeaders(),
+      });
       if (res.ok) {
         setShorts((prev) => prev.filter((s) => s.id !== id));
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        alert(errData.error || "Failed to delete reel. Please check admin login.");
       }
-    } catch {
-      alert("Error deleting reel");
+    } catch (err) {
+      console.error("Delete reel error:", err);
+      alert("Error deleting reel. Network or server error.");
     }
   };
 
