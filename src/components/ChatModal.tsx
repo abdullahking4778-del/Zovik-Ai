@@ -239,7 +239,7 @@ export default function ChatModal({
     setTimeUntilReset(`${hoursLeft}h ${minsLeft}m`);
   }, [authTier]);
 
-  // Load chat history from localStorage or greeting (Candy.ai style companion introductory video)
+  // Load chat history from localStorage or greeting (Zovik companion introductory video)
   useEffect(() => {
     if (character) {
       const storageKey = `zovik_chat_${character.id}`;
@@ -872,7 +872,7 @@ export default function ChatModal({
           {messages.map((msg, idx) => {
             const isAI = msg.sender === "ai";
 
-            // Candy.ai Style Introduction Video Message
+            // Zovik AI Introduction Video Message
             if (msg.type === "video") {
               return (
                 <div key={idx} className="flex items-start space-x-2 max-w-[85%] sm:max-w-sm">
