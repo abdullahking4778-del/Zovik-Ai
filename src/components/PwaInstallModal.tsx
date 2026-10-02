@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import { X, Download, Check, Share, PlusSquare, Sparkles } from "lucide-react";
+import { BeforeInstallPromptEvent } from "@/components/PwaRegister";
 
 interface PwaInstallModalProps {
   isOpen: boolean;
@@ -10,7 +11,7 @@ interface PwaInstallModalProps {
 }
 
 export default function PwaInstallModal({ isOpen, onClose }: PwaInstallModalProps) {
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isInstalled, setIsInstalled] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
 
@@ -37,10 +38,11 @@ export default function PwaInstallModal({ isOpen, onClose }: PwaInstallModalProp
     };
 
     window.addEventListener("zovik_pwa_ready", handlePromptReady);
-    window.addEventListener("beforeinstallprompt", (e: any) => {
+    window.addEventListener("beforeinstallprompt", (e: Event) => {
       e.preventDefault();
-      window.__pwaInstallPrompt = e;
-      setDeferredPrompt(e);
+      const pEvent = e as BeforeInstallPromptEvent;
+      window.__pwaInstallPrompt = pEvent;
+      setDeferredPrompt(pEvent);
     });
 
     return () => {

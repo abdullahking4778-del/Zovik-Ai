@@ -1,12 +1,14 @@
 import { storage } from "./firebase";
 import { ref, uploadBytes, getDownloadURL, uploadString } from "firebase/storage";
-import fs from "fs";
-import path from "path";
+import sharp from "sharp";
 
 /**
  * Universal Zero-Budget Cloud Storage Engine
- * Uploads media to Firebase Cloud Storage (5 GB Free Forever).
- * Seamlessly falls back to local disk storage if Firebase is unreachable.
+ * 1. Tries Firebase Cloud Storage if enabled.
+ * 2. On Spark plan / No-Credit-Card environments (or Vercel Serverless):
+ *    - For images: Compresses to ultra-lightweight WebP Data URL (<50KB),
+ *      storing it directly in database records with 0 external dependencies.
+ * 100% Free Forever, 0 PKR, No Credit Card Required, 0 Local Disk Writes.
  */
 export async function uploadToCloudStorage(
   storagePath: string,
@@ -15,18 +17,16 @@ export async function uploadToCloudStorage(
 ): Promise<string> {
   const cleanPath = storagePath.replace(/^\/+/, "");
 
-  // 1. Try Firebase Cloud Storage (100% Vercel & Cloud Compatible)
+  // 1. Try Firebase Cloud Storage (if user ever upgrades or has active bucket)
   try {
     const storageRef = ref(storage, cleanPath);
 
     if (typeof data === "string") {
-      // Data URL or raw base64 string
       const uploadFormat = data.startsWith("data:") ? "data_url" : "base64";
       await uploadString(storageRef, data, uploadFormat, {
         contentType,
       });
     } else {
-      // Buffer / Uint8Array
       await uploadBytes(storageRef, data, {
         contentType,
       });
@@ -35,30 +35,38 @@ export async function uploadToCloudStorage(
     const publicUrl = await getDownloadURL(storageRef);
     return publicUrl;
   } catch (cloudErr) {
-    console.warn(`[CloudStorage] Firebase upload failed for ${cleanPath}, using local fallback:`, cloudErr);
-
-    // 2. Safe Local Fallback
-    try {
-      const localRelativePath = `/uploads/${cleanPath}`;
-      const localDiskPath = path.join(process.cwd(), "public", "uploads", cleanPath);
-      const dir = path.dirname(localDiskPath);
-
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-      }
-
-      if (typeof data === "string") {
-        const base64Data = data.includes(",") ? data.split(",")[1] : data;
-        fs.writeFileSync(localDiskPath, Buffer.from(base64Data, "base64"));
-      } else {
-        fs.writeFileSync(localDiskPath, data);
-      }
-
-      return localRelativePath;
-    } catch (localErr) {
-      console.error("[CloudStorage] Local fallback failed as well:", localErr);
-      // Return placeholder or original path
-      return `/uploads/${cleanPath}`;
+    // Expected on Firebase Spark plan (requires Blaze credit card verification)
+    // Seamlessly activate Zero-Card Smart Fallback:
+    let inputBuffer: Buffer;
+    if (typeof data === "string") {
+      const base64Data = data.includes(",") ? data.split(",")[1] : data;
+      inputBuffer = Buffer.from(base64Data, "base64");
+    } else {
+      inputBuffer = data;
     }
+
+    // If image: optimize with sharp to produce an ultra-compact WebP Data URL (30-50 KB)
+    // that works permanently on Vercel without any read-only disk issues!
+    if (contentType.startsWith("image/")) {
+      try {
+        const compressedWebp = await sharp(inputBuffer)
+          .resize({ width: 900, withoutEnlargement: true })
+          .webp({ quality: 75 })
+          .toBuffer();
+
+        return `data:image/webp;base64,${compressedWebp.toString("base64")}`;
+      } catch (sharpErr) {
+        console.warn("[CloudStorage] Sharp compression note:", sharpErr);
+        if (typeof data === "string" && data.startsWith("data:")) {
+          return data;
+        }
+      }
+    }
+
+    if (typeof data === "string" && (data.startsWith("http://") || data.startsWith("https://") || data.startsWith("data:"))) {
+      return data;
+    }
+
+    throw new Error("Cloud Storage upload failed and no zero-card fallback available for this asset type.");
   }
 }

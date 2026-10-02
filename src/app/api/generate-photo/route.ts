@@ -7,12 +7,22 @@ import {
   consumeQuotaOnSuccess,
   getAuthoritativeIdentifier,
 } from "@/lib/quotaManager";
+import { getPersistentCustomCharacters } from "@/lib/serverDb";
+import { Character } from "@/types";
+
+interface GeneratePhotoBody {
+  character?: Character;
+  characterId?: string;
+  seenIndices?: number[];
+  token?: string;
+  sessionToken?: string;
+}
 
 export async function POST(req: NextRequest) {
   try {
-    let body: any;
+    let body: GeneratePhotoBody;
     try {
-      body = await req.json();
+      body = (await req.json()) as GeneratePhotoBody;
     } catch {
       return NextResponse.json({ error: "Invalid JSON in request body" }, { status: 400 });
     }
@@ -62,18 +72,17 @@ export async function POST(req: NextRequest) {
     }
 
     // 2. Resolve Character Gallery
-    let matchedChar: any = null;
+    let matchedChar: Character | null = null;
     try {
-      const defCharsFile = path.join(process.cwd(), "src", "data", "characters.json");
-      const custCharsFile = path.join(process.cwd(), "src", "data", "custom_characters.json");
+      const customList = await getPersistentCustomCharacters();
+      matchedChar = customList.find((c) => c.id === targetCharId) || null;
 
-      if (fs.existsSync(custCharsFile)) {
-        const cust = JSON.parse(fs.readFileSync(custCharsFile, "utf-8") || "[]");
-        matchedChar = cust.find((c: any) => c.id === targetCharId);
-      }
-      if (!matchedChar && fs.existsSync(defCharsFile)) {
-        const def = JSON.parse(fs.readFileSync(defCharsFile, "utf-8") || "[]");
-        matchedChar = def.find((c: any) => c.id === targetCharId);
+      if (!matchedChar) {
+        const defCharsFile = path.join(process.cwd(), "src", "data", "characters.json");
+        if (fs.existsSync(defCharsFile)) {
+          const def: Character[] = JSON.parse(fs.readFileSync(defCharsFile, "utf-8") || "[]");
+          matchedChar = def.find((c) => c.id === targetCharId) || null;
+        }
       }
     } catch (e) {
       console.error("Error reading character gallery:", e);
@@ -141,8 +150,9 @@ export async function POST(req: NextRequest) {
         tier: userTier,
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Internal server error";
     console.error("Photo API Error:", error);
-    return NextResponse.json({ error: error?.message || "Internal server error" }, { status: 500 });
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

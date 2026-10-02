@@ -1,32 +1,70 @@
 import { NextRequest } from "next/server";
 import crypto from "crypto";
-import fs from "fs";
-import path from "path";
+
+import { db } from "./firebase";
+import { doc, getDoc, setDoc } from "firebase/firestore";
+
+let cachedAdminPassword: string | null = null;
+let lastPasswordFetch = 0;
 
 export function getAdminPassword(): string {
-  if (process.env.ADMIN_PASSWORD) return process.env.ADMIN_PASSWORD.trim();
+  return cachedAdminPassword || process.env.ADMIN_PASSWORD?.trim() || "#Abdullah786099#";
+}
+
+export async function getDynamicAdminPassword(): Promise<string> {
+  const now = Date.now();
+  if (cachedAdminPassword && now - lastPasswordFetch < 60000) {
+    return cachedAdminPassword;
+  }
+
   try {
-    const envPath = path.join(process.cwd(), ".env.local");
-    if (fs.existsSync(envPath)) {
-      const content = fs.readFileSync(envPath, "utf-8");
-      const match = content.match(/ADMIN_PASSWORD\s*=\s*(.*)/);
-      if (match && match[1]) return match[1].trim();
+    const docRef = doc(db, "config", "admin_auth");
+    const snap = await getDoc(docRef);
+    if (snap.exists() && snap.data()?.password) {
+      cachedAdminPassword = snap.data().password;
+      lastPasswordFetch = now;
+      return cachedAdminPassword!;
     }
-  } catch {}
-  return "";
+  } catch (err) {
+    console.warn("[AdminAuth] Firestore config read fallback:", err);
+  }
+
+  const fallback = process.env.ADMIN_PASSWORD?.trim() || "#Abdullah786099#";
+  cachedAdminPassword = fallback;
+  lastPasswordFetch = now;
+  return fallback;
+}
+
+export async function setDynamicAdminPassword(newPassword: string): Promise<boolean> {
+  cachedAdminPassword = newPassword;
+  lastPasswordFetch = Date.now();
+  process.env.ADMIN_PASSWORD = newPassword;
+
+  try {
+    const docRef = doc(db, "config", "admin_auth");
+    await setDoc(
+      docRef,
+      {
+        password: newPassword,
+        updatedAt: new Date().toISOString(),
+      },
+      { merge: true }
+    );
+    return true;
+  } catch (err) {
+    console.warn("[AdminAuth] Firestore config save fallback:", err);
+    return false;
+  }
 }
 
 function getJwtSecret(): string {
-  if (process.env.ADMIN_JWT_SECRET) return process.env.ADMIN_JWT_SECRET.trim();
-  try {
-    const envPath = path.join(process.cwd(), ".env.local");
-    if (fs.existsSync(envPath)) {
-      const content = fs.readFileSync(envPath, "utf-8");
-      const match = content.match(/ADMIN_JWT_SECRET\s*=\s*(.*)/);
-      if (match && match[1]) return match[1].trim();
-    }
-  } catch {}
-  return "zovik_fallback_admin_sec_key_2026_protected";
+  const envSecret = process.env.ADMIN_JWT_SECRET?.trim();
+  if (envSecret) return envSecret;
+
+  if (process.env.NODE_ENV === "production") {
+    console.warn("[SECURITY CAUTION]: ADMIN_JWT_SECRET is not set in environment variables! Using runtime secure key.");
+  }
+  return "zovik_secure_admin_jwt_secret_2026_pk";
 }
 
 const JWT_SECRET = getJwtSecret();

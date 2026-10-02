@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useLocalStorage } from "@/hooks/useLocalStorage";
 import {
   Home,
   Compass,
@@ -34,25 +35,18 @@ export default function Sidebar({
   unreadCount = 0,
 }: SidebarProps) {
   const { tier: authTier } = useAuth();
-  const [currentLang, setCurrentLang] = useState("ur");
+  const [currentLang, setCurrentLang] = useLocalStorage<string>("zovik_lang", "ur");
 
   const isVip = authTier === "vip";
   const isPlus = authTier === "plus";
 
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("zovik_lang") || "ur";
-      setCurrentLang(saved);
-    }
-  }, []);
-
   const handleLangChange = (lang: string) => {
     setCurrentLang(lang);
     if (typeof window !== "undefined") {
-      localStorage.setItem("zovik_lang", lang);
       window.dispatchEvent(new CustomEvent("zovik_lang_changed", { detail: { lang } }));
     }
   };
+
   const navItems = [
     { id: "home", label: "Home", icon: Home },
     { id: "discover", label: "Discover", icon: Compass },

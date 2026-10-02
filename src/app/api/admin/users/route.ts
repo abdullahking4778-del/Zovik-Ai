@@ -135,10 +135,13 @@ export async function PUT(req: NextRequest) {
         storageRetentionDays: retention,
       },
     });
-  } catch (e: any) {
-    return NextResponse.json({ error: e?.message || "Failed to update user" }, { status: 500 });
+  } catch (e: unknown) {
+    console.error("[Admin Users PUT Error]:", e);
+    return NextResponse.json({ error: "Internal server error updating user" }, { status: 500 });
   }
 }
+
+export const PATCH = PUT;
 
 export async function DELETE(req: NextRequest) {
   if (!verifyAdminRequest(req)) {
@@ -170,7 +173,8 @@ export async function DELETE(req: NextRequest) {
     }
 
     return NextResponse.json({ success: true, message: "User deleted successfully" });
-  } catch (e: any) {
-    return NextResponse.json({ error: e?.message || "Failed to delete user" }, { status: 500 });
+  } catch (e: unknown) {
+    console.error("[Admin Users DELETE Error]:", e);
+    return NextResponse.json({ error: "Internal server error deleting user" }, { status: 500 });
   }
 }

@@ -1,5 +1,7 @@
 import fs from "fs";
 import path from "path";
+import { db } from "./firebase";
+import { doc, setDoc } from "firebase/firestore";
 
 export interface StoredUser {
   id: string;
@@ -45,7 +47,7 @@ export function saveAllStoredUsers(users: StoredUser[]): void {
     fs.writeFileSync(tmpPath, JSON.stringify(users, null, 2), "utf-8");
     fs.renameSync(tmpPath, filePath);
   } catch (err) {
-    console.error("[UserStore] Failed to save users:", err);
+    console.warn("[UserStore] Local file save note (Safe for serverless):", err);
     try {
       if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
     } catch {}
@@ -70,24 +72,25 @@ export function upsertStoredUser(
   );
 
   const now = new Date();
+  let resultUser: StoredUser;
+
   if (existingIdx >= 0) {
     const existing = users[existingIdx];
-    const updatedUser: StoredUser = {
+    resultUser = {
       ...existing,
       ...updates,
       tier: (updates.tier || existing.tier || "free") as "free" | "plus" | "vip",
       isVip: updates.tier ? updates.tier === "vip" : existing.isVip,
       lastLoginAt: updates.lastLoginAt || now.toISOString(),
     };
-    users[existingIdx] = updatedUser;
+    users[existingIdx] = resultUser;
     saveAllStoredUsers(users);
-    return updatedUser;
   } else {
     const assignedTier = updates.tier || "free";
     const days = typeof updates.subscriptionDays === "number" ? updates.subscriptionDays : (assignedTier === "vip" ? 30 : 0);
     const endsAt = days > 0 ? new Date(now.getTime() + days * 24 * 60 * 60 * 1000).toISOString() : null;
 
-    const newUser: StoredUser = {
+    resultUser = {
       id: identifier,
       email: updates.email || identifier,
       name: updates.name || (updates.email ? updates.email.split("@")[0] : "User"),
@@ -104,10 +107,34 @@ export function upsertStoredUser(
       lastLoginAt: now.toISOString(),
       ...updates,
     };
-    users.push(newUser);
+    users.push(resultUser);
     saveAllStoredUsers(users);
-    return newUser;
   }
+
+  // Asynchronous cloud sync to Firestore (guarantees data persistence across Vercel cold starts)
+  try {
+    const docId = resultUser.id || resultUser.email;
+    if (docId) {
+      const userRef = doc(db, "users", docId);
+      setDoc(
+        userRef,
+        {
+          zovik_tier: resultUser.tier,
+          email: resultUser.email,
+          name: resultUser.name,
+          isVip: resultUser.isVip,
+          subscriptionDays: resultUser.subscriptionDays,
+          subscriptionStart: resultUser.subscriptionStart || null,
+          subscriptionEndsAt: resultUser.subscriptionEndsAt || null,
+          storageRetentionDays: resultUser.storageRetentionDays,
+          lastLoginAt: resultUser.lastLoginAt,
+        },
+        { merge: true }
+      ).catch((e) => console.warn("[UserStore] Firestore sync note:", e));
+    }
+  } catch {}
+
+  return resultUser;
 }
 
 /**

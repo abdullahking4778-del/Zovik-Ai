@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createAdminToken, verifyAdminRequest, getAdminPassword } from "@/lib/adminAuth";
+import { createAdminToken, verifyAdminRequest, getDynamicAdminPassword } from "@/lib/adminAuth";
 
 export async function GET(req: NextRequest) {
   const isValid = verifyAdminRequest(req);
@@ -12,11 +12,11 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const { password } = await req.json();
-    const correctPassword = getAdminPassword();
+    const correctPassword = await getDynamicAdminPassword();
 
     if (!correctPassword) {
       return NextResponse.json(
-        { error: "Server Configuration Error: ADMIN_PASSWORD is not set." },
+        { error: "Server Configuration Error: Admin password not initialized." },
         { status: 500 }
       );
     }
@@ -33,7 +33,8 @@ export async function POST(req: NextRequest) {
       { error: "Invalid Master Password! Access Denied." },
       { status: 401 }
     );
-  } catch (error: any) {
-    return NextResponse.json({ error: error?.message || "Server error" }, { status: 500 });
+  } catch (error: unknown) {
+    console.error("[Admin Auth POST Error]:", error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

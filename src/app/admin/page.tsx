@@ -38,7 +38,7 @@ import {
   Calendar,
   HardDrive,
 } from "lucide-react";
-import { Character } from "@/types";
+import { Character, ShortReel, PaymentRequest, UserAccount } from "@/types";
 
 export default function AdminPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -52,17 +52,17 @@ export default function AdminPage() {
   >("overview");
 
   // Admin Data State
-  const [users, setUsers] = useState<any[]>([]);
+  const [users, setUsers] = useState<UserAccount[]>([]);
   const [characters, setCharacters] = useState<Character[]>([]);
   const [availableImages, setAvailableImages] = useState<string[]>([]);
-  const [payments, setPayments] = useState<any[]>([]);
-  const [shorts, setShorts] = useState<any[]>([]);
+  const [payments, setPayments] = useState<PaymentRequest[]>([]);
+  const [shorts, setShorts] = useState<ShortReel[]>([]);
   const [loadingData, setLoadingData] = useState(false);
   const [previewSlip, setPreviewSlip] = useState<string | null>(null);
 
   // User Management State
   const [userSearchQuery, setUserSearchQuery] = useState("");
-  const [editingUser, setEditingUser] = useState<any | null>(null);
+  const [editingUser, setEditingUser] = useState<UserAccount | null>(null);
   const [editUserTier, setEditUserTier] = useState<"free" | "plus" | "vip">("free");
   const [editUserDays, setEditUserDays] = useState<number>(30);
   const [editUserStorageDays, setEditUserStorageDays] = useState<number>(35);
@@ -261,7 +261,7 @@ export default function AdminPage() {
     }
   };
 
-  const handleOpenEditUser = (user: any) => {
+  const handleOpenEditUser = (user: UserAccount) => {
     setEditingUser(user);
     setEditUserTier(user.tier === "vip" ? "vip" : user.tier === "plus" ? "plus" : "free");
     setEditUserDays(user.subscriptionDays || (user.tier === "vip" ? 30 : 0));
@@ -487,8 +487,9 @@ export default function AdminPage() {
           throw new Error(data.error || "Failed to save reel");
         }
       }
-    } catch (err: any) {
-      setReelUploadError(err.message || "Error saving reel");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Error saving reel";
+      setReelUploadError(msg);
     } finally {
       setIsUploadingReel(false);
     }
@@ -518,7 +519,7 @@ export default function AdminPage() {
         const data = await res.json();
         if (res.ok) {
           if (data.isZip && Array.isArray(data.files)) {
-            data.files.forEach((f: any) => {
+            data.files.forEach((f: { type?: string; url?: string }) => {
               if (f.type === "image" && f.url) newUrls.push(f.url);
             });
           } else if (data.url) {
@@ -535,8 +536,9 @@ export default function AdminPage() {
         setGalleryUploadStatus("No valid images found.");
         setTimeout(() => setGalleryUploadStatus(null), 3000);
       }
-    } catch (err: any) {
-      setGalleryUploadStatus(`Upload failed: ${err.message || "Unknown error"}`);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      setGalleryUploadStatus(`Upload failed: ${msg}`);
     } finally {
       setIsUploadingGallery(false);
     }
@@ -589,22 +591,30 @@ export default function AdminPage() {
       setCurrentMasterPassword("");
       setNewMasterPassword("");
       setConfirmMasterPassword("");
-    } catch (err: any) {
-      setPasswordStatusMsg({ type: "error", text: err.message || "Failed to update password." });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to update password.";
+      setPasswordStatusMsg({ type: "error", text: msg });
     } finally {
       setIsUpdatingPassword(false);
     }
   };
 
   const handleDeleteReel = async (id: string) => {
-    if (!confirm("Delete this reel?")) return;
+    if (!confirm("Are you sure you want to permanently delete this reel?")) return;
     try {
-      const res = await fetch(`/api/shorts?id=${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/shorts?id=${id}`, {
+        method: "DELETE",
+        headers: getAuthHeaders(),
+      });
       if (res.ok) {
         setShorts((prev) => prev.filter((s) => s.id !== id));
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        alert(errData.error || "Failed to delete reel. Please check admin login.");
       }
-    } catch {
-      alert("Error deleting reel");
+    } catch (err) {
+      console.error("Delete reel error:", err);
+      alert("Error deleting reel. Network or server error.");
     }
   };
 
@@ -735,7 +745,7 @@ export default function AdminPage() {
             return (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
+                onClick={() => setActiveTab(tab.id as typeof activeTab)}
                 className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-extrabold transition-all whitespace-nowrap ${
                   isActive
                     ? "bg-gradient-to-r from-[#f53b70] to-[#ff5b8c] text-white shadow-md shadow-pink-600/30"
@@ -898,7 +908,7 @@ export default function AdminPage() {
                           </button>
                         ) : (
                           <span className="text-[10px] text-white/40">
-                            {(p as any).screenshotPurged ? "Auto-Cleaned 🧹" : "No Slip"}
+                            {p.screenshotPurged ? "Auto-Cleaned 🧹" : "No Slip"}
                           </span>
                         )}
                       </td>

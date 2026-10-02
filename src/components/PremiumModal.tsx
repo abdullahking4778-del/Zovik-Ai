@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   X,
   Check,
@@ -43,19 +43,21 @@ export default function PremiumModal({ isOpen, onClose }: PremiumModalProps) {
 
   if (!isOpen) return null;
 
-  // Auto-fill user email from localStorage safely
-  let currentEmail = "";
-  if (typeof window !== "undefined") {
+  const [currentEmail, setCurrentEmail] = useState("");
+
+  useEffect(() => {
     try {
       const savedUserStr = localStorage.getItem("zovik_user");
       if (savedUserStr) {
         const parsed = JSON.parse(savedUserStr);
-        currentEmail = parsed?.email || "";
+        if (parsed?.email) {
+          setCurrentEmail(parsed.email);
+        }
       }
     } catch (e) {
       console.warn("Failed to parse user session in PremiumModal:", e);
     }
-  }
+  }, []);
 
   // Payment credentials provided by admin
   const paymentDetails = {

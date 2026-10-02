@@ -4,10 +4,47 @@ import React, { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { PhoneOff, Mic, MicOff, Volume2, VolumeX, Sparkles, Send } from "lucide-react";
 import { Character } from "@/types";
+import { safeLocalStorage } from "@/lib/storage";
 
 interface VoiceCallModalProps {
   character: Character | null;
   onClose: () => void;
+}
+
+interface SpeechRecognitionResultItem {
+  transcript: string;
+  confidence: number;
+}
+
+interface SpeechRecognitionEventLike extends Event {
+  resultIndex: number;
+  results: {
+    length: number;
+    [index: number]: {
+      [index: number]: SpeechRecognitionResultItem;
+      isFinal?: boolean;
+    };
+  };
+}
+
+interface SpeechRecognitionInstance {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onstart: (() => void) | null;
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
+  onerror: ((event: Event) => void) | null;
+  onend: (() => void) | null;
+  start(): void;
+  stop(): void;
+  abort(): void;
+}
+
+type SpeechRecognitionConstructor = new () => SpeechRecognitionInstance;
+
+interface WindowWithSpeech extends Window {
+  SpeechRecognition?: SpeechRecognitionConstructor;
+  webkitSpeechRecognition?: SpeechRecognitionConstructor;
 }
 
 export default function VoiceCallModal({
@@ -23,7 +60,7 @@ export default function VoiceCallModal({
   const [userTranscript, setUserTranscript] = useState<string>("");
   const [inputText, setInputText] = useState("");
   const [micUnsupported, setMicUnsupported] = useState(false);
-  const recognitionRef = useRef<any>(null);
+  const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
 
   // Timer
   useEffect(() => {
@@ -119,10 +156,10 @@ export default function VoiceCallModal({
   const startListening = () => {
     if (typeof window === "undefined" || isSpeaking) return;
 
-    const SpeechRecognition =
-      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const win = window as unknown as WindowWithSpeech;
+    const SpeechRecognitionClass = win.SpeechRecognition || win.webkitSpeechRecognition;
 
-    if (!SpeechRecognition) {
+    if (!SpeechRecognitionClass) {
       setMicUnsupported(true);
       console.warn("SpeechRecognition not supported in this browser");
       return;
@@ -133,7 +170,7 @@ export default function VoiceCallModal({
         recognitionRef.current.abort();
       }
 
-      const recognition = new SpeechRecognition();
+      const recognition = new SpeechRecognitionClass();
       recognition.continuous = false;
       recognition.interimResults = true;
       recognition.lang = micLang;
@@ -142,19 +179,19 @@ export default function VoiceCallModal({
         setIsListening(true);
       };
 
-      recognition.onresult = (event: any) => {
+      recognition.onresult = (event: SpeechRecognitionEventLike) => {
         let currentText = "";
         for (let i = event.resultIndex; i < event.results.length; ++i) {
           currentText += event.results[i][0].transcript;
         }
         setUserTranscript(currentText);
 
-        if (event.results[0].isFinal) {
+        if (event.results[0]?.isFinal) {
           handleUserSpeech(currentText);
         }
       };
 
-      recognition.onerror = (event: any) => {
+      recognition.onerror = () => {
         setIsListening(false);
       };
 
@@ -184,9 +221,9 @@ export default function VoiceCallModal({
     setCallTranscript("Thinking...");
 
     try {
-      const savedUserStr = typeof window !== "undefined" ? localStorage.getItem("zovik_user") : null;
-      const directTier = typeof window !== "undefined" ? localStorage.getItem("zovik_tier") || "free" : "free";
-      const token = typeof window !== "undefined" ? localStorage.getItem("zovik_token") : null;
+      const savedUserStr = safeLocalStorage.getRawItem("zovik_user");
+      const directTier = safeLocalStorage.getRawItem("zovik_tier", "free") || "free";
+      const token = safeLocalStorage.getRawItem("zovik_token");
       let currentUserId: string | undefined;
       try {
         if (savedUserStr) currentUserId = JSON.parse(savedUserStr)?.id;
