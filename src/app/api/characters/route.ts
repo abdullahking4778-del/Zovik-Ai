@@ -87,9 +87,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true, character: saved });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Failed to add character";
     console.error("[Characters POST Error]:", err);
-    return NextResponse.json({ success: false, error: message }, { status: 500 });
+    return NextResponse.json({ success: false, error: "Internal server error adding companion" }, { status: 500 });
   }
 }
 
@@ -109,8 +108,7 @@ export async function DELETE(req: NextRequest) {
 
     return NextResponse.json({ success: true, message: "Custom character deleted" });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Failed to delete character";
     console.error("[Characters DELETE Error]:", err);
-    return NextResponse.json({ success: false, error: message }, { status: 500 });
+    return NextResponse.json({ success: false, error: "Internal server error deleting companion" }, { status: 500 });
   }
 }

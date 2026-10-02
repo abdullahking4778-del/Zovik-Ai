@@ -33,9 +33,8 @@ export async function GET(req: NextRequest) {
     const payments = await getPersistentPayments();
     return NextResponse.json({ success: true, payments });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Failed to fetch payments";
     console.error("[Subscriptions GET Error]:", err);
-    return NextResponse.json({ success: false, error: message }, { status: 500 });
+    return NextResponse.json({ success: false, error: "Internal server error fetching payments" }, { status: 500 });
   }
 }
 
@@ -95,9 +94,8 @@ export async function POST(req: NextRequest) {
       request: newRequest,
     });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Failed to submit payment";
     console.error("[Subscriptions POST Error]:", err);
-    return NextResponse.json({ success: false, error: message }, { status: 500 });
+    return NextResponse.json({ success: false, error: "Internal server error submitting payment" }, { status: 500 });
   }
 }
 
@@ -162,8 +160,7 @@ export async function PATCH(req: NextRequest) {
 
     return NextResponse.json({ success: true, payment: updatedPayment });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Operation failed";
     console.error("[Subscriptions PATCH Error]:", err);
-    return NextResponse.json({ success: false, error: message }, { status: 500 });
+    return NextResponse.json({ success: false, error: "Internal server error updating payment status" }, { status: 500 });
   }
 }

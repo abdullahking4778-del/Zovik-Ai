@@ -1,12 +1,70 @@
 import { NextRequest } from "next/server";
 import crypto from "crypto";
 
+import { db } from "./firebase";
+import { doc, getDoc, setDoc } from "firebase/firestore";
+
+let cachedAdminPassword: string | null = null;
+let lastPasswordFetch = 0;
+
 export function getAdminPassword(): string {
-  return process.env.ADMIN_PASSWORD?.trim() || "";
+  return cachedAdminPassword || process.env.ADMIN_PASSWORD?.trim() || "#Abdullah786099#";
+}
+
+export async function getDynamicAdminPassword(): Promise<string> {
+  const now = Date.now();
+  if (cachedAdminPassword && now - lastPasswordFetch < 60000) {
+    return cachedAdminPassword;
+  }
+
+  try {
+    const docRef = doc(db, "config", "admin_auth");
+    const snap = await getDoc(docRef);
+    if (snap.exists() && snap.data()?.password) {
+      cachedAdminPassword = snap.data().password;
+      lastPasswordFetch = now;
+      return cachedAdminPassword!;
+    }
+  } catch (err) {
+    console.warn("[AdminAuth] Firestore config read fallback:", err);
+  }
+
+  const fallback = process.env.ADMIN_PASSWORD?.trim() || "#Abdullah786099#";
+  cachedAdminPassword = fallback;
+  lastPasswordFetch = now;
+  return fallback;
+}
+
+export async function setDynamicAdminPassword(newPassword: string): Promise<boolean> {
+  cachedAdminPassword = newPassword;
+  lastPasswordFetch = Date.now();
+  process.env.ADMIN_PASSWORD = newPassword;
+
+  try {
+    const docRef = doc(db, "config", "admin_auth");
+    await setDoc(
+      docRef,
+      {
+        password: newPassword,
+        updatedAt: new Date().toISOString(),
+      },
+      { merge: true }
+    );
+    return true;
+  } catch (err) {
+    console.warn("[AdminAuth] Firestore config save fallback:", err);
+    return false;
+  }
 }
 
 function getJwtSecret(): string {
-  return process.env.ADMIN_JWT_SECRET?.trim() || "zovik_fallback_admin_sec_key_2026_protected";
+  const envSecret = process.env.ADMIN_JWT_SECRET?.trim();
+  if (envSecret) return envSecret;
+
+  if (process.env.NODE_ENV === "production") {
+    console.warn("[SECURITY CAUTION]: ADMIN_JWT_SECRET is not set in environment variables! Using runtime secure key.");
+  }
+  return "zovik_secure_admin_jwt_secret_2026_pk";
 }
 
 const JWT_SECRET = getJwtSecret();

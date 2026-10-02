@@ -1,7 +1,5 @@
 import { storage } from "./firebase";
 import { ref, uploadBytes, getDownloadURL, uploadString } from "firebase/storage";
-import fs from "fs";
-import path from "path";
 import sharp from "sharp";
 
 /**
@@ -10,8 +8,7 @@ import sharp from "sharp";
  * 2. On Spark plan / No-Credit-Card environments (or Vercel Serverless):
  *    - For images: Compresses to ultra-lightweight WebP Data URL (<50KB),
  *      storing it directly in database records with 0 external dependencies.
- *    - For local development: Saves to public/uploads/ for fast local serving.
- * 100% Free Forever, 0 PKR, No Credit Card Required.
+ * 100% Free Forever, 0 PKR, No Credit Card Required, 0 Local Disk Writes.
  */
 export async function uploadToCloudStorage(
   storagePath: string,
@@ -48,7 +45,7 @@ export async function uploadToCloudStorage(
       inputBuffer = data;
     }
 
-    // A. If image: optimize with sharp to produce an ultra-compact WebP Data URL (30-50 KB)
+    // If image: optimize with sharp to produce an ultra-compact WebP Data URL (30-50 KB)
     // that works permanently on Vercel without any read-only disk issues!
     if (contentType.startsWith("image/")) {
       try {
@@ -57,40 +54,19 @@ export async function uploadToCloudStorage(
           .webp({ quality: 75 })
           .toBuffer();
 
-        // Also save locally if public/uploads directory is writable (Local Dev)
-        try {
-          const localRelativePath = `/uploads/${cleanPath}`;
-          const localDiskPath = path.join(process.cwd(), "public", "uploads", cleanPath);
-          const dir = path.dirname(localDiskPath);
-          if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-          fs.writeFileSync(localDiskPath, compressedWebp);
-
-          if (!process.env.VERCEL) {
-            return localRelativePath;
-          }
-        } catch {}
-
-        // On Vercel serverless: return compressed data URI so it stays permanently in database / payment record
         return `data:image/webp;base64,${compressedWebp.toString("base64")}`;
       } catch (sharpErr) {
         console.warn("[CloudStorage] Sharp compression note:", sharpErr);
+        if (typeof data === "string" && data.startsWith("data:")) {
+          return data;
+        }
       }
     }
 
-    // B. For videos or raw files on local development
-    try {
-      const localRelativePath = `/uploads/${cleanPath}`;
-      const localDiskPath = path.join(process.cwd(), "public", "uploads", cleanPath);
-      const dir = path.dirname(localDiskPath);
-      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-      fs.writeFileSync(localDiskPath, inputBuffer);
-      return localRelativePath;
-    } catch (localErr) {
-      console.error("[CloudStorage] Local write failed:", localErr);
-      if (typeof data === "string" && data.startsWith("data:")) {
-        return data;
-      }
-      return `/uploads/${cleanPath}`;
+    if (typeof data === "string" && (data.startsWith("http://") || data.startsWith("https://") || data.startsWith("data:"))) {
+      return data;
     }
+
+    throw new Error("Cloud Storage upload failed and no zero-card fallback available for this asset type.");
   }
 }

@@ -42,9 +42,8 @@ export async function GET(req: NextRequest) {
       total: all.length,
     });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Failed to load characters";
     console.error("[Admin Characters GET Error]:", err);
-    return NextResponse.json({ success: false, error: message }, { status: 500 });
+    return NextResponse.json({ success: false, error: "Internal server error loading admin characters" }, { status: 500 });
   }
 }
 
@@ -103,9 +102,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true, message: "Companion saved successfully!", character: formatted });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Failed to save companion";
     console.error("[Admin Characters POST Error]:", err);
-    return NextResponse.json({ success: false, error: message }, { status: 500 });
+    return NextResponse.json({ success: false, error: "Internal server error saving companion" }, { status: 500 });
   }
 }
 
@@ -126,9 +124,8 @@ export async function DELETE(req: NextRequest) {
 
     return NextResponse.json({ success: true, message: "Companion removed successfully" });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Failed to delete companion";
     console.error("[Admin Characters DELETE Error]:", err);
-    return NextResponse.json({ success: false, error: message }, { status: 500 });
+    return NextResponse.json({ success: false, error: "Internal server error removing companion" }, { status: 500 });
   }
 }
 
@@ -165,8 +162,7 @@ export async function PATCH(req: NextRequest) {
 
     return NextResponse.json({ success: false, error: "Character not found" }, { status: 404 });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Failed to update gallery";
     console.error("[Admin Characters PATCH Error]:", err);
-    return NextResponse.json({ success: false, error: message }, { status: 500 });
+    return NextResponse.json({ success: false, error: "Internal server error updating gallery" }, { status: 500 });
   }
 }

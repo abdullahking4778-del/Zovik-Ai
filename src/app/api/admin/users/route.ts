@@ -136,8 +136,8 @@ export async function PUT(req: NextRequest) {
       },
     });
   } catch (e: unknown) {
-    const message = e instanceof Error ? e.message : "Failed to update user";
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error("[Admin Users PUT Error]:", e);
+    return NextResponse.json({ error: "Internal server error updating user" }, { status: 500 });
   }
 }
 
@@ -174,7 +174,7 @@ export async function DELETE(req: NextRequest) {
 
     return NextResponse.json({ success: true, message: "User deleted successfully" });
   } catch (e: unknown) {
-    const message = e instanceof Error ? e.message : "Failed to delete user";
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error("[Admin Users DELETE Error]:", e);
+    return NextResponse.json({ error: "Internal server error deleting user" }, { status: 500 });
   }
 }

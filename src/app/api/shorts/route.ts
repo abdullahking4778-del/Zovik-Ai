@@ -13,9 +13,8 @@ export async function GET() {
     const shorts = await getPersistentShorts();
     return NextResponse.json({ success: true, shorts });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Failed to load shorts";
     console.error("[Shorts GET Error]:", err);
-    return NextResponse.json({ success: false, error: message }, { status: 500 });
+    return NextResponse.json({ success: false, error: "Internal server error loading shorts" }, { status: 500 });
   }
 }
 
@@ -54,9 +53,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true, short: newShort });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Failed to create short";
     console.error("[Shorts POST Error]:", err);
-    return NextResponse.json({ success: false, error: message }, { status: 500 });
+    return NextResponse.json({ success: false, error: "Internal server error creating short reel" }, { status: 500 });
   }
 }
 
@@ -76,8 +74,7 @@ export async function DELETE(req: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Failed to delete short";
     console.error("[Shorts DELETE Error]:", err);
-    return NextResponse.json({ success: false, error: message }, { status: 500 });
+    return NextResponse.json({ success: false, error: "Internal server error deleting short reel" }, { status: 500 });
   }
 }
