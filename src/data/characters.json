@@ -79,7 +79,9 @@
     ],
     "videoUrl": "/videos/companions/raven-steele.mp4",
     "gallery": [
-      "/characters/zovik_02.jpg"
+      "/characters/zovik_02.jpg",
+      "/characters/zovik_16.jpg",
+      "/characters/zovik_24.jpg"
     ],
     "accessTier": "vip",
     "isVipOnly": true
@@ -120,10 +122,12 @@
     ],
     "videoUrl": "/videos/companions/genevieve-claire.mp4",
     "gallery": [
-      "/characters/zovik_03.jpg"
+      "/characters/zovik_03.jpg",
+      "/characters/zovik_15.jpg",
+      "/characters/zovik_33.jpg"
     ],
-    "accessTier": "vip",
-    "isVipOnly": true
+    "accessTier": "free",
+    "isVipOnly": false
   },
   {
     "id": "sierra-brooks",
@@ -1021,7 +1025,9 @@
     ],
     "videoUrl": "/videos/companions/julian-blackwood.mp4",
     "gallery": [
-      "/characters/zovik_26.jpg"
+      "/characters/zovik_26.jpg",
+      "/characters/zovik_10.jpg",
+      "/characters/zovik_22.jpg"
     ],
     "accessTier": "free",
     "isVipOnly": false

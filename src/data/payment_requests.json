@@ -1,50 +1,5 @@
 [
   {
-    "id": "pay_8e60d986-5d91-4918-bb2d-e3be12ad1e0e",
-    "userEmail": "demo.tester.1790911260193@zovik.ai",
-    "plan": "vip",
-    "planName": "VIP Plan (1 Month)",
-    "currency": "PKR",
-    "amount": 2500,
-    "method": "JazzCash",
-    "trxId": "TRX_TEST_1790911263423",
-    "senderName": "Demo Tester User",
-    "screenshot": "data:image/webp;base64,UklGRkAAAABXRUJQVlA4WAoAAAAQAAAAAAAAAAAAQUxQSAIAAAAAAFZQOCAYAAAAMAEAnQEqAQABAAIANCWkAANwAP77/VAA",
-    "status": "approved",
-    "createdAt": "2026-10-02T03:21:05.272Z",
-    "approvedAt": "2026-10-02T03:21:06.936Z"
-  },
-  {
-    "id": "pay_bb6c3ff1-7829-4cb8-ba46-84b8b511514e",
-    "userEmail": "demo.tester.1790910974402@zovik.ai",
-    "plan": "vip",
-    "planName": "VIP Plan (1 Month)",
-    "currency": "PKR",
-    "amount": 2500,
-    "method": "JazzCash",
-    "trxId": "TRX_TEST_1790910974938",
-    "senderName": "Demo Tester User",
-    "screenshot": "data:image/webp;base64,UklGRkAAAABXRUJQVlA4WAoAAAAQAAAAAAAAAAAAQUxQSAIAAAAAAFZQOCAYAAAAMAEAnQEqAQABAAIANCWkAANwAP77/VAA",
-    "status": "approved",
-    "createdAt": "2026-10-02T03:16:15.764Z",
-    "approvedAt": "2026-10-02T03:45:56.628Z"
-  },
-  {
-    "id": "pay-1790845175232-19vi",
-    "userEmail": "testvip@zovik.ai",
-    "plan": "vip",
-    "planName": "VIP Plan (1 Month)",
-    "currency": "PKR",
-    "amount": 2500,
-    "method": "Easypaisa",
-    "trxId": "TRX998877",
-    "senderName": "Ali Khan",
-    "screenshot": null,
-    "status": "approved",
-    "createdAt": "2026-10-01T08:59:35.233Z",
-    "approvedAt": "2026-10-01T09:00:44.118Z"
-  },
-  {
     "id": "pay-1790840781118-vrj9",
     "userEmail": "lyricabdullah78609@gmail.com",
     "plan": "vip",
@@ -91,19 +46,5 @@
     "rejectedAt": "2026-09-29T07:56:13.023Z",
     "screenshot": null,
     "screenshotPurged": true
-  },
-  {
-    "id": "pay-demo-1",
-    "userEmail": "vip_demo@zovik.ai",
-    "plan": "vip",
-    "planName": "VIP Plan (1 Month)",
-    "currency": "PKR",
-    "amount": "Rs. 3,000",
-    "method": "EasyPaisa",
-    "trxId": "EP-9834271890",
-    "senderName": "Ahmad Raza",
-    "status": "approved",
-    "createdAt": "2026-09-26T09:15:00.000Z",
-    "approvedAt": "2026-09-26T09:20:00.000Z"
   }
 ]

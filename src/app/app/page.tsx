@@ -19,9 +19,12 @@ import RouletteModal from "@/components/RouletteModal";
 import ShortsModal from "@/components/ShortsModal";
 import PwaInstallModal from "@/components/PwaInstallModal";
 import UserProfileModal from "@/components/UserProfileModal";
+import CompanionToast from "@/components/CompanionToast";
 import rawCharacters from "@/data/characters.json";
 import { Character, Message, SavedPhoto } from "@/types";
 import Image from "next/image";
+import { normalizeTags } from "@/lib/tagHelper";
+import { getSafeImageUrl } from "@/lib/imageHelper";
 import { useAuth } from "@/context/AuthContext";
 import {
   LayoutGrid,
@@ -321,10 +324,11 @@ export default function Home() {
 
       // 3. Search Query Match
       if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
+        const q = searchQuery.toLowerCase().trim();
         const matchesName = char.name.toLowerCase().includes(q);
-        const matchesDesc = char.desc.toLowerCase().includes(q);
-        const matchesTag = char.tags.some((t) => t.toLowerCase().includes(q));
+        const matchesDesc = (char.desc || "").toLowerCase().includes(q) || (char.tagline || "").toLowerCase().includes(q);
+        const safeTags = normalizeTags(char.tags);
+        const matchesTag = safeTags.some((t) => t.toLowerCase().includes(q));
         if (!matchesName && !matchesDesc && !matchesTag) return false;
       }
 
@@ -1339,6 +1343,18 @@ export default function Home() {
           </div>
         </div>
       )}
+
+      {/* Option 3: Companion Intimate Floating Banner Toast */}
+      <CompanionToast
+        onOpenCompanion={(name) => {
+          const matched = characters.find(
+            (c) => c.name.toLowerCase() === name.toLowerCase()
+          );
+          if (matched) {
+            setSelectedCharacter(matched);
+          }
+        }}
+      />
     </div>
   );
 }

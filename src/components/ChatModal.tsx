@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { Character, Message } from "@/types";
 import { getSafeStreamUrl, fetchVideoBlobUrl } from "@/lib/videoHelper";
+import { getSafeImageUrl } from "@/lib/imageHelper";
 import { auth } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
 
@@ -771,11 +772,12 @@ export default function ChatModal({
 
             <div className="relative size-11 rounded-full overflow-hidden border border-[#f53b70]/40 shrink-0">
               <Image
-                src={character.image}
+                src={getSafeImageUrl(character.image)}
                 alt={character.name}
                 fill
                 className="object-cover object-top"
                 unoptimized
+                referrerPolicy="no-referrer"
               />
               <span className="absolute bottom-0 right-0 size-2.5 rounded-full bg-emerald-400 border-2 border-[#130d17]" />
             </div>
@@ -925,13 +927,14 @@ export default function ChatModal({
                       }`}
                     >
                       <Image
-                        src={msg.imageUrl || character.image}
+                        src={getSafeImageUrl(msg.imageUrl || character.image)}
                         alt="Private Photo"
                         fill
                         className={`object-cover object-top transition-all duration-500 ${
                           isVipUser ? "blur-0 group-hover:scale-105" : "blur-2xl scale-110"
                         }`}
                         unoptimized
+                        referrerPolicy="no-referrer"
                       />
 
                       {/* VIP Unblurred Tag */}
@@ -981,7 +984,7 @@ export default function ChatModal({
               >
                 {isAI && (
                   <div className="relative size-7 rounded-full overflow-hidden shrink-0 mb-1">
-                    <Image src={character.image} alt="" fill className="object-cover object-top" unoptimized />
+                    <Image src={getSafeImageUrl(character.image)} alt="" fill className="object-cover object-top" unoptimized referrerPolicy="no-referrer" />
                   </div>
                 )}
 
@@ -1000,14 +1003,31 @@ export default function ChatModal({
                   </p>
                   <div className="flex items-center justify-between space-x-2 mt-1">
                     {isAI ? (
-                      <div className="flex items-center space-x-2.5">
+                      <div className="flex items-center space-x-2">
                         <button
                           onClick={() => speakText(msg.text || "", idx)}
-                          title="Listen to this message in voice"
-                          className="text-[10px] text-[#aeaeae] hover:text-[#f53b70] flex items-center space-x-1 transition-colors"
+                          title="Listen to companion voice note"
+                          className={`px-2.5 py-1 rounded-full text-[10px] font-bold flex items-center space-x-1.5 transition-all active:scale-95 ${
+                            playingVoiceIdx === idx
+                              ? "bg-gradient-to-r from-[#f53b70] to-[#ff457c] text-white shadow-md shadow-pink-600/40 ring-2 ring-pink-500/50"
+                              : "bg-white/5 hover:bg-white/10 text-[#cbb6bf] hover:text-white border border-white/10"
+                          }`}
                         >
-                          <Volume2 className="size-3" />
-                          <span>{playingVoiceIdx === idx ? "Speaking..." : "Voice"}</span>
+                          {playingVoiceIdx === idx ? (
+                            <>
+                              <span className="flex items-center space-x-0.5">
+                                <span className="w-0.5 h-2.5 bg-white animate-pulse" />
+                                <span className="w-0.5 h-3.5 bg-white animate-pulse [animation-delay:0.15s]" />
+                                <span className="w-0.5 h-2 bg-white animate-pulse [animation-delay:0.3s]" />
+                              </span>
+                              <span>Playing Voice...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Volume2 className="size-3 text-[#f53b70]" />
+                              <span>Voice Note</span>
+                            </>
+                          )}
                         </button>
                         <button
                           onClick={() => handleCopyMessage(msg.text || "", idx)}
@@ -1168,11 +1188,12 @@ export default function ChatModal({
         >
           <div className="relative max-w-2xl max-h-[90vh] w-full h-[85vh] rounded-3xl overflow-hidden border border-white/20 shadow-2xl">
             <Image
-              src={previewPhotoUrl}
+              src={getSafeImageUrl(previewPhotoUrl)}
               alt="High Res Photo"
               fill
               className="object-contain"
               unoptimized
+              referrerPolicy="no-referrer"
             />
             <button
               onClick={() => setPreviewPhotoUrl(null)}

@@ -4,6 +4,7 @@ import React from "react";
 import Image from "next/image";
 import { MessageCircle, Film, Sparkles, CheckCircle2, Phone, Heart, Crown, Lock } from "lucide-react";
 import { Character } from "@/types";
+import { getSafeImageUrl } from "@/lib/imageHelper";
 
 interface CharacterCardProps {
   character: Character;
@@ -34,12 +35,13 @@ export default function CharacterCard({
       {/* Character Image */}
       <div className="absolute inset-0 size-full overflow-hidden" onClick={() => onSelect(character)}>
         <Image
-          src={character.image}
+          src={getSafeImageUrl(character.image)}
           alt={character.name}
           fill
           sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
           className="object-cover object-top transition-transform duration-500 group-hover:scale-105"
           unoptimized
+          referrerPolicy="no-referrer"
         />
         {/* Shadow Overlay */}
         <div className="absolute inset-x-0 bottom-0 h-3/5 bg-gradient-to-t from-[#08060a] via-[#08060a]/75 to-transparent" />

@@ -37,7 +37,7 @@ export default function FAQSection() {
       text: "Zovik AI's voice calls and realistic replies blew my mind. Bonnie Blue talks exactly like a real person. 10/10 experience!",
     },
     {
-      name: "Liam T.",
+      name: "Lucas T.",
       rating: 5,
       date: "1 week ago",
       text: "The response speed on Zovik AI is instantaneous. The character creator allowed me to build my dream anime companion in 2 minutes.",

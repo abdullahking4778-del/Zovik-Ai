@@ -1,33 +1,5 @@
 [
   {
-    "id": "testvip@zovik.ai",
-    "email": "testvip@zovik.ai",
-    "name": "testvip",
-    "photoURL": null,
-    "tier": "vip",
-    "isVip": true,
-    "subscriptionDays": 30,
-    "subscriptionStart": "2026-10-01T09:00:44.118Z",
-    "subscriptionEndsAt": "2026-10-31T09:00:44.118Z",
-    "storageRetentionDays": 35,
-    "createdAt": "2026-10-01T09:00:44.119Z",
-    "lastLoginAt": "2026-10-01T09:00:44.119Z"
-  },
-  {
-    "id": "usr_plus_123",
-    "email": "testplus@zovik.ai",
-    "name": "testplus",
-    "photoURL": null,
-    "tier": "plus",
-    "isVip": false,
-    "subscriptionDays": 30,
-    "subscriptionStart": "2026-10-01T09:01:05.698Z",
-    "subscriptionEndsAt": "2026-10-31T09:01:05.698Z",
-    "storageRetentionDays": 30,
-    "createdAt": "2026-10-01T09:01:05.698Z",
-    "lastLoginAt": "2026-10-01T09:01:05.704Z"
-  },
-  {
     "id": "jF0bi0gv8BP53cozx5jtRD6vph83",
     "email": "abdullahking4778@gmail.com",
     "name": "abdullahking4778",
@@ -35,52 +7,10 @@
     "tier": "vip",
     "isVip": true,
     "subscriptionDays": 30,
-    "subscriptionStart": "2026-10-02T02:48:32.019Z",
-    "subscriptionEndsAt": "2026-11-01T02:48:32.019Z",
+    "subscriptionStart": "2026-10-02T05:00:26.949Z",
+    "subscriptionEndsAt": "2026-11-01T05:00:26.949Z",
     "storageRetentionDays": 35,
     "createdAt": "2026-10-02T02:48:32.020Z",
-    "lastLoginAt": "2026-10-02T03:55:59.246Z"
-  },
-  {
-    "id": "user_test_1790910974402",
-    "email": "demo.tester.1790910974402@zovik.ai",
-    "name": "demo.tester.1790910974402",
-    "photoURL": null,
-    "tier": "vip",
-    "isVip": true,
-    "subscriptionDays": 30,
-    "subscriptionStart": "2026-10-02T03:45:57.208Z",
-    "subscriptionEndsAt": "2026-11-01T03:45:57.208Z",
-    "storageRetentionDays": 35,
-    "createdAt": "2026-10-02T03:16:20.757Z",
-    "lastLoginAt": "2026-10-02T03:45:57.209Z"
-  },
-  {
-    "id": "user_test_1790911260193",
-    "email": "demo.tester.1790911260193@zovik.ai",
-    "name": "demo.tester.1790911260193",
-    "photoURL": null,
-    "tier": "free",
-    "isVip": false,
-    "subscriptionDays": 0,
-    "subscriptionStart": null,
-    "subscriptionEndsAt": null,
-    "storageRetentionDays": 7,
-    "createdAt": "2026-10-02T03:21:07.557Z",
-    "lastLoginAt": "2026-10-02T03:21:11.085Z"
-  },
-  {
-    "id": "user_test_1790911260193",
-    "email": "demo.tester.1790911260193@zovik.ai",
-    "name": "demo.tester.1790911260193",
-    "photoURL": null,
-    "tier": "free",
-    "isVip": false,
-    "subscriptionDays": 0,
-    "subscriptionStart": null,
-    "subscriptionEndsAt": null,
-    "storageRetentionDays": 7,
-    "createdAt": "2026-10-02T03:21:08.892Z",
-    "lastLoginAt": "2026-10-02T03:21:11.070Z"
+    "lastLoginAt": "2026-10-02T05:00:26.951Z"
   }
 ]

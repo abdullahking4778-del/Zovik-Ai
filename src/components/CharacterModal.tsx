@@ -1,15 +1,18 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Image from "next/image";
-import { X, MessageCircle, Phone, Volume2, VolumeX, CheckCircle2, Sparkles, Heart, Share2, Trash2, Crown, Lock } from "lucide-react";
+import { X, MessageCircle, CheckCircle2, Heart, Share2, Trash2, Crown, Lock, Images } from "lucide-react";
 import { Character } from "@/types";
+import { getCurrentLanguage, getT, LanguageCode } from "@/lib/translations";
+import { normalizeTags } from "@/lib/tagHelper";
+import { getSafeImageUrl } from "@/lib/imageHelper";
 
 interface CharacterModalProps {
   character: Character | null;
   onClose: () => void;
   onStartChat: (character: Character) => void;
-  onStartCall: (character: Character) => void;
+  onStartCall?: (character: Character) => void;
   onDelete?: (charId: string, charName: string) => void;
   isLiked?: boolean;
   onToggleLike?: (character: Character) => void;
@@ -21,93 +24,29 @@ export default function CharacterModal({
   character,
   onClose,
   onStartChat,
-  onStartCall,
   onDelete,
   isLiked = false,
   onToggleLike,
   isPaidUser = false,
   openPremiumModal,
 }: CharacterModalProps) {
-  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
+  const [lang, setLang] = useState<LanguageCode>("en");
 
-  React.useEffect(() => {
-    return () => {
-      if (typeof window !== "undefined" && window.speechSynthesis) {
-        window.speechSynthesis.cancel();
-      }
+  useEffect(() => {
+    setLang(getCurrentLanguage());
+    const handleLang = (e: Event) => {
+      const ce = e as CustomEvent<LanguageCode>;
+      if (ce.detail) setLang(ce.detail);
     };
+    window.addEventListener("zovik_lang_changed", handleLang);
+    return () => window.removeEventListener("zovik_lang_changed", handleLang);
   }, []);
 
   if (!character) return null;
 
-  const toggleAudio = () => {
-    if (typeof window === "undefined" || !window.speechSynthesis) return;
-
-    if (isPlayingAudio) {
-      window.speechSynthesis.cancel();
-      setIsPlayingAudio(false);
-      return;
-    }
-
-    window.speechSynthesis.cancel();
-    setIsPlayingAudio(true);
-
-    const sampleText = character.greeting || `Hey there, I am ${character.name}! So excited to chat with you 💕`;
-    const clean = sampleText.replace(/[^\p{L}\p{N}\s.,?!'’\-]/gu, "").trim();
-    const utterance = new SpeechSynthesisUtterance(clean);
-
-    const isUrduScript = /[\u0600-\u06FF]/.test(clean);
-    utterance.lang = isUrduScript ? "ur-PK" : "en-US";
-
-    const selectVoice = () => {
-      const voices = window.speechSynthesis.getVoices();
-      const isFemale = character.gender !== "male";
-
-      if (isUrduScript) {
-        const urduVoice = voices.find((v) => v.lang.startsWith("ur") || v.lang.startsWith("hi"));
-        if (urduVoice) {
-          utterance.voice = urduVoice;
-          return;
-        }
-      }
-
-      if (isFemale) {
-        const femaleVoice = voices.find(
-          (v) =>
-            v.name.includes("Zira") ||
-            v.name.includes("Female") ||
-            v.name.includes("Jenny") ||
-            v.name.includes("Samantha") ||
-            v.name.includes("Victoria") ||
-            v.name.includes("Google UK English Female") ||
-            (v.name.includes("English") && !v.name.includes("David") && !v.name.includes("Male"))
-        );
-        if (femaleVoice) utterance.voice = femaleVoice;
-        utterance.pitch = 1.25;
-      } else {
-        const maleVoice = voices.find((v) => v.name.includes("David") || v.name.includes("Male"));
-        if (maleVoice) utterance.voice = maleVoice;
-        utterance.pitch = 0.95;
-      }
-    };
-
-    selectVoice();
-    utterance.rate = 0.96;
-
-    utterance.onend = () => setIsPlayingAudio(false);
-    utterance.onerror = () => setIsPlayingAudio(false);
-
-    window.speechSynthesis.speak(utterance);
-  };
-
-  const handleClose = () => {
-    if (typeof window !== "undefined" && window.speechSynthesis) {
-      window.speechSynthesis.cancel();
-    }
-    setIsPlayingAudio(false);
-    onClose();
-  };
+  const t = getT(lang);
 
   const handleShare = () => {
     navigator.clipboard?.writeText(window.location.href);
@@ -117,9 +56,11 @@ export default function CharacterModal({
 
   const isVipChar = character.accessTier === "vip" || character.accessTier === "plus" || character.isVipOnly === true;
   const isLocked = isVipChar && !isPaidUser;
+  const currentPhoto = getSafeImageUrl(selectedPhoto || character.image || "/characters/zovik_01.jpg");
+  const safeTags = normalizeTags(character.tags);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6 bg-black/80 backdrop-blur-md animate-fadeIn">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6 bg-black/85 backdrop-blur-md animate-fadeIn">
       <div className="relative flex flex-col md:flex-row w-full max-w-4xl max-h-[92vh] overflow-y-auto md:overflow-hidden rounded-3xl bg-[#120d16] border border-white/10 shadow-2xl shadow-pink-950/30">
         {/* Top Right Action Buttons: Heart/Save and Close */}
         <div className="absolute top-4 right-4 z-30 flex items-center space-x-2">
@@ -135,69 +76,56 @@ export default function CharacterModal({
             </button>
           )}
           <button
-            onClick={handleClose}
+            onClick={onClose}
             className="size-9 rounded-full bg-black/60 hover:bg-black/90 border border-white/10 flex items-center justify-center text-white transition-all active:scale-90"
           >
             <X className="size-5" />
           </button>
         </div>
 
-        {/* Left Side: High-Res Portrait & Media */}
-        <div className="relative w-full md:w-1/2 h-80 md:h-auto min-h-[380px] shrink-0 overflow-hidden bg-black">
-          {character.videoUrl ? (
-            <video
-              src={character.videoUrl}
-              autoPlay
-              loop
-              muted
-              playsInline
-              className="size-full object-cover object-top"
-            />
-          ) : (
-            <Image
-              src={character.image}
-              alt={character.name}
-              fill
-              className="object-cover object-top"
-              unoptimized
-            />
-          )}
+        {/* Left Side: High-Res Companion Portrait (Zero Video Tag = Zero IDM Interception) */}
+        <div className="relative w-full md:w-1/2 h-80 md:h-auto min-h-[400px] shrink-0 overflow-hidden bg-[#0d0711]">
+          <Image
+            src={currentPhoto}
+            alt={character.name}
+            fill
+            className="object-cover object-top transition-all duration-300"
+            unoptimized
+            priority
+            referrerPolicy="no-referrer"
+          />
           <div className="absolute inset-0 bg-gradient-to-t from-[#120d16] via-transparent to-transparent md:hidden" />
 
-          {/* Voice Note Player Pill */}
-          <div className="absolute bottom-4 inset-x-4 z-20 flex items-center justify-between p-3 rounded-2xl bg-black/75 backdrop-blur-xl border border-white/10">
-            <div className="flex items-center space-x-3">
-              <button
-                onClick={toggleAudio}
-                className="size-10 rounded-full bg-[#f53b70] hover:brightness-110 flex items-center justify-center text-white shadow-lg shadow-pink-500/30 transition-transform active:scale-95"
-              >
-                {isPlayingAudio ? <VolumeX className="size-5" /> : <Volume2 className="size-5" />}
-              </button>
-              <div>
-                <span className="block text-xs font-bold text-white">Voice Sample</span>
-                <span className="block text-[10px] text-[#aeaeae]">{character.voice}</span>
-              </div>
-            </div>
-
-            {/* Animated Soundwave */}
-            <div className="flex items-center space-x-1 px-3">
-              {[4, 12, 8, 16, 22, 14, 18, 10, 6].map((h, i) => (
-                <span
-                  key={i}
-                  style={{
-                    height: isPlayingAudio ? `${h}px` : "4px",
-                    transition: "height 0.2s ease",
-                  }}
-                  className={`w-1 rounded-full ${
-                    isPlayingAudio ? "bg-[#f53b70]" : "bg-white/30"
+          {/* Photo Gallery Selector Pill if multiple photos exist */}
+          {character.gallery && character.gallery.length > 1 && (
+            <div className="absolute bottom-3 inset-x-3 z-20 flex items-center justify-center space-x-2 p-2 rounded-2xl bg-black/70 backdrop-blur-md border border-white/10 overflow-x-auto no-scrollbar">
+              <span className="text-[10px] text-white/70 font-bold uppercase tracking-wider shrink-0 mr-1 flex items-center space-x-1">
+                <Images className="size-3 text-[#f53b70]" />
+                <span>{t.album}:</span>
+              </span>
+              {character.gallery.map((photoUrl, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => setSelectedPhoto(photoUrl)}
+                  className={`relative size-8 rounded-lg overflow-hidden shrink-0 border transition-all ${
+                    (selectedPhoto || character.image) === photoUrl ? "border-[#f53b70] scale-105 ring-2 ring-[#f53b70]/50" : "border-white/20 opacity-70 hover:opacity-100"
                   }`}
-                />
+                >
+                  <Image
+                    src={getSafeImageUrl(photoUrl)}
+                    alt={`Photo ${idx + 1}`}
+                    fill
+                    className="object-cover"
+                    unoptimized
+                    referrerPolicy="no-referrer"
+                  />
+                </button>
               ))}
             </div>
-          </div>
+          )}
         </div>
 
-        {/* Right Side: Details, Backstory, Tags & CTAs */}
+        {/* Right Side: Details, Backstory, Traits & Clean Full-Width CTA */}
         <div className="flex flex-col justify-between w-full md:w-1/2 p-6 md:p-8 space-y-6 overflow-y-auto">
           <div className="space-y-4">
             {/* Header info */}
@@ -206,7 +134,7 @@ export default function CharacterModal({
                 {isVipChar ? (
                   <span className="flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-gradient-to-r from-amber-500 to-yellow-400 text-black text-xs font-black uppercase tracking-wider shadow-md shadow-yellow-500/30">
                     <Crown className="size-3.5 fill-black text-black" />
-                    <span>VIP & PLUS</span>
+                    <span>{t.vipOnly}</span>
                   </span>
                 ) : (
                   <span className="px-2.5 py-0.5 rounded-full bg-[#f53b70]/20 text-[#f53b70] text-xs font-black uppercase tracking-wider border border-[#f53b70]/30">
@@ -230,7 +158,7 @@ export default function CharacterModal({
 
             {/* Backstory & Personality */}
             <div>
-              <h4 className="text-xs font-bold text-[#aeaeae] uppercase tracking-wider mb-2">Backstory</h4>
+              <h4 className="text-xs font-bold text-[#aeaeae] uppercase tracking-wider mb-2">{t.backstory}</h4>
               <p className="text-sm text-[#e0d6dc] leading-relaxed bg-[#1b1322] p-4 rounded-2xl border border-white/5">
                 {character.desc}
               </p>
@@ -238,9 +166,9 @@ export default function CharacterModal({
 
             {/* Personality Tags */}
             <div>
-              <h4 className="text-xs font-bold text-[#aeaeae] uppercase tracking-wider mb-2">Traits & Persona</h4>
+              <h4 className="text-xs font-bold text-[#aeaeae] uppercase tracking-wider mb-2">{t.traits}</h4>
               <div className="flex flex-wrap gap-1.5">
-                {character.tags.map((tag) => (
+                {safeTags.map((tag) => (
                   <span
                     key={tag}
                     className="px-3 py-1 rounded-xl bg-white/5 border border-white/10 text-xs font-semibold text-white/90"
@@ -252,46 +180,29 @@ export default function CharacterModal({
             </div>
           </div>
 
-          {/* Action CTAs */}
+          {/* Action CTAs: Full-width Chat Now button */}
           <div className="pt-4 border-t border-white/10 space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                onClick={() => {
-                  handleClose();
-                  onStartChat(character);
-                }}
-                className={`flex items-center justify-center space-x-2 py-3 rounded-2xl font-bold text-sm md:text-base shadow-xl active:scale-95 transition-all ${
-                  isLocked
-                    ? "bg-gradient-to-r from-amber-500 to-yellow-400 text-black font-black shadow-amber-500/25 hover:brightness-110"
-                    : "bg-gradient-to-r from-[#f53b70] to-[#ff457c] text-white shadow-pink-600/30 hover:brightness-110"
-                }`}
-              >
-                {isLocked ? <Lock className="size-5 text-black" /> : <MessageCircle className="size-5" />}
-                <span>{isLocked ? "Unlock VIP Chat" : "Chat Now"}</span>
-              </button>
-
-              <button
-                onClick={() => {
-                  handleClose();
-                  onStartCall(character);
-                }}
-                className={`flex items-center justify-center space-x-2 py-3 rounded-2xl font-bold text-sm md:text-base active:scale-95 transition-all ${
-                  isLocked
-                    ? "bg-[#23172e] border border-amber-500/40 text-amber-300 hover:bg-[#2d1e3a]"
-                    : "bg-[#23172e] border border-white/10 hover:bg-[#2d1e3a] text-white"
-                }`}
-              >
-                {isLocked ? <Crown className="size-5 text-amber-400" /> : <Phone className="size-5 text-[#f53b70]" />}
-                <span>{isLocked ? "Unlock VIP Call" : "Audio Call"}</span>
-              </button>
-            </div>
+            <button
+              onClick={() => {
+                onClose();
+                onStartChat(character);
+              }}
+              className={`flex items-center justify-center space-x-2.5 w-full py-3.5 rounded-2xl font-black text-base shadow-xl active:scale-95 transition-all ${
+                isLocked
+                  ? "bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 text-black shadow-amber-500/25 hover:brightness-110"
+                  : "bg-gradient-to-r from-[#f53b70] to-[#ff457c] text-white shadow-pink-600/30 hover:brightness-110"
+              }`}
+            >
+              {isLocked ? <Lock className="size-5 text-black" /> : <MessageCircle className="size-5" />}
+              <span>{isLocked ? t.unlockVip : t.chatNow}</span>
+            </button>
 
             <button
               onClick={handleShare}
               className="flex items-center justify-center space-x-1.5 w-full py-2 text-xs font-semibold text-[#aeaeae] hover:text-white transition-colors"
             >
               <Share2 className="size-3.5" />
-              <span>{copied ? "Link Copied!" : "Share Character"}</span>
+              <span>{copied ? t.linkCopied : t.shareChar}</span>
             </button>
 
             {/* If custom character, allow deleting */}
@@ -304,7 +215,7 @@ export default function CharacterModal({
                 className="flex items-center justify-center space-x-1.5 w-full py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 border border-red-500/25 text-xs font-bold text-red-400 hover:text-red-300 transition-colors"
               >
                 <Trash2 className="size-3.5" />
-                <span>Delete Custom Companion</span>
+                <span>{t.deleteCustom}</span>
               </button>
             )}
           </div>

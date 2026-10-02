@@ -168,20 +168,6 @@
     ]
   },
   {
-    "id": "short-13",
-    "characterId": "liam-hudson",
-    "characterName": "Liam Hudson",
-    "characterAge": 24,
-    "avatar": "/characters/zovik_14.jpg",
-    "videoUrl": "/videos/companions/liam-hudson.mp4",
-    "caption": "Caught some insane waves at sunrise! Ready for our next adventure? 🌊",
-    "tags": [
-      "Surfer",
-      "Golden Coast",
-      "Athletic"
-    ]
-  },
-  {
     "id": "short-14",
     "characterId": "amelia-rose",
     "characterName": "Amelia Rose",

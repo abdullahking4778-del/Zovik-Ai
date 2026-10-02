@@ -9,6 +9,7 @@ import {
   generateUniqueId,
 } from "@/lib/serverDb";
 import { Character } from "@/types";
+import { normalizeTags } from "@/lib/tagHelper";
 
 const publicCharsDir = path.join(process.cwd(), "public", "characters");
 
@@ -79,11 +80,7 @@ export async function POST(req: NextRequest) {
       series: !!companion.series,
       verified: true,
       online: true,
-      tags: Array.isArray(companion.tags)
-        ? companion.tags
-        : typeof companion.tags === "string"
-        ? (companion.tags as string).split(",").map((t) => t.trim())
-        : ["Flirty", isVipTier ? "VIP" : "Sweet"],
+      tags: companion.tags ? normalizeTags(companion.tags) : ["Flirty", isVipTier ? "VIP" : "Sweet"],
       voice: companion.voice || "Warm Whisper",
       greeting: companion.greeting || `Hey there... so glad you stopped by! What's on your mind? 💕`,
       videoUrl: companion.videoUrl,
@@ -132,6 +129,7 @@ export async function PUT(req: NextRequest) {
       ...body,
       id: existing.id,
       slug: existing.slug,
+      tags: body.tags !== undefined ? normalizeTags(body.tags) : normalizeTags(existing.tags),
       accessTier: isVipTier ? "vip" : "free",
       isVipOnly: isVipTier,
       badge: body.badge || (isVipTier ? "VIP" : existing.badge),

@@ -41,6 +41,7 @@ import {
 } from "lucide-react";
 import { Character, ShortReel, PaymentRequest, UserAccount } from "@/types";
 import { getSafeStreamUrl } from "@/lib/videoHelper";
+import { getSafeImageUrl } from "@/lib/imageHelper";
 
 export default function AdminPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -1176,7 +1177,7 @@ export default function AdminPage() {
                     className="flex items-center space-x-3 p-3.5 rounded-2xl bg-[#140b1c] border border-white/5 hover:border-white/15 transition-all shadow-sm"
                   >
                     <div className="relative size-14 rounded-xl overflow-hidden shrink-0 bg-black">
-                      <Image src={char.image} alt={char.name} fill className="object-cover" unoptimized />
+                      <Image src={getSafeImageUrl(char.image)} alt={char.name} fill className="object-cover" unoptimized referrerPolicy="no-referrer" />
                       {isVipTier && (
                         <div className="absolute top-1 left-1 px-1.5 py-0.5 rounded-md bg-amber-500 text-black text-[9px] font-black uppercase shadow-sm">
                           VIP
@@ -1270,7 +1271,7 @@ export default function AdminPage() {
                   <>
                     <div className="flex items-center space-x-3.5">
                       <div className="relative size-16 rounded-2xl overflow-hidden bg-black shrink-0 border-2 border-[#f53b70]/40 shadow-lg">
-                        <Image src={current?.image || "/characters/zovik_01.jpg"} alt={current?.name || ""} fill className="object-cover" unoptimized />
+                        <Image src={getSafeImageUrl(current?.image || "/characters/zovik_01.jpg")} alt={current?.name || ""} fill className="object-cover" unoptimized referrerPolicy="no-referrer" />
                       </div>
                       <div>
                         <div className="flex items-center space-x-2">
@@ -1323,7 +1324,7 @@ export default function AdminPage() {
                     className="group relative rounded-2xl bg-[#140b1c] border border-white/10 overflow-hidden flex flex-col shadow-md hover:border-pink-500/50 transition-all"
                   >
                     <div className="relative aspect-[3/4] w-full bg-black">
-                      <Image src={photoUrl} alt={`Photo ${idx + 1}`} fill className="object-cover" unoptimized />
+                      <Image src={getSafeImageUrl(photoUrl)} alt={`Photo ${idx + 1}`} fill className="object-cover" unoptimized referrerPolicy="no-referrer" />
                       <div className="absolute top-2 left-2 z-10 px-2.5 py-1 rounded-full bg-black/70 backdrop-blur-md border border-pink-500/40 text-pink-300 text-[10px] font-black shadow-md">
                         #{idx + 1} {idx === 0 ? "Default" : `Click ${idx + 1}`}
                       </div>
@@ -1403,11 +1404,35 @@ export default function AdminPage() {
                   <label className="text-[11px] text-[#aeaeae] block mb-1 font-bold">Image URL or Local Path</label>
                   <input
                     type="text"
-                    placeholder="/characters/zovik_01.jpg or https://..."
+                    placeholder="/characters/zovik_01.jpg, https://pin.it/..., or direct image URL"
                     value={newGalleryPhotoUrl}
                     onChange={(e) => setNewGalleryPhotoUrl(e.target.value)}
                     className="w-full px-3.5 py-2.5 rounded-xl bg-black/60 border border-white/10 text-white text-xs font-medium outline-none focus:border-[#f53b70]"
                   />
+                  {newGalleryPhotoUrl.trim() && (
+                    <div className="mt-2.5 p-2.5 rounded-xl bg-black/40 border border-white/10 flex items-center space-x-3">
+                      <div className="relative size-12 rounded-lg overflow-hidden bg-black shrink-0 border border-pink-500/40">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={getSafeImageUrl(newGalleryPhotoUrl.trim())}
+                          alt="Live Preview"
+                          className="size-full object-cover"
+                          referrerPolicy="no-referrer"
+                          onError={(e) => {
+                            (e.currentTarget as HTMLImageElement).src = "/characters/zovik_01.jpg";
+                          }}
+                        />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <span className="text-[11px] font-bold text-white block">Photo Live Preview</span>
+                        <span className="text-[10px] text-pink-400 font-mono truncate block">
+                          {newGalleryPhotoUrl.includes("pin.it") || newGalleryPhotoUrl.includes("pinterest")
+                            ? "📌 Pinterest link detected - auto-resolving & proxying"
+                            : "Safe CDN / Image URL"}
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -2191,11 +2216,12 @@ export default function AdminPage() {
                 <div className="flex items-center space-x-3">
                   <div className="relative size-12 rounded-xl overflow-hidden bg-black shrink-0 border border-white/10">
                     <Image
-                      src={formData.image || availableImages[0] || "/characters/zovik_01.jpg"}
+                      src={getSafeImageUrl(formData.image || availableImages[0] || "/characters/zovik_01.jpg")}
                       alt="Avatar Preview"
                       fill
                       className="object-cover"
                       unoptimized
+                      referrerPolicy="no-referrer"
                     />
                   </div>
                   <div className="flex-1 space-y-1">
@@ -2238,7 +2264,7 @@ export default function AdminPage() {
             <div className="flex items-center justify-between pb-3 border-b border-white/10">
               <div className="flex items-center space-x-3">
                 <div className="relative size-10 rounded-xl overflow-hidden bg-black shrink-0 border border-blue-400/40">
-                  <Image src={editFormData.image} alt={editFormData.name} fill className="object-cover" unoptimized />
+                  <Image src={getSafeImageUrl(editFormData.image)} alt={editFormData.name} fill className="object-cover" unoptimized referrerPolicy="no-referrer" />
                 </div>
                 <div>
                   <h3 className="text-base font-black flex items-center space-x-1.5">
@@ -2464,11 +2490,12 @@ export default function AdminPage() {
                 <div className="flex items-center space-x-3">
                   <div className="relative size-12 rounded-xl overflow-hidden bg-black shrink-0 border border-white/10">
                     <Image
-                      src={editFormData.image || "/characters/zovik_01.jpg"}
+                      src={getSafeImageUrl(editFormData.image || "/characters/zovik_01.jpg")}
                       alt="Avatar Preview"
                       fill
                       className="object-cover"
                       unoptimized
+                      referrerPolicy="no-referrer"
                     />
                   </div>
                   <div className="flex-1 space-y-1">

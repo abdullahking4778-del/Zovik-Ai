@@ -21,6 +21,7 @@ import rawCharacters from "@/data/characters.json";
 import { Character } from "@/types";
 import PwaInstallModal from "@/components/PwaInstallModal";
 import { useAuth } from "@/context/AuthContext";
+import { normalizeTags } from "@/lib/tagHelper";
 
 export default function LandingPage() {
   const { user: currentUser, userData, tier: currentTier, isLocallyLoggedIn } = useAuth();
@@ -115,7 +116,7 @@ export default function LandingPage() {
       text: "Zovik AI's replies blew my mind. Bonnie Blue talks exactly like a real person. 10/10 experience!",
     },
     {
-      name: "Liam T.",
+      name: "Lucas T.",
       role: "Plus Subscriber",
       rating: 5,
       date: "1 week ago",
@@ -538,7 +539,7 @@ export default function LandingPage() {
 
                   {/* Character Tags */}
                   <div className="mt-3 flex flex-wrap gap-1">
-                    {char.tags?.slice(0, 3).map((tag, idx) => (
+                    {normalizeTags(char.tags).slice(0, 3).map((tag, idx) => (
                       <span
                         key={idx}
                         className="px-2 py-0.5 rounded-md bg-white/5 text-[10px] font-medium text-pink-300/80 border border-white/5"

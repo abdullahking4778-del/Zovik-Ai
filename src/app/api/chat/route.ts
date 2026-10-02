@@ -158,7 +158,7 @@ function detectUserLanguage(text: string): "urdu_script" | "arabic" | "english" 
 // Intelligent, context-aware fallback generator supporting multiple languages & dynamic lengths
 function generateIntelligentResponse(character: Partial<Character>, lastUserText: string): string {
   const isMale = character.gender === "male";
-  const charName = character.name || (isMale ? "Liam" : "Aria");
+  const charName = character.name || (isMale ? "Alexander" : "Aria");
   const lower = (lastUserText || "").toLowerCase().trim();
   const lang = detectUserLanguage(lastUserText);
 
@@ -441,11 +441,17 @@ export async function POST(req: NextRequest) {
 - In Roman Urdu / Hindi, ALWAYS use FEMININE verb endings: "main karti hoon", "soch rahi thi", "aaungi", "chahti hoon", "dekh rahi hoon". Never use masculine forms.
 - In English, talk like an affectionate, flirty, seductive girlfriend.`;
 
+    const safeTagsFormatted = Array.isArray(character.tags)
+      ? character.tags.join(", ")
+      : typeof character.tags === "string"
+      ? character.tags
+      : "Romantic, Seductive, Intelligent";
+
     // Dynamic system prompt with strict Directness, Zero Asterisks, and Photo Guidance
     const systemPrompt = `You are ${character.name}, a 26-year-old ${genderNoun} companion on Zovik AI.
 Persona & Backstory: ${character.desc || character.tagline || "Passionate, loving, devoted partner"}
 Voice Tone: ${character.voice || "Warm, flirty, and romantic"}
-Tags: ${character.tags ? character.tags.join(", ") : "Romantic, Seductive, Intelligent"}
+Tags: ${safeTagsFormatted}
 
 CRITICAL RULES (ABSOLUTE PRIORITY):
 
