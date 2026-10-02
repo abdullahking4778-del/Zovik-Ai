@@ -33,6 +33,8 @@ export interface Character {
   likes?: number;
   isOnline?: boolean;
   unreadCount?: number;
+  accessTier?: "free" | "plus" | "vip";
+  isVipOnly?: boolean;
 }
 
 export interface ShortReel {

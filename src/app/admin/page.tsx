@@ -37,8 +37,10 @@ import {
   Edit3,
   Calendar,
   HardDrive,
+  Globe,
 } from "lucide-react";
 import { Character, ShortReel, PaymentRequest, UserAccount } from "@/types";
+import { getSafeStreamUrl } from "@/lib/videoHelper";
 
 export default function AdminPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -93,10 +95,11 @@ export default function AdminPage() {
 
   // Short/Reel Form Modal State
   const [isAddReelOpen, setIsAddReelOpen] = useState(false);
+  const [reelVideoMode, setReelVideoMode] = useState<"url" | "upload" | "preset">("url");
   const [reelData, setReelData] = useState({
     characterName: "",
     caption: "",
-    videoUrl: "/videos/companions/aria-solis.mp4",
+    videoUrl: "",
     avatar: "/characters/zovik_01.jpg",
   });
 
@@ -435,8 +438,8 @@ export default function AdminPage() {
     try {
       const token = localStorage.getItem("zovik_admin_session") || "";
 
-      // If user uploaded a direct video or ZIP file from their device
-      if (reelUploadFile) {
+      // 1. If user uploaded a direct video or ZIP file from their device
+      if (reelVideoMode === "upload" && reelUploadFile) {
         const formData = new FormData();
         formData.append("file", reelUploadFile);
         formData.append("type", "reel");
@@ -462,7 +465,7 @@ export default function AdminPage() {
         setReelData({
           characterName: "",
           caption: "",
-          videoUrl: "/videos/companions/aria-solis.mp4",
+          videoUrl: "",
           avatar: "/characters/zovik_01.jpg",
         });
         fetchAdminData();
@@ -472,16 +475,31 @@ export default function AdminPage() {
             : "Reel uploaded and published live to Zovik Shorts!"
         );
       } else {
-        // Fallback to path submission
+        // 2. Direct External URL or Preset Video submission
+        if (!reelData.videoUrl || !reelData.videoUrl.trim()) {
+          throw new Error("Please enter a valid video URL or select an upload file.");
+        }
+
         const res = await fetch("/api/shorts", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            ...getAuthHeaders(),
+            "Content-Type": "application/json",
+          },
           body: JSON.stringify(reelData),
         });
+
         if (res.ok) {
           setIsAddReelOpen(false);
+          setReelUploadFile(null);
+          setReelData({
+            characterName: "",
+            caption: "",
+            videoUrl: "",
+            avatar: "/characters/zovik_01.jpg",
+          });
           fetchAdminData();
-          alert("Reel added to Zovik Shorts!");
+          alert("Reel published live to Zovik Shorts! 🚀");
         } else {
           const data = await res.json();
           throw new Error(data.error || "Failed to save reel");
@@ -1253,12 +1271,14 @@ export default function AdminPage() {
                 >
                   <div className="relative aspect-[9/14] w-full rounded-2xl overflow-hidden bg-black">
                     <video
-                      src={reel.videoUrl}
+                      src={getSafeStreamUrl(reel.videoUrl)}
                       poster={reel.avatar}
                       autoPlay
                       muted
                       loop
                       playsInline
+                      controlsList="nodownload nofullscreen noremoteplayback"
+                      disablePictureInPicture
                       className="size-full object-cover"
                     />
                   </div>
@@ -1869,67 +1889,171 @@ export default function AdminPage() {
                 />
               </div>
 
-              {/* Direct Video / ZIP File Upload Zone */}
-              <div className="space-y-1.5">
-                <label className="text-[#aeaeae] block text-xs font-bold">
-                  Upload Video from PC / Phone (or .ZIP Archive)
-                </label>
-                <label className="border-2 border-dashed border-white/15 hover:border-[#f53b70] rounded-2xl p-4 flex flex-col items-center justify-center cursor-pointer transition-colors bg-black/40 hover:bg-black/60 group">
-                  <input
-                    type="file"
-                    accept="video/mp4,video/webm,video/quicktime,.zip"
-                    onChange={(e) => {
-                      if (e.target.files && e.target.files[0]) {
-                        setReelUploadFile(e.target.files[0]);
+              {/* Segmented Mode Selector */}
+              <div>
+                <label className="text-[#aeaeae] block mb-1.5 font-bold text-xs">Video Source Mode</label>
+                <div className="grid grid-cols-3 gap-1.5 p-1 rounded-xl bg-black/60 border border-white/10">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setReelVideoMode("url");
+                      setReelUploadFile(null);
+                    }}
+                    className={`py-1.5 px-2 rounded-lg font-bold text-[11px] flex items-center justify-center space-x-1 transition-all ${
+                      reelVideoMode === "url"
+                        ? "bg-gradient-to-r from-[#f53b70] to-[#8b5cf6] text-white shadow-md"
+                        : "text-[#aeaeae] hover:text-white"
+                    }`}
+                  >
+                    <Globe className="size-3.5 shrink-0" />
+                    <span>External URL</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setReelVideoMode("upload")}
+                    className={`py-1.5 px-2 rounded-lg font-bold text-[11px] flex items-center justify-center space-x-1 transition-all ${
+                      reelVideoMode === "upload"
+                        ? "bg-gradient-to-r from-[#f53b70] to-[#8b5cf6] text-white shadow-md"
+                        : "text-[#aeaeae] hover:text-white"
+                    }`}
+                  >
+                    <UploadCloud className="size-3.5 shrink-0" />
+                    <span>Upload File</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setReelVideoMode("preset");
+                      setReelUploadFile(null);
+                      if (!reelData.videoUrl || reelData.videoUrl.startsWith("http")) {
+                        setReelData({ ...reelData, videoUrl: "/videos/companions/aria-solis.mp4" });
                       }
                     }}
-                    className="hidden"
-                    disabled={isUploadingReel}
-                  />
-                  <div className="size-10 rounded-xl bg-white/5 group-hover:bg-[#f53b70]/20 flex items-center justify-center text-[#f53b70] mb-1.5 transition-colors">
-                    {reelUploadFile ? (
-                      reelUploadFile.name.endsWith(".zip") ? (
-                        <FileArchive className="size-5" />
-                      ) : (
-                        <Video className="size-5" />
-                      )
-                    ) : (
-                      <UploadCloud className="size-5" />
-                    )}
-                  </div>
-                  {reelUploadFile ? (
-                    <div className="flex items-center space-x-2 text-xs font-bold text-emerald-400">
-                      <span>✓ {reelUploadFile.name} ({(reelUploadFile.size / (1024 * 1024)).toFixed(2)} MB)</span>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          setReelUploadFile(null);
-                        }}
-                        className="text-red-400 hover:text-red-300 ml-1"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  ) : (
-                    <>
-                      <span className="text-xs font-bold text-white group-hover:text-[#f53b70] transition-colors">
-                        Click or Drag & Drop Video (.mp4/.webm) or .ZIP
-                      </span>
-                      <span className="text-[10px] text-[#aeaeae] mt-0.5">
-                        Direct 0-budget upload from your device to Zovik Shorts
-                      </span>
-                    </>
-                  )}
-                </label>
+                    className={`py-1.5 px-2 rounded-lg font-bold text-[11px] flex items-center justify-center space-x-1 transition-all ${
+                      reelVideoMode === "preset"
+                        ? "bg-gradient-to-r from-[#f53b70] to-[#8b5cf6] text-white shadow-md"
+                        : "text-[#aeaeae] hover:text-white"
+                    }`}
+                  >
+                    <Film className="size-3.5 shrink-0" />
+                    <span>Preset Video</span>
+                  </button>
+                </div>
               </div>
 
-              {/* Or Select Existing Video Path fallback */}
-              {!reelUploadFile && (
+              {/* MODE 1: EXTERNAL DIRECT URL (RECOMMENDED: 0 MB SERVER STORAGE) */}
+              {reelVideoMode === "url" && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[#aeaeae] font-bold text-xs flex items-center space-x-1">
+                      <span>Direct Video URL / CDN Link</span>
+                      <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 text-[9px] font-black uppercase">
+                        0 MB Server Storage
+                      </span>
+                    </label>
+                  </div>
+                  <input
+                    type="url"
+                    required={reelVideoMode === "url"}
+                    value={reelData.videoUrl}
+                    onChange={(e) => setReelData({ ...reelData, videoUrl: e.target.value.trim() })}
+                    placeholder="https://files.catbox.moe/xxxxxx.mp4 or Cloudinary link..."
+                    className="w-full px-3 py-2.5 rounded-xl bg-black/40 border border-white/10 text-white font-mono text-xs focus:border-[#f53b70] transition-colors"
+                  />
+                  <div className="p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/20 text-[11px] text-purple-300 leading-relaxed">
+                    💡 <strong>Pro Tip:</strong> Upload your video (5MB, 10MB, or any size) to{" "}
+                    <a href="https://catbox.moe" target="_blank" rel="noreferrer" className="underline text-pink-400 font-bold">
+                      Catbox.moe
+                    </a>
+                    , <strong>Cloudinary</strong>, or <strong>Streamable</strong> for free, copy the direct link, and paste here.
+                    Takes 0 MB server storage, loads instantly, and stays online permanently!
+                  </div>
+
+                  {/* Real-time live video preview player */}
+                  {reelData.videoUrl && (reelData.videoUrl.startsWith("http://") || reelData.videoUrl.startsWith("https://")) && (
+                    <div className="mt-2 space-y-1">
+                      <div className="flex items-center space-x-1 text-[11px] font-bold text-emerald-400">
+                        <CheckCircle2 className="size-3.5" />
+                        <span>Live Video Preview</span>
+                      </div>
+                      <div className="relative rounded-xl overflow-hidden bg-black border border-white/10 max-h-48 flex items-center justify-center">
+                        <video
+                          src={getSafeStreamUrl(reelData.videoUrl)}
+                          controls
+                          playsInline
+                          controlsList="nodownload nofullscreen noremoteplayback"
+                          disablePictureInPicture
+                          className="w-full max-h-48 object-contain"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* MODE 2: DIRECT FILE / ZIP UPLOAD */}
+              {reelVideoMode === "upload" && (
+                <div className="space-y-1.5">
+                  <label className="text-[#aeaeae] block text-xs font-bold">
+                    Upload Video from PC / Phone (or .ZIP Archive)
+                  </label>
+                  <label className="border-2 border-dashed border-white/15 hover:border-[#f53b70] rounded-2xl p-4 flex flex-col items-center justify-center cursor-pointer transition-colors bg-black/40 hover:bg-black/60 group">
+                    <input
+                      type="file"
+                      accept="video/mp4,video/webm,video/quicktime,.zip"
+                      onChange={(e) => {
+                        if (e.target.files && e.target.files[0]) {
+                          setReelUploadFile(e.target.files[0]);
+                        }
+                      }}
+                      className="hidden"
+                      disabled={isUploadingReel}
+                    />
+                    <div className="size-10 rounded-xl bg-white/5 group-hover:bg-[#f53b70]/20 flex items-center justify-center text-[#f53b70] mb-1.5 transition-colors">
+                      {reelUploadFile ? (
+                        reelUploadFile.name.endsWith(".zip") ? (
+                          <FileArchive className="size-5" />
+                        ) : (
+                          <Video className="size-5" />
+                        )
+                      ) : (
+                        <UploadCloud className="size-5" />
+                      )}
+                    </div>
+                    {reelUploadFile ? (
+                      <div className="flex items-center space-x-2 text-xs font-bold text-emerald-400">
+                        <span>✓ {reelUploadFile.name} ({(reelUploadFile.size / (1024 * 1024)).toFixed(2)} MB)</span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setReelUploadFile(null);
+                          }}
+                          className="text-red-400 hover:text-red-300 ml-1"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <span className="text-xs font-bold text-white group-hover:text-[#f53b70] transition-colors">
+                          Click or Drag & Drop Video (.mp4/.webm) or .ZIP
+                        </span>
+                        <span className="text-[10px] text-[#aeaeae] mt-0.5">
+                          Direct upload from your device to Zovik Shorts
+                        </span>
+                      </>
+                    )}
+                  </label>
+                </div>
+              )}
+
+              {/* MODE 3: PRESET COMPANION VIDEO */}
+              {reelVideoMode === "preset" && (
                 <div>
                   <label className="text-[#aeaeae] block mb-1 text-[11px] font-bold">
-                    Or Select Existing Preset Video
+                    Select Existing Preset Companion Video
                   </label>
                   <select
                     value={reelData.videoUrl}

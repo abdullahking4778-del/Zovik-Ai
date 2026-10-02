@@ -92,6 +92,8 @@ function ChatVideoPlayer({
         muted
         loop
         playsInline
+        controlsList="nodownload nofullscreen noremoteplayback"
+        disablePictureInPicture
         onPlay={() => setIsPlaying(true)}
         onPause={() => setIsPlaying(false)}
         className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-300"
@@ -1201,6 +1203,8 @@ function CinemaVideoModal({
           src={videoSrc}
           autoPlay
           controls
+          controlsList="nodownload nofullscreen noremoteplayback"
+          disablePictureInPicture
           playsInline
           className="w-full h-full object-contain"
         />

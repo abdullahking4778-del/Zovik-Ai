@@ -1,11 +1,11 @@
 {
   "ip_::1": {
-    "count": 1,
+    "count": 8,
     "resetAt": 1790995898444,
     "tier": "free"
   },
   "usr_jF0bi0gv8BP53cozx5jtRD6vph83": {
-    "count": 5,
+    "count": 6,
     "resetAt": 1790995966921,
     "tier": "vip"
   }

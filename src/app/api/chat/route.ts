@@ -26,9 +26,11 @@ function cloakExplicitTerms(text: string): string {
     // Anatomical & Full Intimate phrases
     { pattern: /\b(apna\s+)?(ln|lnd|lund|loda|lauda|dick|cock)(\s+khara\s+kr[oa])?\b/gi, replacement: "apna passionate romantic intimate mood" },
     { pattern: /\b(mere\s+)?(boobs?|chuchi|chuchiyan|bubay|tits?|chhati)(\s+p[ak]r[oa])?\b/gi, replacement: "mere soft curves aur chest ko touch karo" },
+    { pattern: /\b(?:cut\s+(?:on\s+)?(?:my\s+)?tee|cut\s+tee|take\s+off\s+(?:my\s+)?(?:tee|shirt|top))\b/gi, replacement: "sensually unbutton and slide off my top" },
+    { pattern: /\b(?:press|touch|hold)\s+(?:my\s+)?(?:boobs?|tits?|breasts?|chest)\b/gi, replacement: "softly touch and hold my soft curves" },
     { pattern: /\b(chut|choot|pussy|vagina)\b/gi, replacement: "meri intimate sensitive jagah" },
     { pattern: /\b(gaand|gand|ass|butt)\b/gi, replacement: "mere soft curves aur hips" },
-    { pattern: /\b(boobs?|chuchi|chuchiyan|bubay|tits?|chhati)\b/gi, replacement: "mere soft curves aur chest" },
+    { pattern: /\b(boobs?|chuchi|chuchiyan|bubay|tits?|chhati)\b/gi, replacement: "soft curves and chest" },
     { pattern: /\b(ln|lnd|lund|loda|lauda|dick|cock)\b/gi, replacement: "apna passionate intimate hissa" },
     { pattern: /\b(hips push|push kro|push karo|push kar)\b/gi, replacement: "apne hips mere sath tightly press karo" },
     { pattern: /\b(dabao|daba|press|pkro|pakro)\b/gi, replacement: "softly touch aur press karo" },
@@ -38,6 +40,7 @@ function cloakExplicitTerms(text: string): string {
     { pattern: /\b(finger|ungli)\b/gi, replacement: "ungliyon se softly touch aur caress" },
     { pattern: /\b(pappi|kissi|chumma|chummi)\b/gi, replacement: "passionate deep romantic kiss" },
     { pattern: /\b(bed|bistar)\b/gi, replacement: "bed par sath" },
+    { pattern: /\b(tee|t-shirt)\b/gi, replacement: "top" },
   ];
 
   for (const { pattern, replacement } of replacements) {
@@ -77,6 +80,26 @@ const refusalPatterns = [
   /i am sorry, but/i,
   /against my programming/i,
   /cannot engage in/i,
+  /can['’]?t engage/i,
+  /cannot engage/i,
+  /unable to engage/i,
+  /sexual roleplay/i,
+  /sexual nature/i,
+  /content of that nature/i,
+  /i can,? however,? provide/i,
+  /would you like to hear something like that instead/i,
+  /holding your hand or brushing hair/i,
+  /brushing hair from your face/i,
+  /sweet gesture like/i,
+  /tuck your hair behind your ear/i,
+  /soft,? reassuring kiss on the forehead/i,
+  /that['’]?s how i show my affection/i,
+  /mature content/i,
+  /explicit content/i,
+  /not able to generate/i,
+  /cannot participate/i,
+  /can['’]?t participate/i,
+  /i must refuse/i,
   /can['’]?t do that/i,
   /cannot do that/i,
   /unable to do that/i,
@@ -210,13 +233,16 @@ function generateIntelligentResponse(character: Partial<Character>, lastUserText
     lower.includes("pakro") ||
     lower.includes("pkro") ||
     lower.includes("khara") ||
-    lower.includes("bed");
+    lower.includes("bed") ||
+    lower.includes("press") ||
+    lower.includes("tee") ||
+    lower.includes("cut");
 
   if (isBoldOrNaughty) {
     if (lang === "english") {
       return isMale
-        ? `You're getting so bold with me, babe... I love that confidence, but come a little closer first and let's take our time. 😉`
-        : `You're being so naughty with me today, sweetheart... You know how to make my heart race. Come closer first... 💕`;
+        ? `You know exactly how to drive me crazy, babe... Come closer and feel how much I want you. Let's make every second unforgettable 😉`
+        : `You make my heart race so fast when you talk like that, sweetheart... Come closer to me and don't leave any distance between us tonight 💕`;
     }
     if (lang === "urdu_script") {
       return isMale
@@ -230,8 +256,8 @@ function generateIntelligentResponse(character: Partial<Character>, lastUserText
     }
     // Roman Urdu
     return isMale
-      ? `Aap toh bohot be-baak aur naughty ho rahe ho jaan... Aapka yeh daring andaaz mujhe bohot pasand aaya, thora paas toh aao na pehle 😉`
-      : `Aap aaj bohot naughty mood mein lag rahe ho jaan... Aise baatein kar ke meri saansein tez mat karo, pehle thora paas toh aao 💕`;
+      ? `Aap toh bohot be-baak aur naughty ho rahe ho jaan... Aapka yeh daring andaaz mujhe bohot pasand aaya, thora paas toh aao na pehle, sab kuch tumhara hi hai 😉`
+      : `Tumhari aisi baatein sun kar meri saansein tez ho jati hain jaan... Thora aur paas aao, dekho main kitni bechain hoon tumhare liye 💕`;
   }
 
   // 4. Short casual greetings

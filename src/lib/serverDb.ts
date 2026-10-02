@@ -34,6 +34,36 @@ export function generateUniqueId(prefix: string = "id"): string {
   return `${prefix}_${crypto.randomUUID()}`;
 }
 
+// Helper: Safe atomic write to prevent race conditions & corrupted JSON
+function safeWriteJsonFile(filePath: string, data: unknown): void {
+  const tmpPath = `${filePath}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`;
+  try {
+    const dir = path.dirname(filePath);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(tmpPath, JSON.stringify(data, null, 2), "utf-8");
+    fs.renameSync(tmpPath, filePath);
+  } catch {
+    try {
+      if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
+    } catch {}
+    try {
+      fs.writeFileSync(filePath, JSON.stringify(data, null, 2), "utf-8");
+    } catch {}
+  }
+}
+
+// Helper: Safe read with non-empty checks to prevent JSON parse errors
+function safeReadJsonFile<T>(filePath: string, fallback: T): T {
+  try {
+    if (!fs.existsSync(filePath)) return fallback;
+    const raw = fs.readFileSync(filePath, "utf-8");
+    if (!raw || !raw.trim()) return fallback;
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
+}
+
 // ============================================================================
 // 1. SHORTS & REELS PERSISTENCE
 // ============================================================================
@@ -56,23 +86,12 @@ export async function getPersistentShorts(): Promise<ShortReel[]> {
   }
 
   // 2. Fallback to local seed file
-  try {
-    const filePath = getStoragePath("shorts.json");
-    if (fs.existsSync(filePath)) {
-      const raw = fs.readFileSync(filePath, "utf-8");
-      const parsed = JSON.parse(raw || "[]");
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-    }
-    const rootPath = path.join(process.cwd(), "src", "data", "shorts.json");
-    if (fs.existsSync(rootPath)) {
-      const raw = fs.readFileSync(rootPath, "utf-8");
-      return JSON.parse(raw || "[]");
-    }
-  } catch (err: unknown) {
-    console.error("[ServerDb] Local shorts fallback error:", err);
-  }
+  const storagePath = getStoragePath("shorts.json");
+  const localList = safeReadJsonFile<ShortReel[]>(storagePath, []);
+  if (localList.length > 0) return localList;
 
-  return [];
+  const rootPath = path.join(process.cwd(), "src", "data", "shorts.json");
+  return safeReadJsonFile<ShortReel[]>(rootPath, []);
 }
 
 export async function savePersistentShort(short: ShortReel): Promise<void> {
@@ -92,9 +111,7 @@ export async function savePersistentShort(short: ShortReel): Promise<void> {
     const filePath = getStoragePath("shorts.json");
     const existing = await getPersistentShorts();
     const updated = [shortWithId, ...existing.filter((s) => s.id !== shortId)];
-    const dir = path.dirname(filePath);
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(filePath, JSON.stringify(updated, null, 2), "utf-8");
+    safeWriteJsonFile(filePath, updated);
   } catch {}
 }
 
@@ -110,26 +127,20 @@ export async function deletePersistentShort(shortId: string): Promise<boolean> {
   // 2. Delete from temporary/serverless storage
   try {
     const filePath = getStoragePath("shorts.json");
-    if (fs.existsSync(filePath)) {
-      const raw = fs.readFileSync(filePath, "utf-8");
-      const list = JSON.parse(raw || "[]");
-      if (Array.isArray(list)) {
-        const filtered = list.filter((s) => s.id !== shortId);
-        fs.writeFileSync(filePath, JSON.stringify(filtered, null, 2), "utf-8");
-      }
+    const list = safeReadJsonFile<ShortReel[]>(filePath, []);
+    if (Array.isArray(list) && list.length > 0) {
+      const filtered = list.filter((s) => s.id !== shortId);
+      safeWriteJsonFile(filePath, filtered);
     }
   } catch {}
 
   // 3. Delete from root seed data (for local dev)
   try {
     const rootPath = path.join(process.cwd(), "src", "data", "shorts.json");
-    if (fs.existsSync(rootPath)) {
-      const raw = fs.readFileSync(rootPath, "utf-8");
-      const list = JSON.parse(raw || "[]");
-      if (Array.isArray(list)) {
-        const filtered = list.filter((s) => s.id !== shortId);
-        fs.writeFileSync(rootPath, JSON.stringify(filtered, null, 2), "utf-8");
-      }
+    const list = safeReadJsonFile<ShortReel[]>(rootPath, []);
+    if (Array.isArray(list) && list.length > 0) {
+      const filtered = list.filter((s) => s.id !== shortId);
+      safeWriteJsonFile(rootPath, filtered);
     }
   } catch {}
 
@@ -155,15 +166,8 @@ export async function getPersistentCustomCharacters(): Promise<Character[]> {
     console.warn("[ServerDb] Firestore custom_characters read failed, using fallback:", err);
   }
 
-  try {
-    const filePath = getStoragePath("custom_characters.json");
-    if (fs.existsSync(filePath)) {
-      const raw = fs.readFileSync(filePath, "utf-8");
-      return JSON.parse(raw || "[]");
-    }
-  } catch {}
-
-  return [];
+  const filePath = getStoragePath("custom_characters.json");
+  return safeReadJsonFile<Character[]>(filePath, []);
 }
 
 export async function savePersistentCustomCharacter(character: Character): Promise<Character> {
@@ -181,9 +185,7 @@ export async function savePersistentCustomCharacter(character: Character): Promi
     const filePath = getStoragePath("custom_characters.json");
     const existing = await getPersistentCustomCharacters();
     const updated = [charWithId, ...existing.filter((c) => c.id !== charId)];
-    const dir = path.dirname(filePath);
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(filePath, JSON.stringify(updated, null, 2), "utf-8");
+    safeWriteJsonFile(filePath, updated);
   } catch {}
 
   return charWithId;
@@ -201,7 +203,7 @@ export async function deletePersistentCustomCharacter(characterId: string): Prom
     const filePath = getStoragePath("custom_characters.json");
     const existing = await getPersistentCustomCharacters();
     const updated = existing.filter((c) => c.id !== characterId);
-    fs.writeFileSync(filePath, JSON.stringify(updated, null, 2), "utf-8");
+    safeWriteJsonFile(filePath, updated);
   } catch {}
 
   return true;
@@ -227,21 +229,12 @@ export async function getPersistentPayments(): Promise<PaymentRequest[]> {
     console.warn("[ServerDb] Firestore payment_requests read note:", err);
   }
 
-  try {
-    const filePath = getStoragePath("payment_requests.json");
-    if (fs.existsSync(filePath)) {
-      const raw = fs.readFileSync(filePath, "utf-8");
-      const list = JSON.parse(raw || "[]");
-      if (Array.isArray(list)) return list;
-    }
-    const rootPath = path.join(process.cwd(), "src", "data", "payment_requests.json");
-    if (fs.existsSync(rootPath)) {
-      const raw = fs.readFileSync(rootPath, "utf-8");
-      return JSON.parse(raw || "[]");
-    }
-  } catch {}
+  const storagePath = getStoragePath("payment_requests.json");
+  const localList = safeReadJsonFile<PaymentRequest[]>(storagePath, []);
+  if (localList.length > 0) return localList;
 
-  return [];
+  const rootPath = path.join(process.cwd(), "src", "data", "payment_requests.json");
+  return safeReadJsonFile<PaymentRequest[]>(rootPath, []);
 }
 
 export async function savePersistentPayment(payment: PaymentRequest): Promise<PaymentRequest> {
@@ -259,9 +252,7 @@ export async function savePersistentPayment(payment: PaymentRequest): Promise<Pa
     const filePath = getStoragePath("payment_requests.json");
     const existing = await getPersistentPayments();
     const updated = [paymentWithId, ...existing.filter((p) => p.id !== payId)];
-    const dir = path.dirname(filePath);
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(filePath, JSON.stringify(updated, null, 2), "utf-8");
+    safeWriteJsonFile(filePath, updated);
   } catch {}
 
   return paymentWithId;
@@ -301,7 +292,7 @@ export async function updatePersistentPaymentStatus(
         target.rejectedAt = now;
       }
       const filePath = getStoragePath("payment_requests.json");
-      fs.writeFileSync(filePath, JSON.stringify(payments, null, 2), "utf-8");
+      safeWriteJsonFile(filePath, payments);
       return target;
     }
   } catch {}

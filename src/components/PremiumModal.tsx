@@ -41,8 +41,6 @@ export default function PremiumModal({ isOpen, onClose }: PremiumModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
 
-  if (!isOpen) return null;
-
   const [currentEmail, setCurrentEmail] = useState("");
 
   useEffect(() => {
@@ -58,6 +56,8 @@ export default function PremiumModal({ isOpen, onClose }: PremiumModalProps) {
       console.warn("Failed to parse user session in PremiumModal:", e);
     }
   }, []);
+
+  if (!isOpen) return null;
 
   // Payment credentials provided by admin
   const paymentDetails = {

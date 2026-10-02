@@ -106,7 +106,8 @@ export async function PATCH(req: NextRequest) {
   }
 
   try {
-    const body: { id?: string; paymentId?: string; action?: "approve" | "reject" } = await req.json();
+    const body: { id?: string; paymentId?: string; action?: "approve" | "reject" } =
+      await req.json().catch(() => ({}));
     const targetId = body.id || body.paymentId;
     const action = body.action;
 
