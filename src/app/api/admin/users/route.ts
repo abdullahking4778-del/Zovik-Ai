@@ -141,6 +141,8 @@ export async function PUT(req: NextRequest) {
   }
 }
 
+export const PATCH = PUT;
+
 export async function DELETE(req: NextRequest) {
   if (!verifyAdminRequest(req)) {
     return NextResponse.json({ error: "Unauthorized: Admin session invalid or missing." }, { status: 401 });

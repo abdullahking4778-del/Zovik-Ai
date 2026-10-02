@@ -138,14 +138,16 @@ export async function PATCH(req: NextRequest) {
   }
 
   try {
-    const { characterId, gallery }: { characterId?: string; gallery?: string[] } = await req.json();
+    const body = await req.json();
+    const targetId: string | undefined = body.characterId || body.id;
+    const gallery: string[] | undefined = body.gallery;
 
-    if (!characterId || !Array.isArray(gallery)) {
-      return NextResponse.json({ success: false, error: "Missing characterId or gallery array" }, { status: 400 });
+    if (!targetId || !Array.isArray(gallery)) {
+      return NextResponse.json({ success: false, error: "Missing characterId (or id) or gallery array" }, { status: 400 });
     }
 
     const custom = await getPersistentCustomCharacters();
-    const existing = custom.find((c) => c.id === characterId);
+    const existing = custom.find((c) => c.id === targetId);
 
     if (existing) {
       existing.gallery = gallery;
@@ -154,7 +156,7 @@ export async function PATCH(req: NextRequest) {
     }
 
     // If default character, create a custom override in persistent store
-    const def = defaultCharacters.find((c) => c.id === characterId);
+    const def = defaultCharacters.find((c) => c.id === targetId);
     if (def) {
       const overrideChar: Character = { ...def, gallery };
       await savePersistentCustomCharacter(overrideChar);

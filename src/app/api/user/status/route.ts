@@ -20,56 +20,63 @@ export async function GET(req: NextRequest) {
   }
 
   // 1. Check user store by email first, then fallback to uid
-  let status = email 
-    ? getActiveUserTier(email) 
-    : { tier: "free" as const, isVip: false, subscriptionEndsAt: null, storageRetentionDays: 7 };
+  const storedUser = (email ? findStoredUser(email) : null) || (uid ? findStoredUser(uid) : null);
 
-  if (status.tier === "free" && uid) {
-    status = getActiveUserTier(uid);
-  }
+  let status: {
+    tier: "free" | "plus" | "vip";
+    isVip: boolean;
+    subscriptionEndsAt: string | null;
+    storageRetentionDays: number;
+  };
 
-  // 2. Cross-check payments in case an admin approved a payment proof by email
-  if (status.tier === "free" && email) {
-    try {
-      const paymentsPath = getPaymentsFilePath();
-      let raw: string | null = null;
-      if (fs.existsSync(paymentsPath)) {
-        raw = fs.readFileSync(paymentsPath, "utf-8");
-      } else {
-        const localFallback = path.join(process.cwd(), "src", "data", "payment_requests.json");
-        if (fs.existsSync(localFallback)) {
-          raw = fs.readFileSync(localFallback, "utf-8");
-        }
-      }
+  if (storedUser) {
+    status = getActiveUserTier(storedUser.id || storedUser.email);
+  } else {
+    status = { tier: "free", isVip: false, subscriptionEndsAt: null, storageRetentionDays: 7 };
 
-      if (raw) {
-        const payments = JSON.parse(raw || "[]");
-        if (Array.isArray(payments)) {
-          const approved = payments.find(
-            (p) => p.status === "approved" && p.userEmail?.toLowerCase() === email
-          );
-          if (approved) {
-            const endsAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-            const updated = upsertStoredUser(uid || email, {
-              id: uid || email,
-              email: email,
-              tier: approved.plan === "vip" ? "vip" : "plus",
-              isVip: approved.plan === "vip",
-              subscriptionDays: 30,
-              subscriptionEndsAt: endsAt,
-              storageRetentionDays: approved.plan === "vip" ? 35 : 30,
-            });
-            status = {
-              tier: updated.tier,
-              isVip: updated.isVip,
-              subscriptionEndsAt: updated.subscriptionEndsAt || null,
-              storageRetentionDays: updated.storageRetentionDays,
-            };
+    // 2. Cross-check payments in case an admin approved a payment proof by email for a user not yet registered
+    if (email) {
+      try {
+        const paymentsPath = getPaymentsFilePath();
+        let raw: string | null = null;
+        if (fs.existsSync(paymentsPath)) {
+          raw = fs.readFileSync(paymentsPath, "utf-8");
+        } else {
+          const localFallback = path.join(process.cwd(), "src", "data", "payment_requests.json");
+          if (fs.existsSync(localFallback)) {
+            raw = fs.readFileSync(localFallback, "utf-8");
           }
         }
+
+        if (raw) {
+          const payments = JSON.parse(raw || "[]");
+          if (Array.isArray(payments)) {
+            const approved = payments.find(
+              (p) => p.status === "approved" && p.userEmail?.toLowerCase() === email
+            );
+            if (approved) {
+              const endsAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+              const updated = upsertStoredUser(uid || email, {
+                id: uid || email,
+                email: email,
+                tier: approved.plan === "vip" ? "vip" : "plus",
+                isVip: approved.plan === "vip",
+                subscriptionDays: 30,
+                subscriptionEndsAt: endsAt,
+                storageRetentionDays: approved.plan === "vip" ? 35 : 30,
+              });
+              status = {
+                tier: updated.tier,
+                isVip: updated.isVip,
+                subscriptionEndsAt: updated.subscriptionEndsAt || null,
+                storageRetentionDays: updated.storageRetentionDays,
+              };
+            }
+          }
+        }
+      } catch (e) {
+        console.warn("[UserStatusAPI] Error checking payment requests:", e);
       }
-    } catch (e) {
-      console.warn("[UserStatusAPI] Error checking payment requests:", e);
     }
   }
 

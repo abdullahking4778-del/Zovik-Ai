@@ -108,14 +108,15 @@ export async function PATCH(req: NextRequest) {
   }
 
   try {
-    const body: { id?: string; action?: "approve" | "reject" } = await req.json();
-    const { id, action } = body;
+    const body: { id?: string; paymentId?: string; action?: "approve" | "reject" } = await req.json();
+    const targetId = body.id || body.paymentId;
+    const action = body.action;
 
-    if (!id || (action !== "approve" && action !== "reject")) {
+    if (!targetId || (action !== "approve" && action !== "reject")) {
       return NextResponse.json({ success: false, error: "Valid payment ID and action ('approve' | 'reject') required" }, { status: 400 });
     }
 
-    const updatedPayment = await updatePersistentPaymentStatus(id, action);
+    const updatedPayment = await updatePersistentPaymentStatus(targetId, action);
     if (!updatedPayment) {
       return NextResponse.json({ success: false, error: "Payment request not found" }, { status: 404 });
     }
