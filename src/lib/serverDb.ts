@@ -36,7 +36,7 @@ export function generateUniqueId(prefix: string = "id"): string {
 
 // Helper: Safe atomic write to prevent race conditions & corrupted JSON
 function safeWriteJsonFile(filePath: string, data: unknown): void {
-  const tmpPath = `${filePath}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`;
+  const tmpPath = `${filePath}.${Date.now()}.${crypto.randomUUID()}.tmp`;
   try {
     const dir = path.dirname(filePath);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });

@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import crypto from "crypto";
 import { db } from "./firebase";
 import { doc, setDoc } from "firebase/firestore";
 
@@ -40,7 +41,7 @@ export function getAllStoredUsers(): StoredUser[] {
 
 export function saveAllStoredUsers(users: StoredUser[]): void {
   const filePath = getUsersFilePath();
-  const tmpPath = `${filePath}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`;
+  const tmpPath = `${filePath}.${Date.now()}.${crypto.randomUUID()}.tmp`;
   try {
     const dir = path.dirname(filePath);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });

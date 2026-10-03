@@ -78,7 +78,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   // Instant hydration from local storage on mount (prevents "Log In" button flicker on page refresh)
   useEffect(() => {
-    const savedLogin = safeLocalStorage.getItem<string>("zovik_logged_in") === "true";
+    const savedLogin = safeLocalStorage.getBoolean("zovik_logged_in");
     setIsLocallyLoggedIn(savedLogin);
     const savedTier = safeLocalStorage.getRawItem("zovik_tier");
     if (savedTier) setTier(savedTier);

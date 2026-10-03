@@ -60,7 +60,8 @@ export default function Home() {
     isLoginOpen: authLoginOpen, 
     setIsLoginOpen: setAuthLoginOpen, 
     requireAuth,
-    isLocallyLoggedIn
+    isLocallyLoggedIn,
+    userData
   } = useAuth();
 
   // Private VIP Gallery states
@@ -243,11 +244,10 @@ export default function Home() {
       const isPaid = currentTier === "vip" || currentTier === "plus";
 
       // 1. Subscription Grace Expiration Check (32 days auto-complete)
-      if (isPaid && (userObj as any)?.subscriptionStart) {
-        const start = new Date((userObj as any).subscriptionStart).getTime();
+      if (isPaid && userData?.subscriptionStart) {
+        const start = new Date(userData.subscriptionStart).getTime();
         const thirtyTwoDaysMs = 32 * 24 * 60 * 60 * 1000;
         if (now - start > thirtyTwoDaysMs) {
-          // Wait, cannot update local storage if we rely on Firestore. For now just show notice.
           showNotice("Notice: Your 30-day VIP plan completed (32 days grace). Reverted to normal user.");
         }
       }
@@ -385,8 +385,16 @@ export default function Home() {
   );
 
   // Active Conversations (strictly active chat threads where user participated, sorted by recent activity)
-  const activeConversations = useMemo(() => {
-    if (typeof window === "undefined") return [];
+  const [activeConversations, setActiveConversations] = useState<{
+    character: Character;
+    lastMessage: string;
+    lastTime: string;
+    lastTimestamp: number;
+    messageCount: number;
+  }[]>([]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
 
     let currentDeleted: string[] = [];
     try {
@@ -409,68 +417,70 @@ export default function Home() {
     const processedIds = new Set<string>();
 
     // 1. Scan all localStorage keys starting with "zovik_chat_"
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key && key.startsWith("zovik_chat_")) {
-        const charId = key.replace("zovik_chat_", "");
-        if (currentDeleted.includes(charId) || processedIds.has(charId)) continue;
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith("zovik_chat_")) {
+          const charId = key.replace("zovik_chat_", "");
+          if (currentDeleted.includes(charId) || processedIds.has(charId)) continue;
 
-        try {
-          const raw = localStorage.getItem(key);
-          if (raw) {
-            const msgs = JSON.parse(raw);
-            if (Array.isArray(msgs) && msgs.length > 0) {
-              const hasUserMsg = msgs.some((m: Message) => m.sender === "user");
-              if (!hasUserMsg && msgs.length <= 1) continue;
+          try {
+            const raw = localStorage.getItem(key);
+            if (raw) {
+              const msgs = JSON.parse(raw);
+              if (Array.isArray(msgs) && msgs.length > 0) {
+                const hasUserMsg = msgs.some((m: Message) => m.sender === "user");
+                if (!hasUserMsg && msgs.length <= 1) continue;
 
-              const char = charMap.get(charId);
-              if (char) {
-                processedIds.add(charId);
-                const lastMsg = msgs[msgs.length - 1];
-                list.push({
-                  character: char,
-                  lastMessage: lastMsg.text || (lastMsg.type === "image" ? "Sent a private photo 📸" : "Hey!"),
-                  lastTime: lastMsg.time || "Recently",
-                  lastTimestamp: lastMsg.timestamp || 0,
-                  messageCount: msgs.length,
-                });
+                const char = charMap.get(charId);
+                if (char) {
+                  processedIds.add(charId);
+                  const lastMsg = msgs[msgs.length - 1];
+                  list.push({
+                    character: char,
+                    lastMessage: lastMsg.text || (lastMsg.type === "image" ? "Sent a private photo 📸" : "Hey!"),
+                    lastTime: lastMsg.time || "Recently",
+                    lastTimestamp: lastMsg.timestamp || 0,
+                    messageCount: msgs.length,
+                  });
+                }
               }
             }
-          }
-        } catch {}
+          } catch {}
+        }
       }
-    }
 
-    // 2. Also check any characters in state
-    characters.forEach((char) => {
-      if (currentDeleted.includes(char.id) || processedIds.has(char.id)) return;
+      // 2. Also check any characters in state
+      characters.forEach((char) => {
+        if (currentDeleted.includes(char.id) || processedIds.has(char.id)) return;
 
-      const saved = localStorage.getItem(`zovik_chat_${char.id}`);
-      if (saved) {
-        try {
-          const msgs = JSON.parse(saved);
-          if (Array.isArray(msgs) && msgs.length > 0) {
-            const hasUserMsg = msgs.some((m: Message) => m.sender === "user");
-            if (!hasUserMsg && msgs.length <= 1) return;
+        const saved = localStorage.getItem(`zovik_chat_${char.id}`);
+        if (saved) {
+          try {
+            const msgs = JSON.parse(saved);
+            if (Array.isArray(msgs) && msgs.length > 0) {
+              const hasUserMsg = msgs.some((m: Message) => m.sender === "user");
+              if (!hasUserMsg && msgs.length <= 1) return;
 
-            processedIds.add(char.id);
-            const lastMsg = msgs[msgs.length - 1];
-            list.push({
-              character: char,
-              lastMessage: lastMsg.text || (lastMsg.type === "image" ? "Sent a private photo 📸" : "Hey!"),
-              lastTime: lastMsg.time || "Recently",
-              lastTimestamp: lastMsg.timestamp || 0,
-              messageCount: msgs.length,
-            });
-          }
-        } catch {}
-      }
-    });
+              processedIds.add(char.id);
+              const lastMsg = msgs[msgs.length - 1];
+              list.push({
+                character: char,
+                lastMessage: lastMsg.text || (lastMsg.type === "image" ? "Sent a private photo 📸" : "Hey!"),
+                lastTime: lastMsg.time || "Recently",
+                lastTimestamp: lastMsg.timestamp || 0,
+                messageCount: msgs.length,
+              });
+            }
+          } catch {}
+        }
+      });
+    } catch {}
 
     // Sort by latest message timestamp descending (most recently active chat at the top!)
     list.sort((a, b) => (b.lastTimestamp || 0) - (a.lastTimestamp || 0));
 
-    return list;
+    setActiveConversations(list);
   }, [characters, activeChatCharacter, chatRefreshTick, activeTab]);
 
   const handleCharacterCreated = async (newChar: Character) => {

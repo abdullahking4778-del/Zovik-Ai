@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveServerUser } from "@/lib/authSession";
+
+// Allow up to 60 seconds execution time on serverless platforms
+export const maxDuration = 60;
 import {
   checkQuotaAllowed,
   consumeQuotaOnSuccess,
@@ -531,7 +534,7 @@ CRITICAL RULES (ABSOLUTE PRIORITY):
 
     for (const model of preferredModels) {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 9000); // 9s timeout prevents serverless hang
+      const timeoutId = setTimeout(() => controller.abort(), 25000); // 25s comfortable timeout for large models
 
       try {
         const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -577,7 +580,7 @@ CRITICAL RULES (ABSOLUTE PRIORITY):
         const isAbort = err instanceof Error && err.name === "AbortError";
         const errMsg = err instanceof Error ? err.message : String(err);
         if (isAbort) {
-          console.warn(`Model ${model} timed out after 9s.`);
+          console.warn(`Model ${model} timed out after 25s.`);
         } else {
           console.warn(`Model ${model} fetch failed:`, errMsg);
         }

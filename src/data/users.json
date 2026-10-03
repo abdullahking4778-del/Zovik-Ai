@@ -12,5 +12,33 @@
     "storageRetentionDays": 35,
     "createdAt": "2026-10-02T02:48:32.020Z",
     "lastLoginAt": "2026-10-02T05:00:26.951Z"
+  },
+  {
+    "id": "user_test_1791010503748",
+    "email": "demo.tester.1791010503748@zovik.ai",
+    "name": "demo.tester.1791010503748",
+    "photoURL": null,
+    "tier": "free",
+    "isVip": false,
+    "subscriptionDays": 0,
+    "subscriptionStart": null,
+    "subscriptionEndsAt": null,
+    "storageRetentionDays": 7,
+    "createdAt": "2026-10-03T06:55:10.268Z",
+    "lastLoginAt": "2026-10-03T06:55:12.309Z"
+  },
+  {
+    "id": "user_test_1791010503748",
+    "email": "demo.tester.1791010503748@zovik.ai",
+    "name": "demo.tester.1791010503748",
+    "photoURL": null,
+    "tier": "free",
+    "isVip": false,
+    "subscriptionDays": 0,
+    "subscriptionStart": null,
+    "subscriptionEndsAt": null,
+    "storageRetentionDays": 7,
+    "createdAt": "2026-10-03T06:55:11.489Z",
+    "lastLoginAt": "2026-10-03T06:55:12.306Z"
   }
 ]

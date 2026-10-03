@@ -42,6 +42,9 @@ import {
 import { Character, ShortReel, PaymentRequest, UserAccount } from "@/types";
 import { getSafeStreamUrl } from "@/lib/videoHelper";
 import { getSafeImageUrl } from "@/lib/imageHelper";
+import { AdminOverviewTab } from "@/components/admin/AdminOverviewTab";
+import { AdminSubscriptionsTab } from "@/components/admin/AdminSubscriptionsTab";
+import { AdminSettingsTab } from "@/components/admin/AdminSettingsTab";
 
 export default function AdminPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -947,207 +950,22 @@ export default function AdminPage() {
 
         {/* ================= TAB 1: OVERVIEW & STATS ================= */}
         {activeTab === "overview" && (
-          <div className="space-y-6">
-            {/* Stat Cards Grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <div className="p-5 rounded-3xl bg-[#140b1c] border border-white/5">
-                <span className="text-xs text-[#aeaeae]">Total Registered Users</span>
-                <div className="text-3xl font-black text-white mt-1">{users.length}</div>
-                <span className="text-[10px] text-emerald-400 font-bold">100% Free DB Storage</span>
-              </div>
-
-              <div className="p-5 rounded-3xl bg-[#140b1c] border border-white/5">
-                <span className="text-xs text-[#aeaeae]">Verified VIP Members</span>
-                <div className="text-3xl font-black text-amber-400 mt-1">
-                  {users.filter((u) => u.isVip || u.tier === "vip" || u.tier === "plus").length}
-                </div>
-                <span className="text-[10px] text-amber-300 font-bold">Paid Subscriptions</span>
-              </div>
-
-              <div className="p-5 rounded-3xl bg-[#140b1c] border border-white/5">
-                <span className="text-xs text-[#aeaeae]">Estimated Revenue</span>
-                <div className="text-3xl font-black text-emerald-400 mt-1">
-                  Rs. {totalRevenuePKR.toLocaleString()}
-                </div>
-                <span className="text-[10px] text-[#aeaeae]">From EasyPaisa/Jazz/Crypto</span>
-              </div>
-
-              <div className="p-5 rounded-3xl bg-[#140b1c] border border-white/5">
-                <span className="text-xs text-[#aeaeae]">Monthly Running Cost</span>
-                <div className="text-3xl font-black text-white mt-1">0 PKR</div>
-                <span className="text-[10px] text-emerald-400 font-bold">Groq Free + Zero Server Bill</span>
-              </div>
-            </div>
-
-            {/* Quick Actions & System Info */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="p-6 rounded-3xl bg-[#140b1c] border border-white/5 space-y-4">
-                <h3 className="text-base font-extrabold text-white flex items-center space-x-2">
-                  <CreditCard className="size-4 text-[#f53b70]" />
-                  <span>Pending Payment Approvals</span>
-                </h3>
-                {payments.filter((p) => p.status === "pending").length > 0 ? (
-                  <div className="space-y-2">
-                    {payments
-                      .filter((p) => p.status === "pending")
-                      .slice(0, 3)
-                      .map((p) => (
-                        <div
-                          key={p.id}
-                          className="flex items-center justify-between p-3 rounded-2xl bg-black/40 border border-white/10"
-                        >
-                          <div>
-                            <span className="text-xs font-bold text-white block">{p.userEmail}</span>
-                            <span className="text-[10px] text-[#aeaeae]">
-                              {p.method} • {p.amount} • Trx: {p.trxId}
-                            </span>
-                          </div>
-                          <button
-                            onClick={() => handleApprovePayment(p.id)}
-                            className="px-3 py-1 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black text-xs font-black shadow-md"
-                          >
-                            Approve
-                          </button>
-                        </div>
-                      ))}
-                  </div>
-                ) : (
-                  <p className="text-xs text-[#aeaeae]">No pending payments. All caught up!</p>
-                )}
-              </div>
-
-              <div className="p-6 rounded-3xl bg-[#140b1c] border border-white/5 space-y-4">
-                <h3 className="text-base font-extrabold text-white flex items-center space-x-2">
-                  <Cpu className="size-4 text-[#8b5cf6]" />
-                  <span>AI Engine Health</span>
-                </h3>
-                <ul className="space-y-2 text-xs text-[#d1c4cd]">
-                  <li className="flex items-center justify-between">
-                    <span>Groq LLM Model:</span>
-                    <strong className="text-emerald-400 font-mono">qwen/qwen3.8-27b</strong>
-                  </li>
-                  <li className="flex items-center justify-between">
-                    <span>Multilingual Roman Urdu:</span>
-                    <strong className="text-emerald-400">Active & Thinking</strong>
-                  </li>
-                  <li className="flex items-center justify-between">
-                    <span>Photo Engine:</span>
-                    <strong className="text-emerald-400 font-mono">Turbo Photorealism</strong>
-                  </li>
-                  <li className="flex items-center justify-between">
-                    <span>Voice Engine:</span>
-                    <strong className="text-emerald-400">Strictly Female Tone (Pitch 1.25)</strong>
-                  </li>
-                </ul>
-              </div>
-            </div>
-          </div>
+          <AdminOverviewTab
+            users={users}
+            totalRevenuePKR={totalRevenuePKR}
+            payments={payments}
+            handleApprovePayment={handleApprovePayment}
+          />
         )}
 
         {/* ================= TAB 2: PAYMENTS & SUBSCRIPTIONS ================= */}
         {activeTab === "subscriptions" && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-xl font-black text-white">Payment Requests & Approvals</h2>
-                <p className="text-xs text-[#aeaeae]">
-                  Review Transaction IDs sent via JazzCash, EasyPaisa, NayaPay, or Binance.
-                </p>
-              </div>
-            </div>
-
-            <div className="overflow-x-auto rounded-3xl bg-[#140b1c] border border-white/5">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-[#1b1024] text-[#aeaeae] uppercase text-[10px] tracking-wider">
-                  <tr>
-                    <th className="p-4">User Email</th>
-                    <th className="p-4">Plan & Amount</th>
-                    <th className="p-4">Payment Method</th>
-                    <th className="p-4">Trx ID / Ref</th>
-                    <th className="p-4">Slip / Receipt</th>
-                    <th className="p-4">Date</th>
-                    <th className="p-4">Status</th>
-                    <th className="p-4 text-right">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                  {payments.map((p) => (
-                    <tr key={p.id} className="hover:bg-white/[0.02]">
-                      <td className="p-4 font-bold text-white">{p.userEmail}</td>
-                      <td className="p-4">
-                        <span className="font-bold text-[#f53b70]">{p.amount}</span>
-                        <span className="block text-[10px] text-[#888]">{p.planName}</span>
-                      </td>
-                      <td className="p-4">
-                        <span className="px-2 py-0.5 rounded-full bg-white/10 text-white font-medium">
-                          {p.method}
-                        </span>
-                      </td>
-                      <td className="p-4 font-mono font-bold text-white">{p.trxId}</td>
-                      <td className="p-4">
-                        {p.screenshot ? (
-                          <button
-                            onClick={() => setPreviewSlip(p.screenshot)}
-                            className="flex items-center space-x-1 px-2.5 py-1 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/40 text-purple-300 font-bold text-[11px] transition-all"
-                          >
-                            <span>View Slip 🖼️</span>
-                          </button>
-                        ) : (
-                          <span className="text-[10px] text-white/40">
-                            {p.screenshotPurged ? "Auto-Cleaned 🧹" : "No Slip"}
-                          </span>
-                        )}
-                      </td>
-                      <td className="p-4 text-[#aeaeae]">
-                        {new Date(p.createdAt).toLocaleDateString()}
-                      </td>
-                      <td className="p-4">
-                        <span
-                          className={`px-2 py-0.5 rounded-full font-bold text-[10px] uppercase ${
-                            p.status === "approved"
-                              ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
-                              : p.status === "rejected"
-                              ? "bg-red-500/20 text-red-400 border border-red-500/30"
-                              : "bg-amber-500/20 text-amber-400 border border-amber-500/30 animate-pulse"
-                          }`}
-                        >
-                          {p.status}
-                        </span>
-                      </td>
-                      <td className="p-4 text-right space-x-2">
-                        {p.status === "pending" && (
-                          <>
-                            <button
-                              onClick={() => handleApprovePayment(p.id)}
-                              className="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-extrabold text-xs shadow-md transition-all"
-                            >
-                              Approve
-                            </button>
-                            <button
-                              onClick={() => handleRejectPayment(p.id)}
-                              className="px-3 py-1.5 rounded-xl bg-red-500/20 hover:bg-red-500/40 text-red-400 font-bold text-xs transition-all"
-                            >
-                              Reject
-                            </button>
-                          </>
-                        )}
-                        {p.status === "approved" && (
-                          <span className="text-[11px] text-emerald-400 font-bold">✓ Active VIP</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                  {payments.length === 0 && (
-                    <tr>
-                      <td colSpan={7} className="p-8 text-center text-[#aeaeae]">
-                        No payment requests received yet.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <AdminSubscriptionsTab
+            payments={payments}
+            handleApprovePayment={handleApprovePayment}
+            handleRejectPayment={handleRejectPayment}
+            setPreviewSlip={setPreviewSlip}
+          />
         )}
 
         {/* ================= TAB 3: COMPANIONS CMS ================= */}
@@ -1877,110 +1695,20 @@ export default function AdminPage() {
 
         {/* ================= TAB 6: SETTINGS ================= */}
         {activeTab === "settings" && (
-          <div className="p-6 rounded-3xl bg-[#140b1c] border border-white/5 max-w-xl mx-auto space-y-6">
-            <div>
-              <h2 className="text-xl font-black text-white">AI Engine & Master Settings</h2>
-              <p className="text-xs text-[#aeaeae]">Configure backend engine and manage your Master Access credentials</p>
-            </div>
-
-            {/* Active AI Model Card */}
-            <div className="p-4 rounded-2xl bg-black/40 border border-white/10 space-y-1">
-              <span className="text-white font-bold block text-xs">Active Chat Model</span>
-              <span className="font-mono text-emerald-400 text-xs">qwen/qwen3.8-27b (Fallback: gpt-oss-120b)</span>
-              <p className="text-[11px] text-[#aeaeae] mt-1">
-                Optimal for multilingual conversations, emotional roleplay, and Roman Urdu.
-              </p>
-            </div>
-
-            {/* Live Master Password Changer Form */}
-            <div className="p-5 rounded-2xl bg-black/50 border border-white/10 space-y-4">
-              <div className="flex items-center justify-between pb-3 border-b border-white/10">
-                <div className="flex items-center space-x-2">
-                  <Lock className="size-4 text-[#f53b70]" />
-                  <span className="text-sm font-black text-white">Change Master Password</span>
-                </div>
-                <div className="flex items-center space-x-1.5 bg-black/60 px-2.5 py-1 rounded-lg border border-white/10">
-                  <span className="text-[10px] text-[#aeaeae]">Active:</span>
-                  <span className="font-mono text-amber-400 text-[11px]">
-                    {showPasswordDetails ? activeMasterPassword : "••••••••••••"}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setShowPasswordDetails(!showPasswordDetails)}
-                    className="text-[#aeaeae] hover:text-white ml-1 cursor-pointer"
-                    title={showPasswordDetails ? "Hide password" : "Show active password"}
-                  >
-                    {showPasswordDetails ? <EyeOff className="size-3" /> : <Eye className="size-3" />}
-                  </button>
-                </div>
-              </div>
-
-              {passwordStatusMsg && (
-                <div
-                  className={`p-3 rounded-xl text-xs font-bold flex items-center space-x-2 ${
-                    passwordStatusMsg.type === "success"
-                      ? "bg-emerald-500/10 border border-emerald-500/30 text-emerald-400"
-                      : "bg-red-500/10 border border-red-500/30 text-red-400"
-                  }`}
-                >
-                  {passwordStatusMsg.type === "success" ? (
-                    <CheckCircle2 className="size-4 shrink-0" />
-                  ) : (
-                    <AlertCircle className="size-4 shrink-0" />
-                  )}
-                  <span>{passwordStatusMsg.text}</span>
-                </div>
-              )}
-
-              <form onSubmit={handleChangePassword} className="space-y-3 text-xs">
-                <div>
-                  <label className="text-[#aeaeae] block mb-1 font-bold">Current Master Password</label>
-                  <input
-                    type="password"
-                    required
-                    value={currentMasterPassword}
-                    onChange={(e) => setCurrentMasterPassword(e.target.value)}
-                    placeholder="Enter current password (e.g. #Abdullah786099#)"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-black/60 border border-white/10 text-white font-mono outline-none focus:border-[#f53b70]"
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-[#aeaeae] block mb-1 font-bold">New Master Password</label>
-                    <input
-                      type="password"
-                      required
-                      value={newMasterPassword}
-                      onChange={(e) => setNewMasterPassword(e.target.value)}
-                      placeholder="Min 6 characters"
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-black/60 border border-white/10 text-white font-mono outline-none focus:border-[#f53b70]"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[#aeaeae] block mb-1 font-bold">Confirm New Password</label>
-                    <input
-                      type="password"
-                      required
-                      value={confirmMasterPassword}
-                      onChange={(e) => setConfirmMasterPassword(e.target.value)}
-                      placeholder="Re-type new password"
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-black/60 border border-white/10 text-white font-mono outline-none focus:border-[#f53b70]"
-                    />
-                  </div>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={isUpdatingPassword}
-                  className="w-full py-3 rounded-xl bg-gradient-to-r from-[#f53b70] via-[#ff5b8c] to-[#8b5cf6] text-white font-extrabold text-xs shadow-lg shadow-pink-600/30 hover:brightness-110 active:scale-98 transition-all disabled:opacity-50 mt-2 flex items-center justify-center space-x-2 cursor-pointer"
-                >
-                  <Lock className="size-3.5" />
-                  <span>{isUpdatingPassword ? "Updating Password..." : "Save New Master Password 🔐"}</span>
-                </button>
-              </form>
-            </div>
-          </div>
+          <AdminSettingsTab
+            showPasswordDetails={showPasswordDetails}
+            setShowPasswordDetails={setShowPasswordDetails}
+            activeMasterPassword={activeMasterPassword}
+            passwordStatusMsg={passwordStatusMsg}
+            currentMasterPassword={currentMasterPassword}
+            setCurrentMasterPassword={setCurrentMasterPassword}
+            newMasterPassword={newMasterPassword}
+            setNewMasterPassword={setNewMasterPassword}
+            confirmMasterPassword={confirmMasterPassword}
+            setConfirmMasterPassword={setConfirmMasterPassword}
+            isUpdatingPassword={isUpdatingPassword}
+            handleChangePassword={handleChangePassword}
+          />
         )}
       </div>
 
