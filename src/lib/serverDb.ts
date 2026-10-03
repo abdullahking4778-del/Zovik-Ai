@@ -10,6 +10,7 @@ import {
   getDoc,
   updateDoc,
 } from "firebase/firestore";
+import { supabaseAdmin, isSupabaseConfigured } from "./supabase";
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
@@ -17,8 +18,9 @@ import { ShortReel, Character, PaymentRequest } from "@/types";
 
 /**
  * Server-Side Persistent Database Layer
- * Primary: Firebase Firestore (100% Free, Zero Card, Works permanently on Vercel Serverless)
- * Secondary: Local JSON Fallback / Initial Seed Cache
+ * Primary: Supabase PostgreSQL (100% Free Forever, 0 PKR, No Card, Durable on Vercel)
+ * Secondary: Firebase Firestore (Backup / Dual-Sync)
+ * Tertiary: Local JSON Fallback / Seed Cache
  */
 
 // Helper: Safe path resolver for serverless environments
@@ -69,7 +71,34 @@ function safeReadJsonFile<T>(filePath: string, fallback: T): T {
 // ============================================================================
 
 export async function getPersistentShorts(): Promise<ShortReel[]> {
-  // 1. Try reading from Firestore
+  // 1. Primary: Try reading from Supabase PostgreSQL
+  if (isSupabaseConfigured()) {
+    try {
+      const { data, error } = await supabaseAdmin
+        .from("shorts_reels")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (!error && Array.isArray(data) && data.length > 0) {
+        return data.map((d) => ({
+          id: d.id,
+          characterId: d.character_id || "general",
+          characterName: d.title || "Companion Reel",
+          characterAge: 22,
+          avatar: "/characters/zovik_01.jpg",
+          videoUrl: d.video_url,
+          caption: d.title,
+          tags: ["Trending", "HD"],
+          likes: d.likes ?? 0,
+          createdAt: d.created_at,
+        }));
+      }
+    } catch (err: unknown) {
+      console.warn("[ServerDb] Supabase shorts read note:", err);
+    }
+  }
+
+  // 2. Secondary: Try reading from Firestore
   try {
     const colRef = collection(db, "shorts");
     const snapshot = await getDocs(colRef);
@@ -85,7 +114,7 @@ export async function getPersistentShorts(): Promise<ShortReel[]> {
     console.warn("[ServerDb] Firestore shorts read failed, using fallback:", message);
   }
 
-  // 2. Fallback to local seed file
+  // 3. Fallback to local seed file
   const storagePath = getStoragePath("shorts.json");
   const localList = safeReadJsonFile<ShortReel[]>(storagePath, []);
   if (localList.length > 0) return localList;
@@ -98,15 +127,31 @@ export async function savePersistentShort(short: ShortReel): Promise<void> {
   const shortId = short.id || generateUniqueId("short");
   const shortWithId: ShortReel = { ...short, id: shortId };
 
-  // 1. Save to Firestore
+  // 1. Primary: Save to Supabase PostgreSQL
+  if (isSupabaseConfigured()) {
+    try {
+      await supabaseAdmin.from("shorts_reels").upsert({
+        id: shortId,
+        title: shortWithId.caption || shortWithId.characterName || "Reel",
+        video_url: shortWithId.videoUrl,
+        character_id: shortWithId.characterId || null,
+        likes: shortWithId.likes || 0,
+        created_at: shortWithId.createdAt || new Date().toISOString(),
+      });
+    } catch (err: unknown) {
+      console.warn("[ServerDb] Supabase save short note:", err);
+    }
+  }
+
+  // 2. Secondary: Save to Firestore
   try {
     const docRef = doc(db, "shorts", shortId);
     await setDoc(docRef, shortWithId);
   } catch (err: unknown) {
-    console.warn("[ServerDb] Firestore save short failed, saving to local fallback:", err);
+    console.warn("[ServerDb] Firestore save short note:", err);
   }
 
-  // 2. Also sync to local cache
+  // 3. Sync to local cache
   try {
     const filePath = getStoragePath("shorts.json");
     const existing = await getPersistentShorts();
@@ -116,7 +161,16 @@ export async function savePersistentShort(short: ShortReel): Promise<void> {
 }
 
 export async function deletePersistentShort(shortId: string): Promise<boolean> {
-  // 1. Delete from Firestore
+  // 1. Primary: Delete from Supabase PostgreSQL
+  if (isSupabaseConfigured()) {
+    try {
+      await supabaseAdmin.from("shorts_reels").delete().eq("id", shortId);
+    } catch (err: unknown) {
+      console.warn("[ServerDb] Supabase delete short note:", err);
+    }
+  }
+
+  // 2. Secondary: Delete from Firestore
   try {
     const docRef = doc(db, "shorts", shortId);
     await deleteDoc(docRef);
@@ -124,7 +178,7 @@ export async function deletePersistentShort(shortId: string): Promise<boolean> {
     console.warn("[ServerDb] Firestore delete short note:", err);
   }
 
-  // 2. Delete from temporary/serverless storage
+  // 3. Delete from temporary/serverless storage
   try {
     const filePath = getStoragePath("shorts.json");
     const list = safeReadJsonFile<ShortReel[]>(filePath, []);
@@ -134,7 +188,7 @@ export async function deletePersistentShort(shortId: string): Promise<boolean> {
     }
   } catch {}
 
-  // 3. Delete from root seed data (for local dev)
+  // 4. Delete from root seed data (for local dev)
   try {
     const rootPath = path.join(process.cwd(), "src", "data", "shorts.json");
     const list = safeReadJsonFile<ShortReel[]>(rootPath, []);
@@ -165,9 +219,7 @@ export async function getPersistentDeletedCharacterIds(): Promise<string[]> {
         if (data?.slug) deletedSet.add(String(data.slug).toLowerCase());
       });
     }
-  } catch (err: unknown) {
-    // Firestore offline fallback
-  }
+  } catch {}
 
   // 2. Check local fallback file
   try {
@@ -183,7 +235,17 @@ export async function recordPersistentDeletedCharacterId(id: string, slug?: stri
   const cleanId = id.trim().toLowerCase();
   const cleanSlug = slug ? slug.trim().toLowerCase() : undefined;
 
-  // 1. Save to Firestore
+  // 1. Delete directly from Supabase companions table
+  if (isSupabaseConfigured()) {
+    try {
+      await supabaseAdmin.from("companions").delete().eq("id", cleanId);
+      if (cleanSlug && cleanSlug !== cleanId) {
+        await supabaseAdmin.from("companions").delete().eq("id", cleanSlug);
+      }
+    } catch {}
+  }
+
+  // 2. Save to Firestore
   try {
     const docRef = doc(db, "deleted_characters", cleanId);
     await setDoc(docRef, { id: cleanId, slug: cleanSlug, deletedAt: new Date().toISOString() });
@@ -195,7 +257,7 @@ export async function recordPersistentDeletedCharacterId(id: string, slug?: stri
     console.warn("[ServerDb] Firestore save deleted character note:", err);
   }
 
-  // 2. Save to local fallback
+  // 3. Save to local fallback
   try {
     const filePath = getStoragePath("deleted_characters.json");
     const existing = safeReadJsonFile<string[]>(filePath, []);
@@ -205,6 +267,46 @@ export async function recordPersistentDeletedCharacterId(id: string, slug?: stri
 }
 
 export async function getPersistentCustomCharacters(): Promise<Character[]> {
+  // 1. Primary: Try reading from Supabase PostgreSQL
+  if (isSupabaseConfigured()) {
+    try {
+      const { data, error } = await supabaseAdmin
+        .from("companions")
+        .select("*")
+        .eq("is_custom", true);
+
+      if (!error && Array.isArray(data) && data.length > 0) {
+        return data.map((d) => ({
+          id: d.id,
+          slug: d.id,
+          name: d.name,
+          age: 21,
+          gender: (d.gender === "male" ? "male" : "female") as "female" | "male" | "anime",
+          style: "realistic" as const,
+          tagline: d.tagline || "",
+          desc: d.tagline || "",
+          image: d.avatar || d.image_url || "/characters/zovik_01.jpg",
+          badge: d.is_vip || d.tier === "vip" ? "VIP" : undefined,
+          category: d.category || "General",
+          series: true,
+          verified: true,
+          online: true,
+          tags: ["Custom", "AI Companion"],
+          voice: "Sweet & Warm",
+          greeting: `Hi sweetheart, I'm ${d.name}! So happy to talk to you 💕`,
+          videoUrl: d.intro_video || undefined,
+          gallery: Array.isArray(d.gallery) ? d.gallery : [],
+          messages: [],
+          accessTier: (d.tier === "vip" || d.tier === "plus" ? d.tier : d.is_vip ? "vip" : "free") as "free" | "plus" | "vip",
+          isVipOnly: Boolean(d.is_vip || d.tier === "vip"),
+        }));
+      }
+    } catch (err: unknown) {
+      console.warn("[ServerDb] Supabase custom companions read note:", err);
+    }
+  }
+
+  // 2. Secondary: Try reading from Firestore
   try {
     const colRef = collection(db, "custom_characters");
     const snapshot = await getDocs(colRef);
@@ -215,9 +317,7 @@ export async function getPersistentCustomCharacters(): Promise<Character[]> {
       });
       return items;
     }
-  } catch (err: unknown) {
-    console.warn("[ServerDb] Firestore custom_characters read note:", err);
-  }
+  } catch {}
 
   const filePath = getStoragePath("custom_characters.json");
   return safeReadJsonFile<Character[]>(filePath, []);
@@ -227,13 +327,35 @@ export async function savePersistentCustomCharacter(character: Character): Promi
   const charId = character.id || generateUniqueId("char");
   const charWithId: Character = { ...character, id: charId };
 
+  // 1. Primary: Save to Supabase PostgreSQL
+  if (isSupabaseConfigured()) {
+    try {
+      await supabaseAdmin.from("companions").upsert({
+        id: charId,
+        name: charWithId.name,
+        tagline: charWithId.tagline || charWithId.desc || "",
+        category: charWithId.category || "General",
+        gender: charWithId.gender || "female",
+        tier: charWithId.accessTier || (charWithId.isVipOnly ? "vip" : "free"),
+        avatar: charWithId.image || "",
+        image_url: charWithId.image || "",
+        gallery: charWithId.gallery || [],
+        intro_video: charWithId.videoUrl || null,
+        is_vip: Boolean(charWithId.isVipOnly || charWithId.accessTier === "vip"),
+        is_custom: true,
+      });
+    } catch (err: unknown) {
+      console.warn("[ServerDb] Supabase save companion note:", err);
+    }
+  }
+
+  // 2. Secondary: Save to Firestore
   try {
     const docRef = doc(db, "custom_characters", charId);
     await setDoc(docRef, charWithId);
-  } catch (err: unknown) {
-    console.warn("[ServerDb] Firestore save custom_character note:", err);
-  }
+  } catch {}
 
+  // 3. Save to local fallback
   try {
     const filePath = getStoragePath("custom_characters.json");
     const existing = await getPersistentCustomCharacters();
@@ -241,7 +363,7 @@ export async function savePersistentCustomCharacter(character: Character): Promi
     safeWriteJsonFile(filePath, updated);
   } catch {}
 
-  // If it exists in root characters.json, also sync updates to keep local seed updated
+  // 4. Also sync root characters.json for local dev if exists
   try {
     const rootPath = path.join(process.cwd(), "src", "data", "characters.json");
     const list = safeReadJsonFile<Character[]>(rootPath, []);
@@ -257,46 +379,86 @@ export async function savePersistentCustomCharacter(character: Character): Promi
 export async function deletePersistentCharacter(characterId: string): Promise<boolean> {
   const cleanId = characterId.trim();
 
-  // 1. Delete from Firestore custom_characters
+  // 1. Primary: Delete from Supabase PostgreSQL
+  if (isSupabaseConfigured()) {
+    try {
+      await supabaseAdmin.from("companions").delete().eq("id", cleanId);
+    } catch {}
+  }
+
+  // 2. Secondary: Delete from Firestore custom_characters
   try {
     const docRef = doc(db, "custom_characters", cleanId);
     await deleteDoc(docRef);
-  } catch (err: unknown) {
-    console.warn("[ServerDb] Firestore delete custom_character note:", err);
-  }
-
-  // 2. Delete from custom_characters.json
-  try {
-    const filePath = getStoragePath("custom_characters.json");
-    const existing = await getPersistentCustomCharacters();
-    const updated = existing.filter((c) => c.id !== cleanId && c.slug !== cleanId);
-    safeWriteJsonFile(filePath, updated);
   } catch {}
 
-  // 3. Delete from root characters.json (so local seed never resurrects it)
+  // 3. Record in persistent deleted character registry
+  await recordPersistentDeletedCharacterId(cleanId);
+
+  // 4. Remove from custom_characters.json
+  try {
+    const filePath = getStoragePath("custom_characters.json");
+    const customList = safeReadJsonFile<Character[]>(filePath, []);
+    if (Array.isArray(customList) && customList.length > 0) {
+      const filtered = customList.filter((c) => c.id !== cleanId && c.slug !== cleanId);
+      safeWriteJsonFile(filePath, filtered);
+    }
+  } catch {}
+
+  // 5. Remove from root characters.json (local seed)
   try {
     const rootPath = path.join(process.cwd(), "src", "data", "characters.json");
     const list = safeReadJsonFile<Character[]>(rootPath, []);
     if (Array.isArray(list) && list.length > 0) {
       const filtered = list.filter((c) => c.id !== cleanId && c.slug !== cleanId);
-      if (filtered.length !== list.length) {
-        safeWriteJsonFile(rootPath, filtered);
-      }
+      safeWriteJsonFile(rootPath, filtered);
     }
-  } catch (err: unknown) {
-    console.warn("[ServerDb] Error pruning character from characters.json:", err);
-  }
-
-  // 4. Record in deleted characters registry
-  await recordPersistentDeletedCharacterId(cleanId);
+  } catch {}
 
   return true;
 }
 
-// Backward-compatible alias
-export const deletePersistentCustomCharacter = deletePersistentCharacter;
+/**
+ * Universal Unified Characters Resolver
+ * Returns all active characters (Default + Custom - Deleted), prioritizing Supabase Cloud Database!
+ */
+export async function getPersistentCharacters(): Promise<Character[]> {
+  // 1. Primary: Read directly from Supabase Cloud Database
+  if (isSupabaseConfigured()) {
+    try {
+      const { data, error } = await supabaseAdmin.from("companions").select("*");
+      if (!error && Array.isArray(data) && data.length > 0) {
+        return data.map((d) => ({
+          id: d.id,
+          slug: d.id,
+          name: d.name,
+          age: 21,
+          gender: (d.gender === "male" ? "male" : "female") as "female" | "male" | "anime",
+          style: "realistic" as const,
+          tagline: d.tagline || "",
+          desc: d.tagline || "",
+          image: d.avatar || d.image_url || "/characters/zovik_01.jpg",
+          badge: d.is_vip || d.tier === "vip" ? "VIP" : undefined,
+          category: d.category || "General",
+          series: true,
+          verified: true,
+          online: true,
+          tags: ["Verified", "AI Companion"],
+          voice: "Sweet & Warm",
+          greeting: `Hi sweetheart, I'm ${d.name}! So happy to talk to you 💕`,
+          videoUrl: d.intro_video || undefined,
+          gallery: Array.isArray(d.gallery) ? d.gallery : [],
+          messages: [],
+          accessTier: (d.tier === "vip" || d.tier === "plus" ? d.tier : d.is_vip ? "vip" : "free") as "free" | "plus" | "vip",
+          isVipOnly: Boolean(d.is_vip || d.tier === "vip"),
+        }));
+      }
+    } catch (err) {
+      console.warn("[ServerDb] Supabase all companions read note:", err);
+    }
+  }
 
-export async function getAllPersistentCharacters(): Promise<Character[]> {
+  // 2. Secondary / Local Fallback: Merge custom and local seed minus deleted
   const [customChars, deletedIds] = await Promise.all([
     getPersistentCustomCharacters(),
     getPersistentDeletedCharacterIds(),
@@ -305,10 +467,8 @@ export async function getAllPersistentCharacters(): Promise<Character[]> {
   const rootPath = path.join(process.cwd(), "src", "data", "characters.json");
   const defaultChars = safeReadJsonFile<Character[]>(rootPath, []);
 
-  // Map of characters by id (custom overrides default)
   const charMap = new Map<string, Character>();
 
-  // Add default characters first (if not deleted)
   for (const c of defaultChars) {
     const isDeleted = deletedIds.includes(c.id.toLowerCase()) || (c.slug && deletedIds.includes(c.slug.toLowerCase()));
     if (!isDeleted) {
@@ -316,7 +476,6 @@ export async function getAllPersistentCharacters(): Promise<Character[]> {
     }
   }
 
-  // Overlay custom characters (if not deleted)
   for (const c of customChars) {
     const isDeleted = deletedIds.includes(c.id.toLowerCase()) || (c.slug && deletedIds.includes(c.slug.toLowerCase()));
     if (!isDeleted) {
@@ -327,11 +486,44 @@ export async function getAllPersistentCharacters(): Promise<Character[]> {
   return Array.from(charMap.values());
 }
 
+// Alias for backwards-compatibility
+export const getAllPersistentCharacters = getPersistentCharacters;
+
 // ============================================================================
 // 3. PAYMENT REQUESTS (SUBSCRIPTIONS) PERSISTENCE
 // ============================================================================
 
 export async function getPersistentPayments(): Promise<PaymentRequest[]> {
+  // 1. Primary: Read from Supabase PostgreSQL
+  if (isSupabaseConfigured()) {
+    try {
+      const { data, error } = await supabaseAdmin
+        .from("payment_requests")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (!error && Array.isArray(data) && data.length > 0) {
+        return data.map((d) => ({
+          id: d.id,
+          userEmail: d.user_email,
+          plan: (d.plan_name === "plus" ? "plus" : "vip") as "plus" | "vip",
+          planName: d.plan_name || "VIP Membership",
+          currency: "PKR",
+          amount: typeof d.amount === "number" ? d.amount : parseFloat(d.amount) || 0,
+          method: d.method || "Manual",
+          trxId: d.trx_id || "",
+          senderName: d.user_email.split("@")[0],
+          screenshot: d.screenshot || null,
+          status: (d.status || "pending") as "pending" | "approved" | "rejected",
+          createdAt: d.created_at,
+        }));
+      }
+    } catch (err: unknown) {
+      console.warn("[ServerDb] Supabase payment_requests read note:", err);
+    }
+  }
+
+  // 2. Secondary: Read from Firestore
   try {
     const colRef = collection(db, "payment_requests");
     const q = query(colRef, orderBy("createdAt", "desc"));
@@ -343,10 +535,9 @@ export async function getPersistentPayments(): Promise<PaymentRequest[]> {
       });
       return items;
     }
-  } catch (err: unknown) {
-    console.warn("[ServerDb] Firestore payment_requests read note:", err);
-  }
+  } catch {}
 
+  // 3. Fallback to local file
   const storagePath = getStoragePath("payment_requests.json");
   const localList = safeReadJsonFile<PaymentRequest[]>(storagePath, []);
   if (localList.length > 0) return localList;
@@ -359,13 +550,32 @@ export async function savePersistentPayment(payment: PaymentRequest): Promise<Pa
   const payId = payment.id || generateUniqueId("pay");
   const paymentWithId: PaymentRequest = { ...payment, id: payId };
 
+  // 1. Primary: Save to Supabase PostgreSQL
+  if (isSupabaseConfigured()) {
+    try {
+      await supabaseAdmin.from("payment_requests").upsert({
+        id: payId,
+        user_email: paymentWithId.userEmail,
+        plan_name: paymentWithId.planName,
+        amount: paymentWithId.amount,
+        method: paymentWithId.method,
+        trx_id: paymentWithId.trxId,
+        screenshot: paymentWithId.screenshot || null,
+        status: paymentWithId.status,
+        created_at: paymentWithId.createdAt || new Date().toISOString(),
+      });
+    } catch (err: unknown) {
+      console.warn("[ServerDb] Supabase save payment note:", err);
+    }
+  }
+
+  // 2. Secondary: Save to Firestore
   try {
     const docRef = doc(db, "payment_requests", payId);
     await setDoc(docRef, paymentWithId);
-  } catch (err: unknown) {
-    console.warn("[ServerDb] Firestore save payment note:", err);
-  }
+  } catch {}
 
+  // 3. Save to local fallback
   try {
     const filePath = getStoragePath("payment_requests.json");
     const existing = await getPersistentPayments();
@@ -383,6 +593,19 @@ export async function updatePersistentPaymentStatus(
   const now = new Date().toISOString();
   const status: "approved" | "rejected" = action === "approve" ? "approved" : "rejected";
 
+  // 1. Primary: Update in Supabase PostgreSQL
+  if (isSupabaseConfigured()) {
+    try {
+      await supabaseAdmin
+        .from("payment_requests")
+        .update({ status })
+        .eq("id", paymentId);
+    } catch (err: unknown) {
+      console.warn("[ServerDb] Supabase update payment status note:", err);
+    }
+  }
+
+  // 2. Secondary: Update in Firestore
   try {
     const docRef = doc(db, "payment_requests", paymentId);
     const snap = await getDoc(docRef);
@@ -395,10 +618,9 @@ export async function updatePersistentPaymentStatus(
       await updateDoc(docRef, updates);
       return { ...current, ...updates, id: paymentId };
     }
-  } catch (err: unknown) {
-    console.warn("[ServerDb] Firestore update payment note:", err);
-  }
+  } catch {}
 
+  // 3. Fallback: Update in local cache
   try {
     const payments = await getPersistentPayments();
     const target = payments.find((p) => p.id === paymentId);

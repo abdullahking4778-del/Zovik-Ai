@@ -3,6 +3,7 @@ import path from "path";
 import crypto from "crypto";
 import { db } from "./firebase";
 import { doc, setDoc } from "firebase/firestore";
+import { supabaseAdmin, isSupabaseConfigured } from "./supabase";
 
 export interface StoredUser {
   id: string;
@@ -134,6 +135,27 @@ export function upsertStoredUser(
       ).catch((e) => console.warn("[UserStore] Firestore sync note:", e));
     }
   } catch {}
+
+  // Cloud sync to Supabase PostgreSQL (100% free permanent database)
+  if (isSupabaseConfigured() && resultUser.email) {
+    Promise.resolve(
+      supabaseAdmin.from("user_accounts").upsert({
+        email: resultUser.email.toLowerCase(),
+        tier: resultUser.tier,
+        is_vip: resultUser.isVip,
+        subscription_start: resultUser.subscriptionStart || null,
+        subscription_end: resultUser.subscriptionEndsAt || null,
+        updated_at: new Date().toISOString(),
+      })
+    ).then(
+      (res) => {
+        if (res.error) console.warn("[UserStore] Supabase user sync error:", res.error.message);
+      },
+      (e: unknown) => {
+        console.warn("[UserStore] Supabase sync note:", e);
+      }
+    );
+  }
 
   return resultUser;
 }
