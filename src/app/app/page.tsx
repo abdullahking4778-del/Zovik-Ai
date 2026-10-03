@@ -19,9 +19,12 @@ import RouletteModal from "@/components/RouletteModal";
 import ShortsModal from "@/components/ShortsModal";
 import PwaInstallModal from "@/components/PwaInstallModal";
 import UserProfileModal from "@/components/UserProfileModal";
+import CompanionToast from "@/components/CompanionToast";
 import rawCharacters from "@/data/characters.json";
 import { Character, Message, SavedPhoto } from "@/types";
 import Image from "next/image";
+import { normalizeTags } from "@/lib/tagHelper";
+import { getSafeImageUrl } from "@/lib/imageHelper";
 import { useAuth } from "@/context/AuthContext";
 import {
   LayoutGrid,
@@ -57,7 +60,8 @@ export default function Home() {
     isLoginOpen: authLoginOpen, 
     setIsLoginOpen: setAuthLoginOpen, 
     requireAuth,
-    isLocallyLoggedIn
+    isLocallyLoggedIn,
+    userData
   } = useAuth();
 
   // Private VIP Gallery states
@@ -83,13 +87,36 @@ export default function Home() {
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [isRouletteOpen, setIsRouletteOpen] = useState(false);
 
-  // Smart Auth Guarded Actions
+  // Check if current user is VIP or Plus subscriber (Both get unrestricted access to VIP companions)
+  const isPaidUser = useMemo(() => {
+    return currentTier === "vip" || currentTier === "plus";
+  }, [currentTier]);
+
+  const isCharacterVip = (char: Character) => {
+    return char.accessTier === "vip" || char.accessTier === "plus" || char.isVipOnly === true;
+  };
+
+  // Smart Auth Guarded Actions with VIP/Plus Access Verification
   const handleStartChatWithAuth = (char: Character) => {
-    requireAuth(() => setActiveChatCharacter(char), `${char.name} ke sath chat shuru karne ke liye pehle login ya create account karein.`);
+    requireAuth(() => {
+      if (isCharacterVip(char) && !isPaidUser) {
+        showNotice(`👑 ${char.name} sirf Plus aur VIP members ke liye unlock hai!`);
+        setIsPremiumOpen(true);
+        return;
+      }
+      setActiveChatCharacter(char);
+    }, `${char.name} ke sath chat shuru karne ke liye pehle login ya create account karein.`);
   };
 
   const handleStartCallWithAuth = (char: Character) => {
-    requireAuth(() => setActiveCallCharacter(char), `${char.name} ke sath live voice call ke liye pehle login ya create account karein.`);
+    requireAuth(() => {
+      if (isCharacterVip(char) && !isPaidUser) {
+        showNotice(`👑 ${char.name} ke sath live voice call sirf Plus aur VIP members ke liye hai!`);
+        setIsPremiumOpen(true);
+        return;
+      }
+      setActiveCallCharacter(char);
+    }, `${char.name} ke sath live voice call ke liye pehle login ya create account karein.`);
   };
   const [isShortsOpen, setIsShortsOpen] = useState(false);
   const [initialReelId, setInitialReelId] = useState<string | null>(null);
@@ -107,11 +134,6 @@ export default function Home() {
       setIsShortsOpen(true);
     }
   }, []);
-
-  // Check if current user is VIP or Plus subscriber
-  const isPaidUser = useMemo(() => {
-    return currentTier === "vip" || currentTier === "plus";
-  }, [currentTier]);
 
   // Load custom characters, and liked characters
   useEffect(() => {
@@ -222,11 +244,10 @@ export default function Home() {
       const isPaid = currentTier === "vip" || currentTier === "plus";
 
       // 1. Subscription Grace Expiration Check (32 days auto-complete)
-      if (isPaid && (userObj as any)?.subscriptionStart) {
-        const start = new Date((userObj as any).subscriptionStart).getTime();
+      if (isPaid && userData?.subscriptionStart) {
+        const start = new Date(userData.subscriptionStart).getTime();
         const thirtyTwoDaysMs = 32 * 24 * 60 * 60 * 1000;
         if (now - start > thirtyTwoDaysMs) {
-          // Wait, cannot update local storage if we rely on Firestore. For now just show notice.
           showNotice("Notice: Your 30-day VIP plan completed (32 days grace). Reverted to normal user.");
         }
       }
@@ -303,10 +324,11 @@ export default function Home() {
 
       // 3. Search Query Match
       if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
+        const q = searchQuery.toLowerCase().trim();
         const matchesName = char.name.toLowerCase().includes(q);
-        const matchesDesc = char.desc.toLowerCase().includes(q);
-        const matchesTag = char.tags.some((t) => t.toLowerCase().includes(q));
+        const matchesDesc = (char.desc || "").toLowerCase().includes(q) || (char.tagline || "").toLowerCase().includes(q);
+        const safeTags = normalizeTags(char.tags);
+        const matchesTag = safeTags.some((t) => t.toLowerCase().includes(q));
         if (!matchesName && !matchesDesc && !matchesTag) return false;
       }
 
@@ -363,8 +385,16 @@ export default function Home() {
   );
 
   // Active Conversations (strictly active chat threads where user participated, sorted by recent activity)
-  const activeConversations = useMemo(() => {
-    if (typeof window === "undefined") return [];
+  const [activeConversations, setActiveConversations] = useState<{
+    character: Character;
+    lastMessage: string;
+    lastTime: string;
+    lastTimestamp: number;
+    messageCount: number;
+  }[]>([]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
 
     let currentDeleted: string[] = [];
     try {
@@ -387,68 +417,70 @@ export default function Home() {
     const processedIds = new Set<string>();
 
     // 1. Scan all localStorage keys starting with "zovik_chat_"
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key && key.startsWith("zovik_chat_")) {
-        const charId = key.replace("zovik_chat_", "");
-        if (currentDeleted.includes(charId) || processedIds.has(charId)) continue;
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith("zovik_chat_")) {
+          const charId = key.replace("zovik_chat_", "");
+          if (currentDeleted.includes(charId) || processedIds.has(charId)) continue;
 
-        try {
-          const raw = localStorage.getItem(key);
-          if (raw) {
-            const msgs = JSON.parse(raw);
-            if (Array.isArray(msgs) && msgs.length > 0) {
-              const hasUserMsg = msgs.some((m: Message) => m.sender === "user");
-              if (!hasUserMsg && msgs.length <= 1) continue;
+          try {
+            const raw = localStorage.getItem(key);
+            if (raw) {
+              const msgs = JSON.parse(raw);
+              if (Array.isArray(msgs) && msgs.length > 0) {
+                const hasUserMsg = msgs.some((m: Message) => m.sender === "user");
+                if (!hasUserMsg && msgs.length <= 1) continue;
 
-              const char = charMap.get(charId);
-              if (char) {
-                processedIds.add(charId);
-                const lastMsg = msgs[msgs.length - 1];
-                list.push({
-                  character: char,
-                  lastMessage: lastMsg.text || (lastMsg.type === "image" ? "Sent a private photo 📸" : "Hey!"),
-                  lastTime: lastMsg.time || "Recently",
-                  lastTimestamp: lastMsg.timestamp || 0,
-                  messageCount: msgs.length,
-                });
+                const char = charMap.get(charId);
+                if (char) {
+                  processedIds.add(charId);
+                  const lastMsg = msgs[msgs.length - 1];
+                  list.push({
+                    character: char,
+                    lastMessage: lastMsg.text || (lastMsg.type === "image" ? "Sent a private photo 📸" : "Hey!"),
+                    lastTime: lastMsg.time || "Recently",
+                    lastTimestamp: lastMsg.timestamp || 0,
+                    messageCount: msgs.length,
+                  });
+                }
               }
             }
-          }
-        } catch {}
+          } catch {}
+        }
       }
-    }
 
-    // 2. Also check any characters in state
-    characters.forEach((char) => {
-      if (currentDeleted.includes(char.id) || processedIds.has(char.id)) return;
+      // 2. Also check any characters in state
+      characters.forEach((char) => {
+        if (currentDeleted.includes(char.id) || processedIds.has(char.id)) return;
 
-      const saved = localStorage.getItem(`zovik_chat_${char.id}`);
-      if (saved) {
-        try {
-          const msgs = JSON.parse(saved);
-          if (Array.isArray(msgs) && msgs.length > 0) {
-            const hasUserMsg = msgs.some((m: Message) => m.sender === "user");
-            if (!hasUserMsg && msgs.length <= 1) return;
+        const saved = localStorage.getItem(`zovik_chat_${char.id}`);
+        if (saved) {
+          try {
+            const msgs = JSON.parse(saved);
+            if (Array.isArray(msgs) && msgs.length > 0) {
+              const hasUserMsg = msgs.some((m: Message) => m.sender === "user");
+              if (!hasUserMsg && msgs.length <= 1) return;
 
-            processedIds.add(char.id);
-            const lastMsg = msgs[msgs.length - 1];
-            list.push({
-              character: char,
-              lastMessage: lastMsg.text || (lastMsg.type === "image" ? "Sent a private photo 📸" : "Hey!"),
-              lastTime: lastMsg.time || "Recently",
-              lastTimestamp: lastMsg.timestamp || 0,
-              messageCount: msgs.length,
-            });
-          }
-        } catch {}
-      }
-    });
+              processedIds.add(char.id);
+              const lastMsg = msgs[msgs.length - 1];
+              list.push({
+                character: char,
+                lastMessage: lastMsg.text || (lastMsg.type === "image" ? "Sent a private photo 📸" : "Hey!"),
+                lastTime: lastMsg.time || "Recently",
+                lastTimestamp: lastMsg.timestamp || 0,
+                messageCount: msgs.length,
+              });
+            }
+          } catch {}
+        }
+      });
+    } catch {}
 
     // Sort by latest message timestamp descending (most recently active chat at the top!)
     list.sort((a, b) => (b.lastTimestamp || 0) - (a.lastTimestamp || 0));
 
-    return list;
+    setActiveConversations(list);
   }, [characters, activeChatCharacter, chatRefreshTick, activeTab]);
 
   const handleCharacterCreated = async (newChar: Character) => {
@@ -672,6 +704,7 @@ export default function Home() {
                       onStartCall={handleStartCallWithAuth}
                       likedIds={likedIds}
                       onToggleLike={handleToggleLike}
+                      isPaidUser={isPaidUser}
                     />
                   )}
 
@@ -686,6 +719,7 @@ export default function Home() {
                       onStartCall={handleStartCallWithAuth}
                       likedIds={likedIds}
                       onToggleLike={handleToggleLike}
+                      isPaidUser={isPaidUser}
                     />
                   )}
 
@@ -700,6 +734,7 @@ export default function Home() {
                       onStartCall={handleStartCallWithAuth}
                       likedIds={likedIds}
                       onToggleLike={handleToggleLike}
+                      isPaidUser={isPaidUser}
                     />
                   )}
 
@@ -714,6 +749,7 @@ export default function Home() {
                       onStartCall={handleStartCallWithAuth}
                       likedIds={likedIds}
                       onToggleLike={handleToggleLike}
+                      isPaidUser={isPaidUser}
                     />
                   )}
 
@@ -728,6 +764,7 @@ export default function Home() {
                       onStartCall={handleStartCallWithAuth}
                       likedIds={likedIds}
                       onToggleLike={handleToggleLike}
+                      isPaidUser={isPaidUser}
                     />
                   )}
                 </div>
@@ -745,6 +782,7 @@ export default function Home() {
                           onStartCall={handleStartCallWithAuth}
                           isLiked={likedIds.includes(character.id)}
                           onToggleLike={handleToggleLike}
+                          isPaidUser={isPaidUser}
                         />
                       ))}
                     </div>
@@ -945,6 +983,7 @@ export default function Home() {
                         onStartCall={handleStartCallWithAuth}
                         isLiked={likedIds.includes(character.id)}
                         onToggleLike={handleToggleLike}
+                        isPaidUser={isPaidUser}
                       />
 
                       {/* Delete Custom Companion Button */}
@@ -1001,6 +1040,7 @@ export default function Home() {
                       onStartCall={handleStartCallWithAuth}
                       isLiked={true}
                       onToggleLike={handleToggleLike}
+                      isPaidUser={isPaidUser}
                     />
                   ))}
                 </div>
@@ -1168,6 +1208,8 @@ export default function Home() {
       {selectedCharacter && (
         <CharacterModal
           character={selectedCharacter}
+          isPaidUser={isPaidUser}
+          openPremiumModal={() => setIsPremiumOpen(true)}
           onClose={() => setSelectedCharacter(null)}
           onStartChat={(char) => {
             setSelectedCharacter(null);
@@ -1311,6 +1353,18 @@ export default function Home() {
           </div>
         </div>
       )}
+
+      {/* Option 3: Companion Intimate Floating Banner Toast */}
+      <CompanionToast
+        onOpenCompanion={(name) => {
+          const matched = characters.find(
+            (c) => c.name.toLowerCase() === name.toLowerCase()
+          );
+          if (matched) {
+            setSelectedCharacter(matched);
+          }
+        }}
+      />
     </div>
   );
 }

@@ -39,7 +39,9 @@
       "/characters/char_1790757646615_Woman_sitting_in_rooftop_lounge_20260930134012.webp",
       "/characters/char_1790757646803_Woman_wearing_green_top_20260930133131.webp",
       "/characters/char_1790757646982_Woman_standing_in_tropical_garden_2K_20260930132905.webp"
-    ]
+    ],
+    "accessTier": "free",
+    "isVipOnly": false
   },
   {
     "id": "raven-steele",
@@ -77,8 +79,12 @@
     ],
     "videoUrl": "/videos/companions/raven-steele.mp4",
     "gallery": [
-      "/characters/zovik_02.jpg"
-    ]
+      "/characters/zovik_02.jpg",
+      "/characters/zovik_16.jpg",
+      "/characters/zovik_24.jpg"
+    ],
+    "accessTier": "vip",
+    "isVipOnly": true
   },
   {
     "id": "genevieve-claire",
@@ -116,8 +122,12 @@
     ],
     "videoUrl": "/videos/companions/genevieve-claire.mp4",
     "gallery": [
-      "/characters/zovik_03.jpg"
-    ]
+      "/characters/zovik_03.jpg",
+      "/characters/zovik_15.jpg",
+      "/characters/zovik_33.jpg"
+    ],
+    "accessTier": "free",
+    "isVipOnly": false
   },
   {
     "id": "sierra-brooks",
@@ -156,7 +166,9 @@
     "videoUrl": "/videos/companions/sierra-brooks.mp4",
     "gallery": [
       "/characters/zovik_04.jpg"
-    ]
+    ],
+    "accessTier": "free",
+    "isVipOnly": false
   },
   {
     "id": "maya-cruz",
@@ -195,7 +207,9 @@
     "videoUrl": "/videos/companions/maya-cruz.mp4",
     "gallery": [
       "/characters/zovik_05.jpg"
-    ]
+    ],
+    "accessTier": "free",
+    "isVipOnly": false
   },
   {
     "id": "elena-santorini",
@@ -233,7 +247,9 @@
     ],
     "gallery": [
       "/characters/zovik_06.jpg"
-    ]
+    ],
+    "accessTier": "vip",
+    "isVipOnly": true
   },
   {
     "id": "chloe-vance",
@@ -272,7 +288,9 @@
     "videoUrl": "/videos/companions/chloe-vance.mp4",
     "gallery": [
       "/characters/zovik_07.jpg"
-    ]
+    ],
+    "accessTier": "free",
+    "isVipOnly": false
   },
   {
     "id": "victoria-ashford",
@@ -311,7 +329,9 @@
     "videoUrl": "/videos/companions/victoria-ashford.mp4",
     "gallery": [
       "/characters/zovik_08.jpg"
-    ]
+    ],
+    "accessTier": "vip",
+    "isVipOnly": true
   },
   {
     "id": "francesca-rossi",
@@ -350,7 +370,9 @@
     "videoUrl": "/videos/companions/francesca-rossi.mp4",
     "gallery": [
       "/characters/zovik_09.jpg"
-    ]
+    ],
+    "accessTier": "free",
+    "isVipOnly": false
   },
   {
     "id": "mina-sakura",
@@ -389,7 +411,9 @@
     "videoUrl": "/videos/companions/mina-sakura.mp4",
     "gallery": [
       "/characters/zovik_10.jpg"
-    ]
+    ],
+    "accessTier": "free",
+    "isVipOnly": false
   },
   {
     "id": "roxie-stone",
@@ -428,7 +452,9 @@
     "videoUrl": "/videos/companions/roxie-stone.mp4",
     "gallery": [
       "/characters/zovik_11.jpg"
-    ]
+    ],
+    "accessTier": "vip",
+    "isVipOnly": true
   },
   {
     "id": "camille-monet",
@@ -467,7 +493,9 @@
     "videoUrl": "/videos/companions/camille-monet.mp4",
     "gallery": [
       "/characters/zovik_12.jpg"
-    ]
+    ],
+    "accessTier": "vip",
+    "isVipOnly": true
   },
   {
     "id": "natasha-romanov",
@@ -506,46 +534,9 @@
     "videoUrl": "/videos/companions/natasha-romanov.mp4",
     "gallery": [
       "/characters/zovik_13.jpg"
-    ]
-  },
-  {
-    "id": "liam-hudson",
-    "name": "Liam Hudson",
-    "age": 24,
-    "gender": "male",
-    "style": "realistic",
-    "category": "Trending",
-    "badge": "HOT BOY",
-    "image": "/characters/zovik_14.jpg",
-    "desc": "An athletic, sun-kissed man with tousled blond hair stands on a wooden beach boardwalk at sunset wearing an unbuttoned linen shirt.",
-    "tags": [
-      "Surfer",
-      "Golden Coast",
-      "Athletic",
-      "Adventurous"
     ],
-    "voice": "Deep, breezy, charismatic Australian accent",
-    "likes": 32300,
-    "isOnline": true,
-    "unreadCount": 0,
-    "slug": "liam-hudson",
-    "tagline": "Surfer • Golden Coast",
-    "series": false,
-    "verified": true,
-    "online": true,
-    "greeting": "Hey! Main Liam Hudson hoon. Main yahin tumhara intezaar kar raha tha... Aaj kaisa din guzra tumhara? Aao baitho aur mujhe sab batao.",
-    "messages": [
-      {
-        "sender": "ai",
-        "text": "Hey! Main Liam Hudson hoon. Main yahin tumhara intezaar kar raha tha... Aaj kaisa din guzra tumhara? Aao baitho aur mujhe sab batao.",
-        "time": "Just now",
-        "timestamp": 1727400000000
-      }
-    ],
-    "videoUrl": "/videos/companions/liam-hudson.mp4",
-    "gallery": [
-      "/characters/zovik_14.jpg"
-    ]
+    "accessTier": "free",
+    "isVipOnly": false
   },
   {
     "id": "amelia-rose",
@@ -584,7 +575,9 @@
     "videoUrl": "/videos/companions/amelia-rose.mp4",
     "gallery": [
       "/characters/zovik_15.jpg"
-    ]
+    ],
+    "accessTier": "free",
+    "isVipOnly": false
   },
   {
     "id": "daisy-mae",
@@ -623,7 +616,9 @@
     "videoUrl": "/videos/companions/daisy-mae.mp4",
     "gallery": [
       "/characters/zovik_16.jpg"
-    ]
+    ],
+    "accessTier": "free",
+    "isVipOnly": false
   },
   {
     "id": "kira-pixel",
@@ -662,7 +657,9 @@
     "videoUrl": "/videos/companions/kira-pixel.mp4",
     "gallery": [
       "/characters/zovik_17.jpg"
-    ]
+    ],
+    "accessTier": "free",
+    "isVipOnly": false
   },
   {
     "id": "harper-green",
@@ -701,7 +698,9 @@
     "videoUrl": "/videos/companions/harper-green.mp4",
     "gallery": [
       "/characters/zovik_18.jpg"
-    ]
+    ],
+    "accessTier": "free",
+    "isVipOnly": false
   },
   {
     "id": "sophie-laurent",
@@ -740,7 +739,9 @@
     "videoUrl": "/videos/companions/sophie-laurent.mp4",
     "gallery": [
       "/characters/zovik_19.jpg"
-    ]
+    ],
+    "accessTier": "vip",
+    "isVipOnly": true
   },
   {
     "id": "morgan-lefay",
@@ -779,7 +780,9 @@
     "videoUrl": "/videos/companions/morgan-lefay.mp4",
     "gallery": [
       "/characters/zovik_20.jpg"
-    ]
+    ],
+    "accessTier": "vip",
+    "isVipOnly": true
   },
   {
     "id": "isabella-thorne",
@@ -818,7 +821,9 @@
     "videoUrl": "/videos/companions/isabella-thorne.mp4",
     "gallery": [
       "/characters/zovik_21.jpg"
-    ]
+    ],
+    "accessTier": "vip",
+    "isVipOnly": true
   },
   {
     "id": "mateo-silva",
@@ -857,7 +862,9 @@
     "videoUrl": "/videos/companions/mateo-silva.mp4",
     "gallery": [
       "/characters/zovik_22.jpg"
-    ]
+    ],
+    "accessTier": "free",
+    "isVipOnly": false
   },
   {
     "id": "zoe-summers",
@@ -896,7 +903,9 @@
     "videoUrl": "/videos/companions/zoe-summers.mp4",
     "gallery": [
       "/characters/zovik_23.jpg"
-    ]
+    ],
+    "accessTier": "vip",
+    "isVipOnly": true
   },
   {
     "id": "carmen-delgado",
@@ -935,7 +944,9 @@
     "videoUrl": "/videos/companions/carmen-delgado.mp4",
     "gallery": [
       "/characters/zovik_24.jpg"
-    ]
+    ],
+    "accessTier": "vip",
+    "isVipOnly": true
   },
   {
     "id": "leilani-kai",
@@ -974,7 +985,9 @@
     "videoUrl": "/videos/companions/leilani-kai.mp4",
     "gallery": [
       "/characters/zovik_25.jpg"
-    ]
+    ],
+    "accessTier": "vip",
+    "isVipOnly": true
   },
   {
     "id": "julian-blackwood",
@@ -1012,8 +1025,12 @@
     ],
     "videoUrl": "/videos/companions/julian-blackwood.mp4",
     "gallery": [
-      "/characters/zovik_26.jpg"
-    ]
+      "/characters/zovik_26.jpg",
+      "/characters/zovik_10.jpg",
+      "/characters/zovik_22.jpg"
+    ],
+    "accessTier": "free",
+    "isVipOnly": false
   },
   {
     "id": "yasmin-al-noor",
@@ -1052,7 +1069,9 @@
     "videoUrl": "/videos/companions/yasmin-al-noor.mp4",
     "gallery": [
       "/characters/zovik_27.jpg"
-    ]
+    ],
+    "accessTier": "vip",
+    "isVipOnly": true
   },
   {
     "id": "nova-vex",
@@ -1091,7 +1110,9 @@
     "videoUrl": "/videos/companions/nova-vex.mp4",
     "gallery": [
       "/characters/zovik_28.jpg"
-    ]
+    ],
+    "accessTier": "free",
+    "isVipOnly": false
   },
   {
     "id": "willow-hayes",
@@ -1130,7 +1151,9 @@
     "videoUrl": "/videos/companions/willow-hayes.mp4",
     "gallery": [
       "/characters/zovik_29.jpg"
-    ]
+    ],
+    "accessTier": "free",
+    "isVipOnly": false
   },
   {
     "id": "cipher-09",
@@ -1169,7 +1192,9 @@
     "videoUrl": "/videos/companions/cipher-09.mp4",
     "gallery": [
       "/characters/zovik_30.jpg"
-    ]
+    ],
+    "accessTier": "free",
+    "isVipOnly": false
   },
   {
     "id": "damon-jax",
@@ -1208,7 +1233,9 @@
     "videoUrl": "/videos/companions/damon-jax.mp4",
     "gallery": [
       "/characters/zovik_31.jpg"
-    ]
+    ],
+    "accessTier": "vip",
+    "isVipOnly": true
   },
   {
     "id": "luna-velvet",
@@ -1247,7 +1274,9 @@
     "videoUrl": "/videos/companions/luna-velvet.mp4",
     "gallery": [
       "/characters/zovik_32.jpg"
-    ]
+    ],
+    "accessTier": "vip",
+    "isVipOnly": true
   },
   {
     "id": "nyx-cyber",
@@ -1286,7 +1315,9 @@
     "videoUrl": "/videos/companions/nyx-cyber.mp4",
     "gallery": [
       "/characters/zovik_33.jpg"
-    ]
+    ],
+    "accessTier": "free",
+    "isVipOnly": false
   },
   {
     "id": "jaxson-vance",
@@ -1325,7 +1356,9 @@
     "videoUrl": "/videos/companions/jaxson-vance.mp4",
     "gallery": [
       "/characters/zovik_34.jpg"
-    ]
+    ],
+    "accessTier": "free",
+    "isVipOnly": false
   },
   {
     "id": "evelyn-reed",
@@ -1364,7 +1397,9 @@
     "videoUrl": "/videos/companions/evelyn-reed.mp4",
     "gallery": [
       "/characters/zovik_35.jpg"
-    ]
+    ],
+    "accessTier": "free",
+    "isVipOnly": false
   },
   {
     "id": "alexander-sterling",
@@ -1403,7 +1438,9 @@
     "videoUrl": "/videos/companions/alexander-sterling.mp4",
     "gallery": [
       "/characters/zovik_36.jpg"
-    ]
+    ],
+    "accessTier": "free",
+    "isVipOnly": false
   },
   {
     "id": "mei-ling-zhou",
@@ -1442,7 +1479,9 @@
     "videoUrl": "/videos/companions/mei-ling-zhou.mp4",
     "gallery": [
       "/characters/zovik_37.jpg"
-    ]
+    ],
+    "accessTier": "vip",
+    "isVipOnly": true
   },
   {
     "id": "bella-bloom",
@@ -1481,7 +1520,9 @@
     "videoUrl": "/videos/companions/bella-bloom.mp4",
     "gallery": [
       "/characters/zovik_38.jpg"
-    ]
+    ],
+    "accessTier": "free",
+    "isVipOnly": false
   },
   {
     "id": "cassandra-vance",
@@ -1520,7 +1561,9 @@
     "videoUrl": "/videos/companions/cassandra-vance.mp4",
     "gallery": [
       "/characters/zovik_39.jpg"
-    ]
+    ],
+    "accessTier": "vip",
+    "isVipOnly": true
   },
   {
     "id": "sylvie-delacroix",
@@ -1559,6 +1602,8 @@
     "videoUrl": "/videos/companions/sylvie-delacroix.mp4",
     "gallery": [
       "/characters/zovik_40.jpg"
-    ]
+    ],
+    "accessTier": "vip",
+    "isVipOnly": true
   }
 ]

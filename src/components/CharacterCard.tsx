@@ -2,8 +2,9 @@
 
 import React from "react";
 import Image from "next/image";
-import { MessageCircle, Film, Sparkles, CheckCircle2, Phone, Heart } from "lucide-react";
+import { MessageCircle, Film, Sparkles, CheckCircle2, Phone, Heart, Crown, Lock } from "lucide-react";
 import { Character } from "@/types";
+import { getSafeImageUrl } from "@/lib/imageHelper";
 
 interface CharacterCardProps {
   character: Character;
@@ -12,6 +13,7 @@ interface CharacterCardProps {
   onStartCall: (character: Character) => void;
   isLiked?: boolean;
   onToggleLike?: (character: Character, e: React.MouseEvent) => void;
+  isPaidUser?: boolean;
 }
 
 export default function CharacterCard({
@@ -21,7 +23,11 @@ export default function CharacterCard({
   onStartCall,
   isLiked = false,
   onToggleLike,
+  isPaidUser = false,
 }: CharacterCardProps) {
+  const isVipChar = character.accessTier === "vip" || character.accessTier === "plus" || character.isVipOnly === true;
+  const isLocked = isVipChar && !isPaidUser;
+
   return (
     <div
       className="group relative flex flex-col aspect-[3/5] w-full rounded-2xl md:rounded-[22px] overflow-hidden bg-[#120d16] border border-white/5 hover:border-[#f53b70]/40 transition-all duration-300 hover:shadow-2xl hover:shadow-pink-900/20 hover:-translate-y-1.5 cursor-pointer select-none"
@@ -29,24 +35,32 @@ export default function CharacterCard({
       {/* Character Image */}
       <div className="absolute inset-0 size-full overflow-hidden" onClick={() => onSelect(character)}>
         <Image
-          src={character.image}
+          src={getSafeImageUrl(character.image)}
           alt={character.name}
           fill
           sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
           className="object-cover object-top transition-transform duration-500 group-hover:scale-105"
           unoptimized
+          referrerPolicy="no-referrer"
         />
         {/* Shadow Overlay */}
         <div className="absolute inset-x-0 bottom-0 h-3/5 bg-gradient-to-t from-[#08060a] via-[#08060a]/75 to-transparent" />
       </div>
 
-      {/* Top Left Badge (e.g. NEW, HOT, ANIME) */}
-      {character.badge && (
-        <div className="absolute top-2.5 left-2.5 z-20 flex items-center space-x-1 px-2.5 py-1 rounded-full bg-gradient-to-r from-[#f53b70] to-[#ff2a6d] text-white text-[10px] md:text-[11px] font-black tracking-wider uppercase shadow-md shadow-pink-600/30">
-          <Sparkles className="size-2.5" />
-          <span>{character.badge}</span>
-        </div>
-      )}
+      {/* Top Left Badge (e.g. VIP, NEW, HOT, ANIME) */}
+      <div className="absolute top-2.5 left-2.5 z-20 flex items-center space-x-1">
+        {isVipChar ? (
+          <div className="flex items-center space-x-1 px-2.5 py-1 rounded-full bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 text-black text-[10px] md:text-[11px] font-black tracking-wider uppercase shadow-md shadow-yellow-500/30">
+            <Crown className="size-3 fill-black text-black" />
+            <span>VIP</span>
+          </div>
+        ) : character.badge ? (
+          <div className="flex items-center space-x-1 px-2.5 py-1 rounded-full bg-gradient-to-r from-[#f53b70] to-[#ff2a6d] text-white text-[10px] md:text-[11px] font-black tracking-wider uppercase shadow-md shadow-pink-600/30">
+            <Sparkles className="size-2.5" />
+            <span>{character.badge}</span>
+          </div>
+        ) : null}
+      </div>
 
       {/* Top Right Badges: In Series / Like button */}
       <div className="absolute top-2.5 right-2.5 z-20 flex flex-col items-end space-y-1.5">
@@ -106,10 +120,14 @@ export default function CharacterCard({
               e.stopPropagation();
               onStartChat(character);
             }}
-            className="flex items-center justify-center space-x-1.5 py-2 rounded-xl bg-gradient-to-r from-[#f53b70] to-[#ff457c] text-white text-xs font-bold shadow-md shadow-pink-600/20 hover:brightness-110 active:scale-95 transition-all"
+            className={`flex items-center justify-center space-x-1.5 py-2 rounded-xl text-xs font-bold transition-all shadow-md active:scale-95 ${
+              isLocked
+                ? "bg-gradient-to-r from-amber-500 to-yellow-400 text-black font-black shadow-amber-500/25 hover:brightness-110"
+                : "bg-gradient-to-r from-[#f53b70] to-[#ff457c] text-white shadow-pink-600/20 hover:brightness-110"
+            }`}
           >
-            <MessageCircle className="size-3.5" />
-            <span>Chat</span>
+            {isLocked ? <Lock className="size-3.5 text-black" /> : <MessageCircle className="size-3.5" />}
+            <span>{isLocked ? "VIP Chat" : "Chat"}</span>
           </button>
 
           <button
@@ -117,10 +135,14 @@ export default function CharacterCard({
               e.stopPropagation();
               onStartCall(character);
             }}
-            className="flex items-center justify-center space-x-1.5 py-2 rounded-xl bg-[#23172e] border border-white/10 hover:bg-[#2d1e3a] text-white text-xs font-bold active:scale-95 transition-all"
+            className={`flex items-center justify-center space-x-1.5 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 ${
+              isLocked
+                ? "bg-[#23172e] border border-amber-500/30 text-amber-300 hover:bg-[#2d1e3a]"
+                : "bg-[#23172e] border border-white/10 hover:bg-[#2d1e3a] text-white"
+            }`}
           >
-            <Phone className="size-3.5 text-[#f53b70]" />
-            <span>Call</span>
+            {isLocked ? <Crown className="size-3.5 text-amber-400" /> : <Phone className="size-3.5 text-[#f53b70]" />}
+            <span>{isLocked ? "VIP Call" : "Call"}</span>
           </button>
         </div>
       </div>

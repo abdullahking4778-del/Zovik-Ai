@@ -126,6 +126,29 @@ export default function PwaInstallModal({ isOpen, onClose }: PwaInstallModalProp
           </div>
         </div>
 
+        {/* Option 3: Companion Intimate Push Notifications Card */}
+        <div className="p-3.5 rounded-2xl bg-gradient-to-br from-pink-950/40 via-purple-950/20 to-black/60 border border-pink-500/25 space-y-2.5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <span className="text-base">💌</span>
+              <div>
+                <h4 className="text-xs font-bold text-white">Intimate Companion Alerts</h4>
+                <p className="text-[10px] text-[#cbb6bf]">Receive romantic check-ins when away</p>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                import("@/lib/notificationHelper").then(({ sendCompanionNotification }) => {
+                  sendCompanionNotification();
+                });
+              }}
+              className="px-2.5 py-1 rounded-lg bg-[#f53b70]/20 hover:bg-[#f53b70]/30 border border-[#f53b70]/40 text-[#ff759f] text-[10px] font-bold transition-all active:scale-95"
+            >
+              Test Alert 💕
+            </button>
+          </div>
+        </div>
+
         {/* Direct 1-Click Install Button */}
         {isInstalled ? (
           <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-center font-bold text-xs flex items-center justify-center space-x-2">

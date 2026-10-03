@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import crypto from "crypto";
 import { NextRequest } from "next/server";
 
 export interface QuotaRecord {
@@ -62,7 +63,7 @@ function loadStore(type: QuotaType): void {
 
 function persistStore(type: QuotaType): void {
   const filePath = getQuotaFilePath(type);
-  const tmpPath = `${filePath}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`;
+  const tmpPath = `${filePath}.${Date.now()}.${crypto.randomUUID()}.tmp`;
   try {
     const dir = path.dirname(filePath);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });

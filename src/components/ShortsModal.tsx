@@ -246,6 +246,8 @@ export default function ShortsModal({
             loop
             playsInline
             controls={false}
+            controlsList="nodownload nofullscreen noremoteplayback"
+            disablePictureInPicture
             className="size-full object-cover"
           />
 

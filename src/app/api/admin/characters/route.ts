@@ -1,17 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
-import defaultCharactersData from "@/data/characters.json";
 import { verifyAdminRequest } from "@/lib/adminAuth";
 import {
-  getPersistentCustomCharacters,
+  getAllPersistentCharacters,
   savePersistentCustomCharacter,
-  deletePersistentCustomCharacter,
+  deletePersistentCharacter,
   generateUniqueId,
 } from "@/lib/serverDb";
 import { Character } from "@/types";
+import { normalizeTags } from "@/lib/tagHelper";
 
-const defaultCharacters: Character[] = defaultCharactersData as Character[];
 const publicCharsDir = path.join(process.cwd(), "public", "characters");
 
 export async function GET(req: NextRequest) {
@@ -20,8 +19,7 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const custom = await getPersistentCustomCharacters();
-    const all = [...custom, ...defaultCharacters];
+    const all = await getAllPersistentCharacters();
 
     // List available local images
     let availableImages: string[] = [];
@@ -65,6 +63,8 @@ export async function POST(req: NextRequest) {
     }
 
     const charId = companion.id || generateUniqueId("char");
+    const isVipTier = companion.accessTier === "vip" || companion.accessTier === "plus" || companion.isVipOnly === true;
+
     const formatted: Character = {
       id: charId,
       slug: companion.slug || companion.name.toLowerCase().replace(/\s+/g, "-"),
@@ -75,16 +75,12 @@ export async function POST(req: NextRequest) {
       tagline: companion.tagline || `${companion.name} • Official AI`,
       desc: companion.desc || "An enchanting AI companion ready to chat.",
       image: companion.image || "/characters/zovik_01.jpg",
-      badge: companion.badge || "NEW",
+      badge: companion.badge || (isVipTier ? "VIP" : "NEW"),
       category: companion.category || "Trending",
       series: !!companion.series,
       verified: true,
       online: true,
-      tags: Array.isArray(companion.tags)
-        ? companion.tags
-        : typeof companion.tags === "string"
-        ? (companion.tags as string).split(",").map((t) => t.trim())
-        : ["Flirty", "Sweet"],
+      tags: companion.tags ? normalizeTags(companion.tags) : ["Flirty", isVipTier ? "VIP" : "Sweet"],
       voice: companion.voice || "Warm Whisper",
       greeting: companion.greeting || `Hey there... so glad you stopped by! What's on your mind? 💕`,
       videoUrl: companion.videoUrl,
@@ -96,6 +92,8 @@ export async function POST(req: NextRequest) {
           time: "Just now",
         },
       ],
+      accessTier: isVipTier ? "vip" : "free",
+      isVipOnly: isVipTier,
     };
 
     await savePersistentCustomCharacter(formatted);
@@ -104,6 +102,45 @@ export async function POST(req: NextRequest) {
   } catch (err: unknown) {
     console.error("[Admin Characters POST Error]:", err);
     return NextResponse.json({ success: false, error: "Internal server error saving companion" }, { status: 500 });
+  }
+}
+
+export async function PUT(req: NextRequest) {
+  if (!verifyAdminRequest(req)) {
+    return NextResponse.json({ success: false, error: "Unauthorized: Admin session invalid or missing." }, { status: 401 });
+  }
+
+  try {
+    const body: Partial<Character> & { id: string } = await req.json();
+    if (!body || !body.id) {
+      return NextResponse.json({ success: false, error: "Missing companion id" }, { status: 400 });
+    }
+
+    const all = await getAllPersistentCharacters();
+    const existing = all.find((c) => c.id === body.id || c.slug === body.id);
+    if (!existing) {
+      return NextResponse.json({ success: false, error: "Companion not found" }, { status: 404 });
+    }
+
+    const isVipTier = body.accessTier === "vip" || body.accessTier === "plus" || body.isVipOnly === true;
+
+    const updated: Character = {
+      ...existing,
+      ...body,
+      id: existing.id,
+      slug: existing.slug,
+      tags: body.tags !== undefined ? normalizeTags(body.tags) : normalizeTags(existing.tags),
+      accessTier: isVipTier ? "vip" : "free",
+      isVipOnly: isVipTier,
+      badge: body.badge || (isVipTier ? "VIP" : existing.badge),
+    };
+
+    await savePersistentCustomCharacter(updated);
+
+    return NextResponse.json({ success: true, message: "Companion updated successfully!", character: updated });
+  } catch (err: unknown) {
+    console.error("[Admin Characters PUT Error]:", err);
+    return NextResponse.json({ success: false, error: "Internal server error updating companion" }, { status: 500 });
   }
 }
 
@@ -120,9 +157,9 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Missing companion id" }, { status: 400 });
     }
 
-    await deletePersistentCustomCharacter(id);
+    await deletePersistentCharacter(id);
 
-    return NextResponse.json({ success: true, message: "Companion removed successfully" });
+    return NextResponse.json({ success: true, message: "Companion permanently deleted" });
   } catch (err: unknown) {
     console.error("[Admin Characters DELETE Error]:", err);
     return NextResponse.json({ success: false, error: "Internal server error removing companion" }, { status: 500 });
@@ -139,30 +176,33 @@ export async function PATCH(req: NextRequest) {
     const targetId: string | undefined = body.characterId || body.id;
     const gallery: string[] | undefined = body.gallery;
 
-    if (!targetId || !Array.isArray(gallery)) {
-      return NextResponse.json({ success: false, error: "Missing characterId (or id) or gallery array" }, { status: 400 });
+    if (!targetId) {
+      return NextResponse.json({ success: false, error: "Missing characterId or id" }, { status: 400 });
     }
 
-    const custom = await getPersistentCustomCharacters();
-    const existing = custom.find((c) => c.id === targetId);
+    const all = await getAllPersistentCharacters();
+    const existing = all.find((c) => c.id === targetId || c.slug === targetId);
 
-    if (existing) {
+    if (!existing) {
+      return NextResponse.json({ success: false, error: "Character not found" }, { status: 404 });
+    }
+
+    if (gallery && Array.isArray(gallery)) {
       existing.gallery = gallery;
-      await savePersistentCustomCharacter(existing);
-      return NextResponse.json({ success: true, message: "Character gallery updated successfully!", gallery });
     }
 
-    // If default character, create a custom override in persistent store
-    const def = defaultCharacters.find((c) => c.id === targetId);
-    if (def) {
-      const overrideChar: Character = { ...def, gallery };
-      await savePersistentCustomCharacter(overrideChar);
-      return NextResponse.json({ success: true, message: "Character gallery updated successfully!", gallery });
+    // Merge any other updated fields
+    if (body.accessTier) {
+      existing.accessTier = body.accessTier === "vip" || body.accessTier === "plus" ? "vip" : "free";
+      existing.isVipOnly = existing.accessTier === "vip";
     }
+    if (body.videoUrl !== undefined) existing.videoUrl = body.videoUrl;
+    if (body.name) existing.name = body.name;
 
-    return NextResponse.json({ success: false, error: "Character not found" }, { status: 404 });
+    await savePersistentCustomCharacter(existing);
+    return NextResponse.json({ success: true, message: "Character updated successfully!", character: existing });
   } catch (err: unknown) {
     console.error("[Admin Characters PATCH Error]:", err);
-    return NextResponse.json({ success: false, error: "Internal server error updating gallery" }, { status: 500 });
+    return NextResponse.json({ success: false, error: "Internal server error updating character" }, { status: 500 });
   }
 }

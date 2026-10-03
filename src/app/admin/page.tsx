@@ -37,8 +37,14 @@ import {
   Edit3,
   Calendar,
   HardDrive,
+  Globe,
 } from "lucide-react";
 import { Character, ShortReel, PaymentRequest, UserAccount } from "@/types";
+import { getSafeStreamUrl } from "@/lib/videoHelper";
+import { getSafeImageUrl } from "@/lib/imageHelper";
+import { AdminOverviewTab } from "@/components/admin/AdminOverviewTab";
+import { AdminSubscriptionsTab } from "@/components/admin/AdminSubscriptionsTab";
+import { AdminSettingsTab } from "@/components/admin/AdminSettingsTab";
 
 export default function AdminPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -75,12 +81,16 @@ export default function AdminPage() {
   const [savingGallery, setSavingGallery] = useState(false);
 
   // Companion Form Modal State
+  // Companion Form Modal State
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [companionVideoMode, setCompanionVideoMode] = useState<"url" | "upload" | "preset">("url");
+  const [companionVideoFile, setCompanionVideoFile] = useState<File | null>(null);
+  const [isUploadingCompanionVideo, setIsUploadingCompanionVideo] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     age: 21,
-    gender: "female",
-    style: "realistic",
+    gender: "female" as "female" | "male" | "anime",
+    style: "realistic" as "realistic" | "anime",
     category: "Trending",
     badge: "NEW",
     tagline: "",
@@ -89,14 +99,42 @@ export default function AdminPage() {
     tags: "Flirty, Sassy, Model",
     greeting: "Hey there! So excited to chat with you 💕",
     image: "",
+    accessTier: "free" as "free" | "vip",
+    videoUrl: "",
   });
+
+  // Edit Companion Modal State
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingCompanion, setEditingCompanion] = useState<Character | null>(null);
+  const [editFormData, setEditFormData] = useState({
+    id: "",
+    name: "",
+    age: 21,
+    gender: "female" as "female" | "male" | "anime",
+    style: "realistic" as "realistic" | "anime",
+    category: "Trending",
+    badge: "NEW",
+    tagline: "",
+    desc: "",
+    voice: "Warm Whisper",
+    tags: "Flirty, Sassy",
+    greeting: "Hey there! So excited to chat with you 💕",
+    image: "/characters/zovik_01.jpg",
+    accessTier: "free" as "free" | "vip",
+    videoUrl: "",
+  });
+  const [editVideoMode, setEditVideoMode] = useState<"url" | "upload" | "preset">("url");
+  const [editVideoFile, setEditVideoFile] = useState<File | null>(null);
+  const [isUploadingEditVideo, setIsUploadingEditVideo] = useState(false);
+  const [isSavingCompanionEdit, setIsSavingCompanionEdit] = useState(false);
 
   // Short/Reel Form Modal State
   const [isAddReelOpen, setIsAddReelOpen] = useState(false);
+  const [reelVideoMode, setReelVideoMode] = useState<"url" | "upload" | "preset">("url");
   const [reelData, setReelData] = useState({
     characterName: "",
     caption: "",
-    videoUrl: "/videos/companions/aria-solis.mp4",
+    videoUrl: "",
     avatar: "/characters/zovik_01.jpg",
   });
 
@@ -301,26 +339,158 @@ export default function AdminPage() {
     }
   };
 
+  const handleOpenEditCompanion = (char: Character) => {
+    setEditingCompanion(char);
+    const isVipTier = char.accessTier === "vip" || char.accessTier === "plus" || char.isVipOnly === true;
+    setEditFormData({
+      id: char.id,
+      name: char.name,
+      age: char.age || 21,
+      gender: char.gender || "female",
+      style: char.style || "realistic",
+      category: char.category || "Trending",
+      badge: char.badge || (isVipTier ? "VIP" : "NEW"),
+      tagline: char.tagline || "",
+      desc: char.desc || "",
+      voice: char.voice || "Warm Whisper",
+      tags: Array.isArray(char.tags) ? char.tags.join(", ") : char.tags || "",
+      greeting: char.greeting || "",
+      image: char.image || "/characters/zovik_01.jpg",
+      accessTier: isVipTier ? "vip" : "free",
+      videoUrl: char.videoUrl || "",
+    });
+    setEditVideoMode(char.videoUrl?.startsWith("http") ? "url" : char.videoUrl ? "preset" : "url");
+    setEditVideoFile(null);
+    setIsEditModalOpen(true);
+  };
+
+  const handleUpdateCompanion = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editFormData.id) return;
+    setIsSavingCompanionEdit(true);
+
+    try {
+      let finalVideoUrl = editFormData.videoUrl;
+
+      // Handle video file upload if in upload mode
+      if (editVideoMode === "upload" && editVideoFile) {
+        setIsUploadingEditVideo(true);
+        const token = localStorage.getItem("zovik_admin_session") || "";
+        const uploadForm = new FormData();
+        uploadForm.append("file", editVideoFile);
+        uploadForm.append("type", "video");
+
+        const upRes = await fetch("/api/admin/upload", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+          body: uploadForm,
+        });
+
+        if (!upRes.ok) {
+          throw new Error("Failed to upload intro video file");
+        }
+        const upData = await upRes.json();
+        finalVideoUrl = upData.url;
+      }
+
+      const res = await fetch("/api/admin/characters", {
+        method: "PUT",
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          ...editFormData,
+          videoUrl: finalVideoUrl,
+          isVipOnly: editFormData.accessTier === "vip",
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setCharacters((prev) =>
+          prev.map((c) => (c.id === editFormData.id ? { ...c, ...data.character } : c))
+        );
+        setIsEditModalOpen(false);
+        setEditingCompanion(null);
+        alert("Companion updated successfully! ✨");
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        alert(errData.error || "Failed to update companion");
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Error updating companion";
+      alert(msg);
+    } finally {
+      setIsSavingCompanionEdit(false);
+      setIsUploadingEditVideo(false);
+    }
+  };
+
   const handleSaveCompanion = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      let finalVideoUrl = formData.videoUrl;
+
+      if (companionVideoMode === "upload" && companionVideoFile) {
+        setIsUploadingCompanionVideo(true);
+        const token = localStorage.getItem("zovik_admin_session") || "";
+        const uploadForm = new FormData();
+        uploadForm.append("file", companionVideoFile);
+        uploadForm.append("type", "video");
+
+        const upRes = await fetch("/api/admin/upload", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+          body: uploadForm,
+        });
+
+        if (upRes.ok) {
+          const upData = await upRes.json();
+          finalVideoUrl = upData.url;
+        }
+      }
+
       const res = await fetch("/api/admin/characters", {
         method: "POST",
         headers: getAuthHeaders(),
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          ...formData,
+          videoUrl: finalVideoUrl,
+          isVipOnly: formData.accessTier === "vip",
+        }),
       });
       if (res.ok) {
         setIsAddModalOpen(false);
+        setFormData({
+          name: "",
+          age: 21,
+          gender: "female",
+          style: "realistic",
+          category: "Trending",
+          badge: "NEW",
+          tagline: "",
+          desc: "",
+          voice: "Warm Whisper",
+          tags: "Flirty, Sassy, Model",
+          greeting: "Hey there! So excited to chat with you 💕",
+          image: availableImages[0] || "/characters/zovik_01.jpg",
+          accessTier: "free",
+          videoUrl: "",
+        });
+        setCompanionVideoFile(null);
         fetchAdminData();
         alert("Companion created and published successfully!");
+      } else {
+        const err = await res.json().catch(() => ({}));
+        alert(err.error || "Failed to create companion");
       }
     } catch {
       alert("Error saving companion");
+    } finally {
+      setIsUploadingCompanionVideo(false);
     }
   };
 
   const handleDeleteCompanion = async (id: string) => {
-    if (!confirm("Delete this companion?")) return;
+    if (!confirm("Are you sure you want to permanently delete this companion? This cannot be undone.")) return;
     try {
       const res = await fetch(`/api/admin/characters?id=${id}`, {
         method: "DELETE",
@@ -328,6 +498,10 @@ export default function AdminPage() {
       });
       if (res.ok) {
         setCharacters((prev) => prev.filter((c) => c.id !== id));
+        alert("Companion permanently deleted from system.");
+      } else {
+        const err = await res.json().catch(() => ({}));
+        alert(err.error || "Failed to delete companion");
       }
     } catch {
       alert("Error deleting companion");
@@ -435,8 +609,8 @@ export default function AdminPage() {
     try {
       const token = localStorage.getItem("zovik_admin_session") || "";
 
-      // If user uploaded a direct video or ZIP file from their device
-      if (reelUploadFile) {
+      // 1. If user uploaded a direct video or ZIP file from their device
+      if (reelVideoMode === "upload" && reelUploadFile) {
         const formData = new FormData();
         formData.append("file", reelUploadFile);
         formData.append("type", "reel");
@@ -462,7 +636,7 @@ export default function AdminPage() {
         setReelData({
           characterName: "",
           caption: "",
-          videoUrl: "/videos/companions/aria-solis.mp4",
+          videoUrl: "",
           avatar: "/characters/zovik_01.jpg",
         });
         fetchAdminData();
@@ -472,16 +646,31 @@ export default function AdminPage() {
             : "Reel uploaded and published live to Zovik Shorts!"
         );
       } else {
-        // Fallback to path submission
+        // 2. Direct External URL or Preset Video submission
+        if (!reelData.videoUrl || !reelData.videoUrl.trim()) {
+          throw new Error("Please enter a valid video URL or select an upload file.");
+        }
+
         const res = await fetch("/api/shorts", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            ...getAuthHeaders(),
+            "Content-Type": "application/json",
+          },
           body: JSON.stringify(reelData),
         });
+
         if (res.ok) {
           setIsAddReelOpen(false);
+          setReelUploadFile(null);
+          setReelData({
+            characterName: "",
+            caption: "",
+            videoUrl: "",
+            avatar: "/characters/zovik_01.jpg",
+          });
           fetchAdminData();
-          alert("Reel added to Zovik Shorts!");
+          alert("Reel published live to Zovik Shorts! 🚀");
         } else {
           const data = await res.json();
           throw new Error(data.error || "Failed to save reel");
@@ -761,207 +950,22 @@ export default function AdminPage() {
 
         {/* ================= TAB 1: OVERVIEW & STATS ================= */}
         {activeTab === "overview" && (
-          <div className="space-y-6">
-            {/* Stat Cards Grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <div className="p-5 rounded-3xl bg-[#140b1c] border border-white/5">
-                <span className="text-xs text-[#aeaeae]">Total Registered Users</span>
-                <div className="text-3xl font-black text-white mt-1">{users.length}</div>
-                <span className="text-[10px] text-emerald-400 font-bold">100% Free DB Storage</span>
-              </div>
-
-              <div className="p-5 rounded-3xl bg-[#140b1c] border border-white/5">
-                <span className="text-xs text-[#aeaeae]">Verified VIP Members</span>
-                <div className="text-3xl font-black text-amber-400 mt-1">
-                  {users.filter((u) => u.isVip || u.tier === "vip" || u.tier === "plus").length}
-                </div>
-                <span className="text-[10px] text-amber-300 font-bold">Paid Subscriptions</span>
-              </div>
-
-              <div className="p-5 rounded-3xl bg-[#140b1c] border border-white/5">
-                <span className="text-xs text-[#aeaeae]">Estimated Revenue</span>
-                <div className="text-3xl font-black text-emerald-400 mt-1">
-                  Rs. {totalRevenuePKR.toLocaleString()}
-                </div>
-                <span className="text-[10px] text-[#aeaeae]">From EasyPaisa/Jazz/Crypto</span>
-              </div>
-
-              <div className="p-5 rounded-3xl bg-[#140b1c] border border-white/5">
-                <span className="text-xs text-[#aeaeae]">Monthly Running Cost</span>
-                <div className="text-3xl font-black text-white mt-1">0 PKR</div>
-                <span className="text-[10px] text-emerald-400 font-bold">Groq Free + Zero Server Bill</span>
-              </div>
-            </div>
-
-            {/* Quick Actions & System Info */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="p-6 rounded-3xl bg-[#140b1c] border border-white/5 space-y-4">
-                <h3 className="text-base font-extrabold text-white flex items-center space-x-2">
-                  <CreditCard className="size-4 text-[#f53b70]" />
-                  <span>Pending Payment Approvals</span>
-                </h3>
-                {payments.filter((p) => p.status === "pending").length > 0 ? (
-                  <div className="space-y-2">
-                    {payments
-                      .filter((p) => p.status === "pending")
-                      .slice(0, 3)
-                      .map((p) => (
-                        <div
-                          key={p.id}
-                          className="flex items-center justify-between p-3 rounded-2xl bg-black/40 border border-white/10"
-                        >
-                          <div>
-                            <span className="text-xs font-bold text-white block">{p.userEmail}</span>
-                            <span className="text-[10px] text-[#aeaeae]">
-                              {p.method} • {p.amount} • Trx: {p.trxId}
-                            </span>
-                          </div>
-                          <button
-                            onClick={() => handleApprovePayment(p.id)}
-                            className="px-3 py-1 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black text-xs font-black shadow-md"
-                          >
-                            Approve
-                          </button>
-                        </div>
-                      ))}
-                  </div>
-                ) : (
-                  <p className="text-xs text-[#aeaeae]">No pending payments. All caught up!</p>
-                )}
-              </div>
-
-              <div className="p-6 rounded-3xl bg-[#140b1c] border border-white/5 space-y-4">
-                <h3 className="text-base font-extrabold text-white flex items-center space-x-2">
-                  <Cpu className="size-4 text-[#8b5cf6]" />
-                  <span>AI Engine Health</span>
-                </h3>
-                <ul className="space-y-2 text-xs text-[#d1c4cd]">
-                  <li className="flex items-center justify-between">
-                    <span>Groq LLM Model:</span>
-                    <strong className="text-emerald-400 font-mono">qwen/qwen3.8-27b</strong>
-                  </li>
-                  <li className="flex items-center justify-between">
-                    <span>Multilingual Roman Urdu:</span>
-                    <strong className="text-emerald-400">Active & Thinking</strong>
-                  </li>
-                  <li className="flex items-center justify-between">
-                    <span>Photo Engine:</span>
-                    <strong className="text-emerald-400 font-mono">Turbo Photorealism</strong>
-                  </li>
-                  <li className="flex items-center justify-between">
-                    <span>Voice Engine:</span>
-                    <strong className="text-emerald-400">Strictly Female Tone (Pitch 1.25)</strong>
-                  </li>
-                </ul>
-              </div>
-            </div>
-          </div>
+          <AdminOverviewTab
+            users={users}
+            totalRevenuePKR={totalRevenuePKR}
+            payments={payments}
+            handleApprovePayment={handleApprovePayment}
+          />
         )}
 
         {/* ================= TAB 2: PAYMENTS & SUBSCRIPTIONS ================= */}
         {activeTab === "subscriptions" && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-xl font-black text-white">Payment Requests & Approvals</h2>
-                <p className="text-xs text-[#aeaeae]">
-                  Review Transaction IDs sent via JazzCash, EasyPaisa, NayaPay, or Binance.
-                </p>
-              </div>
-            </div>
-
-            <div className="overflow-x-auto rounded-3xl bg-[#140b1c] border border-white/5">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-[#1b1024] text-[#aeaeae] uppercase text-[10px] tracking-wider">
-                  <tr>
-                    <th className="p-4">User Email</th>
-                    <th className="p-4">Plan & Amount</th>
-                    <th className="p-4">Payment Method</th>
-                    <th className="p-4">Trx ID / Ref</th>
-                    <th className="p-4">Slip / Receipt</th>
-                    <th className="p-4">Date</th>
-                    <th className="p-4">Status</th>
-                    <th className="p-4 text-right">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                  {payments.map((p) => (
-                    <tr key={p.id} className="hover:bg-white/[0.02]">
-                      <td className="p-4 font-bold text-white">{p.userEmail}</td>
-                      <td className="p-4">
-                        <span className="font-bold text-[#f53b70]">{p.amount}</span>
-                        <span className="block text-[10px] text-[#888]">{p.planName}</span>
-                      </td>
-                      <td className="p-4">
-                        <span className="px-2 py-0.5 rounded-full bg-white/10 text-white font-medium">
-                          {p.method}
-                        </span>
-                      </td>
-                      <td className="p-4 font-mono font-bold text-white">{p.trxId}</td>
-                      <td className="p-4">
-                        {p.screenshot ? (
-                          <button
-                            onClick={() => setPreviewSlip(p.screenshot)}
-                            className="flex items-center space-x-1 px-2.5 py-1 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/40 text-purple-300 font-bold text-[11px] transition-all"
-                          >
-                            <span>View Slip 🖼️</span>
-                          </button>
-                        ) : (
-                          <span className="text-[10px] text-white/40">
-                            {p.screenshotPurged ? "Auto-Cleaned 🧹" : "No Slip"}
-                          </span>
-                        )}
-                      </td>
-                      <td className="p-4 text-[#aeaeae]">
-                        {new Date(p.createdAt).toLocaleDateString()}
-                      </td>
-                      <td className="p-4">
-                        <span
-                          className={`px-2 py-0.5 rounded-full font-bold text-[10px] uppercase ${
-                            p.status === "approved"
-                              ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
-                              : p.status === "rejected"
-                              ? "bg-red-500/20 text-red-400 border border-red-500/30"
-                              : "bg-amber-500/20 text-amber-400 border border-amber-500/30 animate-pulse"
-                          }`}
-                        >
-                          {p.status}
-                        </span>
-                      </td>
-                      <td className="p-4 text-right space-x-2">
-                        {p.status === "pending" && (
-                          <>
-                            <button
-                              onClick={() => handleApprovePayment(p.id)}
-                              className="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-extrabold text-xs shadow-md transition-all"
-                            >
-                              Approve
-                            </button>
-                            <button
-                              onClick={() => handleRejectPayment(p.id)}
-                              className="px-3 py-1.5 rounded-xl bg-red-500/20 hover:bg-red-500/40 text-red-400 font-bold text-xs transition-all"
-                            >
-                              Reject
-                            </button>
-                          </>
-                        )}
-                        {p.status === "approved" && (
-                          <span className="text-[11px] text-emerald-400 font-bold">✓ Active VIP</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                  {payments.length === 0 && (
-                    <tr>
-                      <td colSpan={7} className="p-8 text-center text-[#aeaeae]">
-                        No payment requests received yet.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <AdminSubscriptionsTab
+            payments={payments}
+            handleApprovePayment={handleApprovePayment}
+            handleRejectPayment={handleRejectPayment}
+            setPreviewSlip={setPreviewSlip}
+          />
         )}
 
         {/* ================= TAB 3: COMPANIONS CMS ================= */}
@@ -983,43 +987,72 @@ export default function AdminPage() {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {characters.map((char) => (
-                <div
-                  key={char.id}
-                  className="flex items-center space-x-3 p-3.5 rounded-2xl bg-[#140b1c] border border-white/5"
-                >
-                  <div className="relative size-14 rounded-xl overflow-hidden shrink-0 bg-black">
-                    <Image src={char.image} alt={char.name} fill className="object-cover" unoptimized />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center space-x-1.5">
-                      <span className="font-extrabold text-sm text-white truncate">{char.name}</span>
-                      <span className="text-xs text-[#aeaeae]">• {char.age}</span>
+              {characters.map((char) => {
+                const isVipTier = char.accessTier === "vip" || char.accessTier === "plus" || char.isVipOnly === true;
+                return (
+                  <div
+                    key={char.id}
+                    className="flex items-center space-x-3 p-3.5 rounded-2xl bg-[#140b1c] border border-white/5 hover:border-white/15 transition-all shadow-sm"
+                  >
+                    <div className="relative size-14 rounded-xl overflow-hidden shrink-0 bg-black">
+                      <Image src={getSafeImageUrl(char.image)} alt={char.name} fill className="object-cover" unoptimized referrerPolicy="no-referrer" />
+                      {isVipTier && (
+                        <div className="absolute top-1 left-1 px-1.5 py-0.5 rounded-md bg-amber-500 text-black text-[9px] font-black uppercase shadow-sm">
+                          VIP
+                        </div>
+                      )}
                     </div>
-                    <span className="text-[11px] text-[#cbb6bf] line-clamp-1">{char.tagline}</span>
-                    <span className="text-[10px] text-[#f53b70] font-bold block">{char.category}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center space-x-1.5">
+                        <span className="font-extrabold text-sm text-white truncate">{char.name}</span>
+                        <span className="text-xs text-[#aeaeae]">• {char.age}</span>
+                        {isVipTier && (
+                          <span className="px-1.5 py-0.2 rounded bg-amber-500/20 border border-amber-500/40 text-amber-300 text-[10px] font-bold">
+                            👑 Plus & VIP
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[11px] text-[#cbb6bf] line-clamp-1">{char.tagline}</span>
+                      <div className="flex items-center space-x-2 mt-0.5">
+                        <span className="text-[10px] text-[#f53b70] font-bold">{char.category}</span>
+                        {char.videoUrl && (
+                          <span className="text-[10px] text-emerald-400 font-medium flex items-center space-x-0.5" title={char.videoUrl}>
+                            <Video className="size-2.5" />
+                            <span>Intro Video</span>
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-1.5 shrink-0">
+                      <button
+                        onClick={() => {
+                          handleSelectGalleryChar(char.id);
+                          setActiveTab("galleries");
+                        }}
+                        className="px-2 py-1.5 rounded-lg bg-pink-500/10 hover:bg-pink-500/20 text-[#f53b70] text-[11px] font-bold flex items-center space-x-1 transition-all"
+                        title="Manage sequential photos"
+                      >
+                        <Camera className="size-3" />
+                        <span>Photos ({char.gallery?.length || 1})</span>
+                      </button>
+                      <button
+                        onClick={() => handleOpenEditCompanion(char)}
+                        className="size-8 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 flex items-center justify-center transition-colors"
+                        title="Edit Companion details & Intro Video"
+                      >
+                        <Edit3 className="size-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteCompanion(char.id)}
+                        className="size-8 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 flex items-center justify-center transition-colors"
+                        title="Delete Companion Permanently"
+                      >
+                        <Trash2 className="size-4" />
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex items-center space-x-1.5 shrink-0">
-                    <button
-                      onClick={() => {
-                        handleSelectGalleryChar(char.id);
-                        setActiveTab("galleries");
-                      }}
-                      className="px-2.5 py-1.5 rounded-lg bg-pink-500/10 hover:bg-pink-500/20 text-[#f53b70] text-[11px] font-bold flex items-center space-x-1 transition-all"
-                      title="Manage sequential photos"
-                    >
-                      <Camera className="size-3" />
-                      <span>Photos ({char.gallery?.length || 1})</span>
-                    </button>
-                    <button
-                      onClick={() => handleDeleteCompanion(char.id)}
-                      className="size-8 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 flex items-center justify-center transition-colors"
-                    >
-                      <Trash2 className="size-4" />
-                    </button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
@@ -1056,7 +1089,7 @@ export default function AdminPage() {
                   <>
                     <div className="flex items-center space-x-3.5">
                       <div className="relative size-16 rounded-2xl overflow-hidden bg-black shrink-0 border-2 border-[#f53b70]/40 shadow-lg">
-                        <Image src={current?.image || "/characters/zovik_01.jpg"} alt={current?.name || ""} fill className="object-cover" unoptimized />
+                        <Image src={getSafeImageUrl(current?.image || "/characters/zovik_01.jpg")} alt={current?.name || ""} fill className="object-cover" unoptimized referrerPolicy="no-referrer" />
                       </div>
                       <div>
                         <div className="flex items-center space-x-2">
@@ -1076,11 +1109,14 @@ export default function AdminPage() {
                         onChange={(e) => handleSelectGalleryChar(e.target.value)}
                         className="flex-1 md:w-64 px-3 py-2 rounded-xl bg-[#1d0f26] border border-white/10 text-white text-xs font-bold outline-none focus:border-[#f53b70]"
                       >
-                        {characters.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.name} ({c.gallery?.length || 1} photos)
-                          </option>
-                        ))}
+                        {characters.map((c) => {
+                          const isVipTier = c.accessTier === "vip" || c.accessTier === "plus" || c.isVipOnly === true;
+                          return (
+                            <option key={c.id} value={c.id}>
+                              {c.name} {isVipTier ? "👑 [VIP]" : ""} ({c.gallery?.length || 1} photos)
+                            </option>
+                          );
+                        })}
                       </select>
                     </div>
                   </>
@@ -1106,7 +1142,7 @@ export default function AdminPage() {
                     className="group relative rounded-2xl bg-[#140b1c] border border-white/10 overflow-hidden flex flex-col shadow-md hover:border-pink-500/50 transition-all"
                   >
                     <div className="relative aspect-[3/4] w-full bg-black">
-                      <Image src={photoUrl} alt={`Photo ${idx + 1}`} fill className="object-cover" unoptimized />
+                      <Image src={getSafeImageUrl(photoUrl)} alt={`Photo ${idx + 1}`} fill className="object-cover" unoptimized referrerPolicy="no-referrer" />
                       <div className="absolute top-2 left-2 z-10 px-2.5 py-1 rounded-full bg-black/70 backdrop-blur-md border border-pink-500/40 text-pink-300 text-[10px] font-black shadow-md">
                         #{idx + 1} {idx === 0 ? "Default" : `Click ${idx + 1}`}
                       </div>
@@ -1186,11 +1222,35 @@ export default function AdminPage() {
                   <label className="text-[11px] text-[#aeaeae] block mb-1 font-bold">Image URL or Local Path</label>
                   <input
                     type="text"
-                    placeholder="/characters/zovik_01.jpg or https://..."
+                    placeholder="/characters/zovik_01.jpg, https://pin.it/..., or direct image URL"
                     value={newGalleryPhotoUrl}
                     onChange={(e) => setNewGalleryPhotoUrl(e.target.value)}
                     className="w-full px-3.5 py-2.5 rounded-xl bg-black/60 border border-white/10 text-white text-xs font-medium outline-none focus:border-[#f53b70]"
                   />
+                  {newGalleryPhotoUrl.trim() && (
+                    <div className="mt-2.5 p-2.5 rounded-xl bg-black/40 border border-white/10 flex items-center space-x-3">
+                      <div className="relative size-12 rounded-lg overflow-hidden bg-black shrink-0 border border-pink-500/40">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={getSafeImageUrl(newGalleryPhotoUrl.trim())}
+                          alt="Live Preview"
+                          className="size-full object-cover"
+                          referrerPolicy="no-referrer"
+                          onError={(e) => {
+                            (e.currentTarget as HTMLImageElement).src = "/characters/zovik_01.jpg";
+                          }}
+                        />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <span className="text-[11px] font-bold text-white block">Photo Live Preview</span>
+                        <span className="text-[10px] text-pink-400 font-mono truncate block">
+                          {newGalleryPhotoUrl.includes("pin.it") || newGalleryPhotoUrl.includes("pinterest")
+                            ? "📌 Pinterest link detected - auto-resolving & proxying"
+                            : "Safe CDN / Image URL"}
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -1253,12 +1313,14 @@ export default function AdminPage() {
                 >
                   <div className="relative aspect-[9/14] w-full rounded-2xl overflow-hidden bg-black">
                     <video
-                      src={reel.videoUrl}
+                      src={getSafeStreamUrl(reel.videoUrl)}
                       poster={reel.avatar}
                       autoPlay
                       muted
                       loop
                       playsInline
+                      controlsList="nodownload nofullscreen noremoteplayback"
+                      disablePictureInPicture
                       className="size-full object-cover"
                     />
                   </div>
@@ -1633,132 +1695,48 @@ export default function AdminPage() {
 
         {/* ================= TAB 6: SETTINGS ================= */}
         {activeTab === "settings" && (
-          <div className="p-6 rounded-3xl bg-[#140b1c] border border-white/5 max-w-xl mx-auto space-y-6">
-            <div>
-              <h2 className="text-xl font-black text-white">AI Engine & Master Settings</h2>
-              <p className="text-xs text-[#aeaeae]">Configure backend engine and manage your Master Access credentials</p>
-            </div>
-
-            {/* Active AI Model Card */}
-            <div className="p-4 rounded-2xl bg-black/40 border border-white/10 space-y-1">
-              <span className="text-white font-bold block text-xs">Active Chat Model</span>
-              <span className="font-mono text-emerald-400 text-xs">qwen/qwen3.8-27b (Fallback: gpt-oss-120b)</span>
-              <p className="text-[11px] text-[#aeaeae] mt-1">
-                Optimal for multilingual conversations, emotional roleplay, and Roman Urdu.
-              </p>
-            </div>
-
-            {/* Live Master Password Changer Form */}
-            <div className="p-5 rounded-2xl bg-black/50 border border-white/10 space-y-4">
-              <div className="flex items-center justify-between pb-3 border-b border-white/10">
-                <div className="flex items-center space-x-2">
-                  <Lock className="size-4 text-[#f53b70]" />
-                  <span className="text-sm font-black text-white">Change Master Password</span>
-                </div>
-                <div className="flex items-center space-x-1.5 bg-black/60 px-2.5 py-1 rounded-lg border border-white/10">
-                  <span className="text-[10px] text-[#aeaeae]">Active:</span>
-                  <span className="font-mono text-amber-400 text-[11px]">
-                    {showPasswordDetails ? activeMasterPassword : "••••••••••••"}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setShowPasswordDetails(!showPasswordDetails)}
-                    className="text-[#aeaeae] hover:text-white ml-1 cursor-pointer"
-                    title={showPasswordDetails ? "Hide password" : "Show active password"}
-                  >
-                    {showPasswordDetails ? <EyeOff className="size-3" /> : <Eye className="size-3" />}
-                  </button>
-                </div>
-              </div>
-
-              {passwordStatusMsg && (
-                <div
-                  className={`p-3 rounded-xl text-xs font-bold flex items-center space-x-2 ${
-                    passwordStatusMsg.type === "success"
-                      ? "bg-emerald-500/10 border border-emerald-500/30 text-emerald-400"
-                      : "bg-red-500/10 border border-red-500/30 text-red-400"
-                  }`}
-                >
-                  {passwordStatusMsg.type === "success" ? (
-                    <CheckCircle2 className="size-4 shrink-0" />
-                  ) : (
-                    <AlertCircle className="size-4 shrink-0" />
-                  )}
-                  <span>{passwordStatusMsg.text}</span>
-                </div>
-              )}
-
-              <form onSubmit={handleChangePassword} className="space-y-3 text-xs">
-                <div>
-                  <label className="text-[#aeaeae] block mb-1 font-bold">Current Master Password</label>
-                  <input
-                    type="password"
-                    required
-                    value={currentMasterPassword}
-                    onChange={(e) => setCurrentMasterPassword(e.target.value)}
-                    placeholder="Enter current password (e.g. #Abdullah786099#)"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-black/60 border border-white/10 text-white font-mono outline-none focus:border-[#f53b70]"
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-[#aeaeae] block mb-1 font-bold">New Master Password</label>
-                    <input
-                      type="password"
-                      required
-                      value={newMasterPassword}
-                      onChange={(e) => setNewMasterPassword(e.target.value)}
-                      placeholder="Min 6 characters"
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-black/60 border border-white/10 text-white font-mono outline-none focus:border-[#f53b70]"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[#aeaeae] block mb-1 font-bold">Confirm New Password</label>
-                    <input
-                      type="password"
-                      required
-                      value={confirmMasterPassword}
-                      onChange={(e) => setConfirmMasterPassword(e.target.value)}
-                      placeholder="Re-type new password"
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-black/60 border border-white/10 text-white font-mono outline-none focus:border-[#f53b70]"
-                    />
-                  </div>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={isUpdatingPassword}
-                  className="w-full py-3 rounded-xl bg-gradient-to-r from-[#f53b70] via-[#ff5b8c] to-[#8b5cf6] text-white font-extrabold text-xs shadow-lg shadow-pink-600/30 hover:brightness-110 active:scale-98 transition-all disabled:opacity-50 mt-2 flex items-center justify-center space-x-2 cursor-pointer"
-                >
-                  <Lock className="size-3.5" />
-                  <span>{isUpdatingPassword ? "Updating Password..." : "Save New Master Password 🔐"}</span>
-                </button>
-              </form>
-            </div>
-          </div>
+          <AdminSettingsTab
+            showPasswordDetails={showPasswordDetails}
+            setShowPasswordDetails={setShowPasswordDetails}
+            activeMasterPassword={activeMasterPassword}
+            passwordStatusMsg={passwordStatusMsg}
+            currentMasterPassword={currentMasterPassword}
+            setCurrentMasterPassword={setCurrentMasterPassword}
+            newMasterPassword={newMasterPassword}
+            setNewMasterPassword={setNewMasterPassword}
+            confirmMasterPassword={confirmMasterPassword}
+            setConfirmMasterPassword={setConfirmMasterPassword}
+            isUpdatingPassword={isUpdatingPassword}
+            handleChangePassword={handleChangePassword}
+          />
         )}
       </div>
 
-      {/* Add Companion Modal */}
+      {/* ================= 1. PUBLISH NEW COMPANION MODAL ================= */}
       {isAddModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md">
           <div className="w-full max-w-lg p-6 rounded-3xl bg-[#170e20] border border-white/10 shadow-2xl text-white space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-3 border-b border-white/10">
-              <h3 className="text-lg font-black">Publish New Companion</h3>
-              <button onClick={() => setIsAddModalOpen(false)}>✕</button>
+              <div>
+                <h3 className="text-lg font-black flex items-center space-x-2">
+                  <Sparkles className="size-5 text-[#f53b70]" />
+                  <span>Publish New Companion</span>
+                </h3>
+                <p className="text-[11px] text-[#aeaeae]">Configure profile, access tiers, and introductory video.</p>
+              </div>
+              <button onClick={() => setIsAddModalOpen(false)} className="text-white/60 hover:text-white">✕</button>
             </div>
 
-            <form onSubmit={handleSaveCompanion} className="space-y-3 text-xs">
+            <form onSubmit={handleSaveCompanion} className="space-y-3.5 text-xs">
               <div>
-                <label className="text-[#aeaeae] block mb-1 font-bold">Name</label>
+                <label className="text-[#aeaeae] block mb-1 font-bold">Companion Name *</label>
                 <input
                   type="text"
                   required
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="e.g. Mia Khalifa"
-                  className="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-white"
+                  placeholder="e.g. Mia Khalifa, Natasha, or Custom AI"
+                  className="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-white outline-none focus:border-[#f53b70]"
                 />
               </div>
 
@@ -1768,23 +1746,59 @@ export default function AdminPage() {
                   <input
                     type="number"
                     value={formData.age}
-                    onChange={(e) => setFormData({ ...formData, age: parseInt(e.target.value, 10) })}
-                    className="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-white"
+                    onChange={(e) => setFormData({ ...formData, age: parseInt(e.target.value, 10) || 21 })}
+                    className="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-white outline-none focus:border-[#f53b70]"
                   />
                 </div>
                 <div>
                   <label className="text-[#aeaeae] block mb-1 font-bold">Category</label>
-                  <select
+                  <input
+                    type="text"
                     value={formData.category}
                     onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-white"
-                  >
-                    <option value="Trending">Trending</option>
-                    <option value="Popular">Popular</option>
-                    <option value="Roleplay">Roleplay</option>
-                    <option value="New">New</option>
-                  </select>
+                    placeholder="e.g. Trending, Hot, Roleplay, Anime"
+                    className="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-white outline-none focus:border-[#f53b70]"
+                  />
                 </div>
+              </div>
+
+              {/* Access Tier Selector (Free vs Plus & VIP Exclusive) */}
+              <div className="p-3 rounded-2xl bg-black/40 border border-white/10 space-y-1.5">
+                <label className="text-white font-bold flex items-center space-x-1.5">
+                  <Crown className="size-4 text-amber-400" />
+                  <span>Access Tier (Lock Control)</span>
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, accessTier: "free" })}
+                    className={`py-2 px-3 rounded-xl font-bold text-xs flex items-center justify-center space-x-1.5 border transition-all ${
+                      formData.accessTier === "free"
+                        ? "bg-white/15 border-white/40 text-white shadow-sm"
+                        : "bg-black/30 border-white/5 text-[#888] hover:text-white"
+                    }`}
+                  >
+                    <span>Free for All Users</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, accessTier: "vip" })}
+                    className={`py-2 px-3 rounded-xl font-black text-xs flex items-center justify-center space-x-1.5 border transition-all ${
+                      formData.accessTier === "vip"
+                        ? "bg-gradient-to-r from-amber-500 to-yellow-400 text-black border-amber-400 shadow-md shadow-amber-500/20"
+                        : "bg-black/30 border-white/5 text-[#888] hover:text-white"
+                    }`}
+                  >
+                    <Crown className="size-3.5 fill-current" />
+                    <span>Plus & VIP Only 👑</span>
+                  </button>
+                </div>
+                <p className="text-[10px] text-[#aeaeae]">
+                  {formData.accessTier === "vip"
+                    ? "✓ Locked for Free tier users. Both Plus and VIP users have 100% full access."
+                    : "✓ Available for all users (Free, Plus, and VIP)."}
+                </p>
               </div>
 
               <div>
@@ -1794,42 +1808,461 @@ export default function AdminPage() {
                   value={formData.tagline}
                   onChange={(e) => setFormData({ ...formData, tagline: e.target.value })}
                   placeholder="e.g. Flirty & Sassy • Sweet Romance"
-                  className="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-white"
+                  className="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-white outline-none focus:border-[#f53b70]"
                 />
               </div>
 
               <div>
                 <label className="text-[#aeaeae] block mb-1 font-bold">Personality & Backstory</label>
                 <textarea
-                  rows={3}
+                  rows={2}
                   value={formData.desc}
                   onChange={(e) => setFormData({ ...formData, desc: e.target.value })}
                   placeholder="Describe her character, style, how she speaks..."
-                  className="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-white"
+                  className="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-white outline-none focus:border-[#f53b70]"
                 />
               </div>
 
+              {/* Intro Video Source Mode */}
+              <div className="space-y-2 p-3 rounded-2xl bg-black/40 border border-white/10">
+                <div className="flex items-center justify-between">
+                  <label className="text-white font-bold flex items-center space-x-1.5">
+                    <Video className="size-4 text-[#f53b70]" />
+                    <span>Introductory Video</span>
+                  </label>
+                  <span className="text-[10px] text-pink-400 font-medium">Starts chat with video</span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-1.5 p-1 rounded-xl bg-black/60 border border-white/10">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCompanionVideoMode("url");
+                      setCompanionVideoFile(null);
+                    }}
+                    className={`py-1.5 px-2 rounded-lg font-bold text-[11px] flex items-center justify-center space-x-1 transition-all ${
+                      companionVideoMode === "url"
+                        ? "bg-gradient-to-r from-[#f53b70] to-[#8b5cf6] text-white shadow-md"
+                        : "text-[#aeaeae] hover:text-white"
+                    }`}
+                  >
+                    <Globe className="size-3 shrink-0" />
+                    <span>External URL</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCompanionVideoMode("upload")}
+                    className={`py-1.5 px-2 rounded-lg font-bold text-[11px] flex items-center justify-center space-x-1 transition-all ${
+                      companionVideoMode === "upload"
+                        ? "bg-gradient-to-r from-[#f53b70] to-[#8b5cf6] text-white shadow-md"
+                        : "text-[#aeaeae] hover:text-white"
+                    }`}
+                  >
+                    <UploadCloud className="size-3 shrink-0" />
+                    <span>Upload File</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCompanionVideoMode("preset");
+                      setCompanionVideoFile(null);
+                      if (!formData.videoUrl || formData.videoUrl.startsWith("http")) {
+                        setFormData({ ...formData, videoUrl: "/videos/companions/aria-solis.mp4" });
+                      }
+                    }}
+                    className={`py-1.5 px-2 rounded-lg font-bold text-[11px] flex items-center justify-center space-x-1 transition-all ${
+                      companionVideoMode === "preset"
+                        ? "bg-gradient-to-r from-[#f53b70] to-[#8b5cf6] text-white shadow-md"
+                        : "text-[#aeaeae] hover:text-white"
+                    }`}
+                  >
+                    <Film className="size-3 shrink-0" />
+                    <span>Preset Video</span>
+                  </button>
+                </div>
+
+                {companionVideoMode === "url" && (
+                  <div className="space-y-2 pt-1">
+                    <input
+                      type="url"
+                      value={formData.videoUrl}
+                      onChange={(e) => setFormData({ ...formData, videoUrl: e.target.value })}
+                      placeholder="Paste video URL (e.g. Catbox, Cloudinary, direct .mp4)..."
+                      className="w-full px-3 py-2 rounded-xl bg-black/60 border border-white/10 text-white font-mono text-[11px] outline-none focus:border-[#f53b70]"
+                    />
+                    {formData.videoUrl && formData.videoUrl.startsWith("http") && (
+                      <div className="rounded-xl overflow-hidden bg-black border border-white/10 max-h-36 flex items-center justify-center">
+                        <video
+                          src={formData.videoUrl}
+                          autoPlay
+                          muted
+                          loop
+                          playsInline
+                          className="max-h-36 w-full object-contain"
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {companionVideoMode === "upload" && (
+                  <div className="space-y-2 pt-1">
+                    <input
+                      type="file"
+                      accept="video/mp4,video/webm,video/quicktime"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0] || null;
+                        setCompanionVideoFile(file);
+                        if (file) {
+                          setFormData({ ...formData, videoUrl: URL.createObjectURL(file) });
+                        }
+                      }}
+                      className="w-full text-xs text-[#aeaeae] file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-[#f53b70] file:text-white hover:file:brightness-110"
+                    />
+                  </div>
+                )}
+
+                {companionVideoMode === "preset" && (
+                  <div className="space-y-2 pt-1">
+                    <select
+                      value={formData.videoUrl}
+                      onChange={(e) => setFormData({ ...formData, videoUrl: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl bg-black/60 border border-white/10 text-white outline-none focus:border-[#f53b70]"
+                    >
+                      <option value="/videos/companions/aria-solis.mp4">Aria Solis (Warm Morning)</option>
+                      <option value="/videos/companions/raven-steele.mp4">Raven Steele (Night Vibe)</option>
+                      <option value="/videos/companions/genevieve-claire.mp4">Genevieve Claire (Library Romance)</option>
+                      <option value="/videos/companions/roxie-stone.mp4">Roxie Stone (Gym & Fit)</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              {/* Avatar Image */}
               <div>
-                <label className="text-[#aeaeae] block mb-1 font-bold">Select Local Avatar</label>
-                <select
-                  value={formData.image}
-                  onChange={(e) => setFormData({ ...formData, image: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-white"
-                >
-                  {availableImages.map((img) => (
-                    <option key={img} value={img}>
-                      {img}
-                    </option>
-                  ))}
-                </select>
+                <label className="text-[#aeaeae] block mb-1 font-bold">Avatar / Profile Photo</label>
+                <div className="flex items-center space-x-3">
+                  <div className="relative size-12 rounded-xl overflow-hidden bg-black shrink-0 border border-white/10">
+                    <Image
+                      src={getSafeImageUrl(formData.image || availableImages[0] || "/characters/zovik_01.jpg")}
+                      alt="Avatar Preview"
+                      fill
+                      className="object-cover"
+                      unoptimized
+                      referrerPolicy="no-referrer"
+                    />
+                  </div>
+                  <div className="flex-1 space-y-1">
+                    <select
+                      value={formData.image}
+                      onChange={(e) => setFormData({ ...formData, image: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-white outline-none focus:border-[#f53b70]"
+                    >
+                      {availableImages.map((img) => (
+                        <option key={img} value={img}>{img}</option>
+                      ))}
+                    </select>
+                    <input
+                      type="text"
+                      value={formData.image}
+                      onChange={(e) => setFormData({ ...formData, image: e.target.value })}
+                      placeholder="Or paste external image URL..."
+                      className="w-full px-3 py-1.5 rounded-xl bg-black/30 border border-white/5 text-[11px] text-[#aeaeae] outline-none focus:border-[#f53b70]"
+                    />
+                  </div>
+                </div>
               </div>
 
               <button
                 type="submit"
-                className="w-full py-2.5 rounded-xl bg-gradient-to-r from-[#f53b70] to-[#ff5b8c] text-white font-extrabold text-xs shadow-md mt-4"
+                disabled={isUploadingCompanionVideo}
+                className="w-full py-3 rounded-xl bg-gradient-to-r from-[#f53b70] via-[#ff5b8c] to-[#f53b70] text-white font-extrabold text-xs shadow-lg shadow-pink-600/30 hover:brightness-110 active:scale-98 transition-all disabled:opacity-50 mt-2"
               >
-                Publish Companion
+                {isUploadingCompanionVideo ? "Uploading Video..." : "Publish Companion to App 🚀"}
               </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ================= 2. EDIT COMPANION MODAL ================= */}
+      {isEditModalOpen && editingCompanion && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md">
+          <div className="w-full max-w-lg p-6 rounded-3xl bg-[#170e20] border border-blue-500/30 shadow-2xl text-white space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-white/10">
+              <div className="flex items-center space-x-3">
+                <div className="relative size-10 rounded-xl overflow-hidden bg-black shrink-0 border border-blue-400/40">
+                  <Image src={getSafeImageUrl(editFormData.image)} alt={editFormData.name} fill className="object-cover" unoptimized referrerPolicy="no-referrer" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black flex items-center space-x-1.5">
+                    <Edit3 className="size-4 text-blue-400" />
+                    <span>Edit Companion: {editFormData.name}</span>
+                  </h3>
+                  <span className="text-[11px] text-[#aeaeae]">Update profile, intro video, or VIP access tier</span>
+                </div>
+              </div>
+              <button onClick={() => setIsEditModalOpen(false)} className="text-white/60 hover:text-white">✕</button>
+            </div>
+
+            <form onSubmit={handleUpdateCompanion} className="space-y-3.5 text-xs">
+              <div>
+                <label className="text-[#aeaeae] block mb-1 font-bold">Companion Name *</label>
+                <input
+                  type="text"
+                  required
+                  value={editFormData.name}
+                  onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-white outline-none focus:border-blue-400"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[#aeaeae] block mb-1 font-bold">Age</label>
+                  <input
+                    type="number"
+                    value={editFormData.age}
+                    onChange={(e) => setEditFormData({ ...editFormData, age: parseInt(e.target.value, 10) || 21 })}
+                    className="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-white outline-none focus:border-blue-400"
+                  />
+                </div>
+                <div>
+                  <label className="text-[#aeaeae] block mb-1 font-bold">Category</label>
+                  <input
+                    type="text"
+                    value={editFormData.category}
+                    onChange={(e) => setEditFormData({ ...editFormData, category: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-white outline-none focus:border-blue-400"
+                  />
+                </div>
+              </div>
+
+              {/* Access Tier Selector (Free vs Plus & VIP Exclusive) */}
+              <div className="p-3 rounded-2xl bg-black/40 border border-white/10 space-y-1.5">
+                <label className="text-white font-bold flex items-center space-x-1.5">
+                  <Crown className="size-4 text-amber-400" />
+                  <span>Access Tier (Lock Control)</span>
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditFormData({ ...editFormData, accessTier: "free" })}
+                    className={`py-2 px-3 rounded-xl font-bold text-xs flex items-center justify-center space-x-1.5 border transition-all ${
+                      editFormData.accessTier === "free"
+                        ? "bg-white/15 border-white/40 text-white shadow-sm"
+                        : "bg-black/30 border-white/5 text-[#888] hover:text-white"
+                    }`}
+                  >
+                    <span>Free for All Users</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setEditFormData({ ...editFormData, accessTier: "vip" })}
+                    className={`py-2 px-3 rounded-xl font-black text-xs flex items-center justify-center space-x-1.5 border transition-all ${
+                      editFormData.accessTier === "vip"
+                        ? "bg-gradient-to-r from-amber-500 to-yellow-400 text-black border-amber-400 shadow-md shadow-amber-500/20"
+                        : "bg-black/30 border-white/5 text-[#888] hover:text-white"
+                    }`}
+                  >
+                    <Crown className="size-3.5 fill-current" />
+                    <span>Plus & VIP Only 👑</span>
+                  </button>
+                </div>
+                <p className="text-[10px] text-[#aeaeae]">
+                  {editFormData.accessTier === "vip"
+                    ? "✓ Locked for Free tier users. Both Plus and VIP users have 100% full access."
+                    : "✓ Available for all users (Free, Plus, and VIP)."}
+                </p>
+              </div>
+
+              <div>
+                <label className="text-[#aeaeae] block mb-1 font-bold">Tagline</label>
+                <input
+                  type="text"
+                  value={editFormData.tagline}
+                  onChange={(e) => setEditFormData({ ...editFormData, tagline: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-white outline-none focus:border-blue-400"
+                />
+              </div>
+
+              <div>
+                <label className="text-[#aeaeae] block mb-1 font-bold">Personality & Backstory</label>
+                <textarea
+                  rows={2}
+                  value={editFormData.desc}
+                  onChange={(e) => setEditFormData({ ...editFormData, desc: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-white outline-none focus:border-blue-400"
+                />
+              </div>
+
+              {/* Intro Video Source Mode for Editing */}
+              <div className="space-y-2 p-3 rounded-2xl bg-black/40 border border-white/10">
+                <div className="flex items-center justify-between">
+                  <label className="text-white font-bold flex items-center space-x-1.5">
+                    <Video className="size-4 text-[#f53b70]" />
+                    <span>Introductory Video</span>
+                  </label>
+                  <span className="text-[10px] text-emerald-400 font-medium">Plays when opening chat</span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-1.5 p-1 rounded-xl bg-black/60 border border-white/10">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditVideoMode("url");
+                      setEditVideoFile(null);
+                    }}
+                    className={`py-1.5 px-2 rounded-lg font-bold text-[11px] flex items-center justify-center space-x-1 transition-all ${
+                      editVideoMode === "url"
+                        ? "bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-md"
+                        : "text-[#aeaeae] hover:text-white"
+                    }`}
+                  >
+                    <Globe className="size-3 shrink-0" />
+                    <span>External URL</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditVideoMode("upload")}
+                    className={`py-1.5 px-2 rounded-lg font-bold text-[11px] flex items-center justify-center space-x-1 transition-all ${
+                      editVideoMode === "upload"
+                        ? "bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-md"
+                        : "text-[#aeaeae] hover:text-white"
+                    }`}
+                  >
+                    <UploadCloud className="size-3 shrink-0" />
+                    <span>Upload File</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditVideoMode("preset");
+                      setEditVideoFile(null);
+                      if (!editFormData.videoUrl || editFormData.videoUrl.startsWith("http")) {
+                        setEditFormData({ ...editFormData, videoUrl: "/videos/companions/aria-solis.mp4" });
+                      }
+                    }}
+                    className={`py-1.5 px-2 rounded-lg font-bold text-[11px] flex items-center justify-center space-x-1 transition-all ${
+                      editVideoMode === "preset"
+                        ? "bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-md"
+                        : "text-[#aeaeae] hover:text-white"
+                    }`}
+                  >
+                    <Film className="size-3 shrink-0" />
+                    <span>Preset Video</span>
+                  </button>
+                </div>
+
+                {editVideoMode === "url" && (
+                  <div className="space-y-2 pt-1">
+                    <input
+                      type="url"
+                      value={editFormData.videoUrl}
+                      onChange={(e) => setEditFormData({ ...editFormData, videoUrl: e.target.value })}
+                      placeholder="Paste video URL (e.g. Catbox, Cloudinary, direct .mp4)..."
+                      className="w-full px-3 py-2 rounded-xl bg-black/60 border border-white/10 text-white font-mono text-[11px] outline-none focus:border-blue-400"
+                    />
+                    {editFormData.videoUrl && editFormData.videoUrl.startsWith("http") && (
+                      <div className="rounded-xl overflow-hidden bg-black border border-white/10 max-h-36 flex items-center justify-center">
+                        <video
+                          src={editFormData.videoUrl}
+                          autoPlay
+                          muted
+                          loop
+                          playsInline
+                          className="max-h-36 w-full object-contain"
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {editVideoMode === "upload" && (
+                  <div className="space-y-2 pt-1">
+                    <input
+                      type="file"
+                      accept="video/mp4,video/webm,video/quicktime"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0] || null;
+                        setEditVideoFile(file);
+                        if (file) {
+                          setEditFormData({ ...editFormData, videoUrl: URL.createObjectURL(file) });
+                        }
+                      }}
+                      className="w-full text-xs text-[#aeaeae] file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-blue-600 file:text-white hover:file:brightness-110"
+                    />
+                  </div>
+                )}
+
+                {editVideoMode === "preset" && (
+                  <div className="space-y-2 pt-1">
+                    <select
+                      value={editFormData.videoUrl}
+                      onChange={(e) => setEditFormData({ ...editFormData, videoUrl: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl bg-black/60 border border-white/10 text-white outline-none focus:border-blue-400"
+                    >
+                      <option value="/videos/companions/aria-solis.mp4">Aria Solis (Warm Morning)</option>
+                      <option value="/videos/companions/raven-steele.mp4">Raven Steele (Night Vibe)</option>
+                      <option value="/videos/companions/genevieve-claire.mp4">Genevieve Claire (Library Romance)</option>
+                      <option value="/videos/companions/roxie-stone.mp4">Roxie Stone (Gym & Fit)</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              {/* Avatar Image */}
+              <div>
+                <label className="text-[#aeaeae] block mb-1 font-bold">Avatar / Profile Photo</label>
+                <div className="flex items-center space-x-3">
+                  <div className="relative size-12 rounded-xl overflow-hidden bg-black shrink-0 border border-white/10">
+                    <Image
+                      src={getSafeImageUrl(editFormData.image || "/characters/zovik_01.jpg")}
+                      alt="Avatar Preview"
+                      fill
+                      className="object-cover"
+                      unoptimized
+                      referrerPolicy="no-referrer"
+                    />
+                  </div>
+                  <div className="flex-1 space-y-1">
+                    <select
+                      value={editFormData.image}
+                      onChange={(e) => setEditFormData({ ...editFormData, image: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-white outline-none focus:border-blue-400"
+                    >
+                      {availableImages.map((img) => (
+                        <option key={img} value={img}>{img}</option>
+                      ))}
+                    </select>
+                    <input
+                      type="text"
+                      value={editFormData.image}
+                      onChange={(e) => setEditFormData({ ...editFormData, image: e.target.value })}
+                      placeholder="Or paste external image URL..."
+                      className="w-full px-3 py-1.5 rounded-xl bg-black/30 border border-white/5 text-[11px] text-[#aeaeae] outline-none focus:border-blue-400"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center space-x-2 pt-2">
+                <button
+                  type="submit"
+                  disabled={isSavingCompanionEdit || isUploadingEditVideo}
+                  className="flex-1 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-extrabold text-xs shadow-lg shadow-blue-600/30 hover:brightness-110 active:scale-98 transition-all disabled:opacity-50"
+                >
+                  {isSavingCompanionEdit || isUploadingEditVideo ? "Saving Changes..." : "Save Companion Changes ✨"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsEditModalOpen(false)}
+                  className="px-4 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-white font-bold text-xs transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
             </form>
           </div>
         </div>
@@ -1869,67 +2302,171 @@ export default function AdminPage() {
                 />
               </div>
 
-              {/* Direct Video / ZIP File Upload Zone */}
-              <div className="space-y-1.5">
-                <label className="text-[#aeaeae] block text-xs font-bold">
-                  Upload Video from PC / Phone (or .ZIP Archive)
-                </label>
-                <label className="border-2 border-dashed border-white/15 hover:border-[#f53b70] rounded-2xl p-4 flex flex-col items-center justify-center cursor-pointer transition-colors bg-black/40 hover:bg-black/60 group">
-                  <input
-                    type="file"
-                    accept="video/mp4,video/webm,video/quicktime,.zip"
-                    onChange={(e) => {
-                      if (e.target.files && e.target.files[0]) {
-                        setReelUploadFile(e.target.files[0]);
+              {/* Segmented Mode Selector */}
+              <div>
+                <label className="text-[#aeaeae] block mb-1.5 font-bold text-xs">Video Source Mode</label>
+                <div className="grid grid-cols-3 gap-1.5 p-1 rounded-xl bg-black/60 border border-white/10">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setReelVideoMode("url");
+                      setReelUploadFile(null);
+                    }}
+                    className={`py-1.5 px-2 rounded-lg font-bold text-[11px] flex items-center justify-center space-x-1 transition-all ${
+                      reelVideoMode === "url"
+                        ? "bg-gradient-to-r from-[#f53b70] to-[#8b5cf6] text-white shadow-md"
+                        : "text-[#aeaeae] hover:text-white"
+                    }`}
+                  >
+                    <Globe className="size-3.5 shrink-0" />
+                    <span>External URL</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setReelVideoMode("upload")}
+                    className={`py-1.5 px-2 rounded-lg font-bold text-[11px] flex items-center justify-center space-x-1 transition-all ${
+                      reelVideoMode === "upload"
+                        ? "bg-gradient-to-r from-[#f53b70] to-[#8b5cf6] text-white shadow-md"
+                        : "text-[#aeaeae] hover:text-white"
+                    }`}
+                  >
+                    <UploadCloud className="size-3.5 shrink-0" />
+                    <span>Upload File</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setReelVideoMode("preset");
+                      setReelUploadFile(null);
+                      if (!reelData.videoUrl || reelData.videoUrl.startsWith("http")) {
+                        setReelData({ ...reelData, videoUrl: "/videos/companions/aria-solis.mp4" });
                       }
                     }}
-                    className="hidden"
-                    disabled={isUploadingReel}
-                  />
-                  <div className="size-10 rounded-xl bg-white/5 group-hover:bg-[#f53b70]/20 flex items-center justify-center text-[#f53b70] mb-1.5 transition-colors">
-                    {reelUploadFile ? (
-                      reelUploadFile.name.endsWith(".zip") ? (
-                        <FileArchive className="size-5" />
-                      ) : (
-                        <Video className="size-5" />
-                      )
-                    ) : (
-                      <UploadCloud className="size-5" />
-                    )}
-                  </div>
-                  {reelUploadFile ? (
-                    <div className="flex items-center space-x-2 text-xs font-bold text-emerald-400">
-                      <span>✓ {reelUploadFile.name} ({(reelUploadFile.size / (1024 * 1024)).toFixed(2)} MB)</span>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          setReelUploadFile(null);
-                        }}
-                        className="text-red-400 hover:text-red-300 ml-1"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  ) : (
-                    <>
-                      <span className="text-xs font-bold text-white group-hover:text-[#f53b70] transition-colors">
-                        Click or Drag & Drop Video (.mp4/.webm) or .ZIP
-                      </span>
-                      <span className="text-[10px] text-[#aeaeae] mt-0.5">
-                        Direct 0-budget upload from your device to Zovik Shorts
-                      </span>
-                    </>
-                  )}
-                </label>
+                    className={`py-1.5 px-2 rounded-lg font-bold text-[11px] flex items-center justify-center space-x-1 transition-all ${
+                      reelVideoMode === "preset"
+                        ? "bg-gradient-to-r from-[#f53b70] to-[#8b5cf6] text-white shadow-md"
+                        : "text-[#aeaeae] hover:text-white"
+                    }`}
+                  >
+                    <Film className="size-3.5 shrink-0" />
+                    <span>Preset Video</span>
+                  </button>
+                </div>
               </div>
 
-              {/* Or Select Existing Video Path fallback */}
-              {!reelUploadFile && (
+              {/* MODE 1: EXTERNAL DIRECT URL (RECOMMENDED: 0 MB SERVER STORAGE) */}
+              {reelVideoMode === "url" && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[#aeaeae] font-bold text-xs flex items-center space-x-1">
+                      <span>Direct Video URL / CDN Link</span>
+                      <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 text-[9px] font-black uppercase">
+                        0 MB Server Storage
+                      </span>
+                    </label>
+                  </div>
+                  <input
+                    type="url"
+                    required={reelVideoMode === "url"}
+                    value={reelData.videoUrl}
+                    onChange={(e) => setReelData({ ...reelData, videoUrl: e.target.value.trim() })}
+                    placeholder="https://files.catbox.moe/xxxxxx.mp4 or Cloudinary link..."
+                    className="w-full px-3 py-2.5 rounded-xl bg-black/40 border border-white/10 text-white font-mono text-xs focus:border-[#f53b70] transition-colors"
+                  />
+                  <div className="p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/20 text-[11px] text-purple-300 leading-relaxed">
+                    💡 <strong>Pro Tip:</strong> Upload your video (5MB, 10MB, or any size) to{" "}
+                    <a href="https://catbox.moe" target="_blank" rel="noreferrer" className="underline text-pink-400 font-bold">
+                      Catbox.moe
+                    </a>
+                    , <strong>Cloudinary</strong>, or <strong>Streamable</strong> for free, copy the direct link, and paste here.
+                    Takes 0 MB server storage, loads instantly, and stays online permanently!
+                  </div>
+
+                  {/* Real-time live video preview player */}
+                  {reelData.videoUrl && (reelData.videoUrl.startsWith("http://") || reelData.videoUrl.startsWith("https://")) && (
+                    <div className="mt-2 space-y-1">
+                      <div className="flex items-center space-x-1 text-[11px] font-bold text-emerald-400">
+                        <CheckCircle2 className="size-3.5" />
+                        <span>Live Video Preview</span>
+                      </div>
+                      <div className="relative rounded-xl overflow-hidden bg-black border border-white/10 max-h-48 flex items-center justify-center">
+                        <video
+                          src={getSafeStreamUrl(reelData.videoUrl)}
+                          controls
+                          playsInline
+                          controlsList="nodownload nofullscreen noremoteplayback"
+                          disablePictureInPicture
+                          className="w-full max-h-48 object-contain"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* MODE 2: DIRECT FILE / ZIP UPLOAD */}
+              {reelVideoMode === "upload" && (
+                <div className="space-y-1.5">
+                  <label className="text-[#aeaeae] block text-xs font-bold">
+                    Upload Video from PC / Phone (or .ZIP Archive)
+                  </label>
+                  <label className="border-2 border-dashed border-white/15 hover:border-[#f53b70] rounded-2xl p-4 flex flex-col items-center justify-center cursor-pointer transition-colors bg-black/40 hover:bg-black/60 group">
+                    <input
+                      type="file"
+                      accept="video/mp4,video/webm,video/quicktime,.zip"
+                      onChange={(e) => {
+                        if (e.target.files && e.target.files[0]) {
+                          setReelUploadFile(e.target.files[0]);
+                        }
+                      }}
+                      className="hidden"
+                      disabled={isUploadingReel}
+                    />
+                    <div className="size-10 rounded-xl bg-white/5 group-hover:bg-[#f53b70]/20 flex items-center justify-center text-[#f53b70] mb-1.5 transition-colors">
+                      {reelUploadFile ? (
+                        reelUploadFile.name.endsWith(".zip") ? (
+                          <FileArchive className="size-5" />
+                        ) : (
+                          <Video className="size-5" />
+                        )
+                      ) : (
+                        <UploadCloud className="size-5" />
+                      )}
+                    </div>
+                    {reelUploadFile ? (
+                      <div className="flex items-center space-x-2 text-xs font-bold text-emerald-400">
+                        <span>✓ {reelUploadFile.name} ({(reelUploadFile.size / (1024 * 1024)).toFixed(2)} MB)</span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setReelUploadFile(null);
+                          }}
+                          className="text-red-400 hover:text-red-300 ml-1"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <span className="text-xs font-bold text-white group-hover:text-[#f53b70] transition-colors">
+                          Click or Drag & Drop Video (.mp4/.webm) or .ZIP
+                        </span>
+                        <span className="text-[10px] text-[#aeaeae] mt-0.5">
+                          Direct upload from your device to Zovik Shorts
+                        </span>
+                      </>
+                    )}
+                  </label>
+                </div>
+              )}
+
+              {/* MODE 3: PRESET COMPANION VIDEO */}
+              {reelVideoMode === "preset" && (
                 <div>
                   <label className="text-[#aeaeae] block mb-1 text-[11px] font-bold">
-                    Or Select Existing Preset Video
+                    Select Existing Preset Companion Video
                   </label>
                   <select
                     value={reelData.videoUrl}

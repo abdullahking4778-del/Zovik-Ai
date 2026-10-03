@@ -3,13 +3,14 @@ import { verifyAdminRequest } from "@/lib/adminAuth";
 import { db } from "@/lib/firebase";
 import { collection, getDocs, doc, updateDoc, deleteDoc } from "firebase/firestore";
 import { getAllStoredUsers, upsertStoredUser, saveAllStoredUsers } from "@/lib/userStore";
+import { UserAccount } from "@/types";
 
 export async function GET(req: NextRequest) {
   if (!verifyAdminRequest(req)) {
     return NextResponse.json({ error: "Unauthorized: Admin session invalid or missing." }, { status: 401 });
   }
 
-  const usersMap = new Map<string, any>();
+  const usersMap = new Map<string, UserAccount>();
 
   // 1. Load from authoritative local store
   try {

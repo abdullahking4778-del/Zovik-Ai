@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { Character, Message } from "@/types";
 import { getSafeStreamUrl, fetchVideoBlobUrl } from "@/lib/videoHelper";
+import { getSafeImageUrl } from "@/lib/imageHelper";
 import { auth } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
 
@@ -92,6 +93,8 @@ function ChatVideoPlayer({
         muted
         loop
         playsInline
+        controlsList="nodownload nofullscreen noremoteplayback"
+        disablePictureInPicture
         onPlay={() => setIsPlaying(true)}
         onPause={() => setIsPlaying(false)}
         className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-300"
@@ -176,6 +179,9 @@ export default function ChatModal({
   // User VIP/Plus Status and Daily Message Limit (Free: 20, Plus: 200, VIP: 500 / 24h)
   const [isVipUser, setIsVipUser] = useState(false);
   const [userTier, setUserTier] = useState<"free" | "plus" | "vip">("free");
+
+  const isCompanionVip = character?.accessTier === "vip" || character?.accessTier === "plus" || character?.isVipOnly === true;
+  const isVipBlocked = isCompanionVip && !isVipUser;
   const [messagesRemaining, setMessagesRemaining] = useState(20);
   const [timeUntilReset, setTimeUntilReset] = useState("");
 
@@ -420,6 +426,11 @@ export default function ChatModal({
     const text = textToSend || inputText;
     if (!text.trim() || isTyping || isStreamingAiText) return;
 
+    if (isVipBlocked) {
+      openPremiumModal();
+      return;
+    }
+
     // Check message quota
     if (messagesRemaining <= 0) {
       if (!isVipUser) {
@@ -612,8 +623,8 @@ export default function ChatModal({
     setHighlightPhotoBtn(false);
     if (isTyping) return;
 
-    // Free users cannot view private selfies - guide them to upgrade
-    if (userTier === "free" && !isVipUser) {
+    // Free users or users blocked by VIP companion cannot request private selfies - guide them to upgrade
+    if (isVipBlocked || (userTier === "free" && !isVipUser)) {
       openPremiumModal();
       return;
     }
@@ -761,11 +772,12 @@ export default function ChatModal({
 
             <div className="relative size-11 rounded-full overflow-hidden border border-[#f53b70]/40 shrink-0">
               <Image
-                src={character.image}
+                src={getSafeImageUrl(character.image)}
                 alt={character.name}
                 fill
                 className="object-cover object-top"
                 unoptimized
+                referrerPolicy="no-referrer"
               />
               <span className="absolute bottom-0 right-0 size-2.5 rounded-full bg-emerald-400 border-2 border-[#130d17]" />
             </div>
@@ -915,13 +927,14 @@ export default function ChatModal({
                       }`}
                     >
                       <Image
-                        src={msg.imageUrl || character.image}
+                        src={getSafeImageUrl(msg.imageUrl || character.image)}
                         alt="Private Photo"
                         fill
                         className={`object-cover object-top transition-all duration-500 ${
                           isVipUser ? "blur-0 group-hover:scale-105" : "blur-2xl scale-110"
                         }`}
                         unoptimized
+                        referrerPolicy="no-referrer"
                       />
 
                       {/* VIP Unblurred Tag */}
@@ -971,7 +984,7 @@ export default function ChatModal({
               >
                 {isAI && (
                   <div className="relative size-7 rounded-full overflow-hidden shrink-0 mb-1">
-                    <Image src={character.image} alt="" fill className="object-cover object-top" unoptimized />
+                    <Image src={getSafeImageUrl(character.image)} alt="" fill className="object-cover object-top" unoptimized referrerPolicy="no-referrer" />
                   </div>
                 )}
 
@@ -990,14 +1003,31 @@ export default function ChatModal({
                   </p>
                   <div className="flex items-center justify-between space-x-2 mt-1">
                     {isAI ? (
-                      <div className="flex items-center space-x-2.5">
+                      <div className="flex items-center space-x-2">
                         <button
                           onClick={() => speakText(msg.text || "", idx)}
-                          title="Listen to this message in voice"
-                          className="text-[10px] text-[#aeaeae] hover:text-[#f53b70] flex items-center space-x-1 transition-colors"
+                          title="Listen to companion voice note"
+                          className={`px-2.5 py-1 rounded-full text-[10px] font-bold flex items-center space-x-1.5 transition-all active:scale-95 ${
+                            playingVoiceIdx === idx
+                              ? "bg-gradient-to-r from-[#f53b70] to-[#ff457c] text-white shadow-md shadow-pink-600/40 ring-2 ring-pink-500/50"
+                              : "bg-white/5 hover:bg-white/10 text-[#cbb6bf] hover:text-white border border-white/10"
+                          }`}
                         >
-                          <Volume2 className="size-3" />
-                          <span>{playingVoiceIdx === idx ? "Speaking..." : "Voice"}</span>
+                          {playingVoiceIdx === idx ? (
+                            <>
+                              <span className="flex items-center space-x-0.5">
+                                <span className="w-0.5 h-2.5 bg-white animate-pulse" />
+                                <span className="w-0.5 h-3.5 bg-white animate-pulse [animation-delay:0.15s]" />
+                                <span className="w-0.5 h-2 bg-white animate-pulse [animation-delay:0.3s]" />
+                              </span>
+                              <span>Playing Voice...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Volume2 className="size-3 text-[#f53b70]" />
+                              <span>Voice Note</span>
+                            </>
+                          )}
                         </button>
                         <button
                           onClick={() => handleCopyMessage(msg.text || "", idx)}
@@ -1059,8 +1089,21 @@ export default function ChatModal({
           ))}
         </div>
 
-        {/* Daily Quota Exhausted Banner */}
-        {!isVipUser && messagesRemaining <= 0 && (
+        {/* VIP Companion Locked Banner or Daily Quota Exhausted Banner */}
+        {isVipBlocked ? (
+          <div className="p-3 bg-gradient-to-r from-amber-950/90 via-[#2a1a08] to-amber-950/90 border-t border-amber-500/40 flex items-center justify-between">
+            <div className="flex items-center space-x-2 text-xs text-amber-200">
+              <Crown className="size-4 text-amber-400 shrink-0" />
+              <span>👑 {character.name} sirf Plus aur VIP members ke liye exclusive hai! Upgrade karein.</span>
+            </div>
+            <button
+              onClick={openPremiumModal}
+              className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 text-black text-xs font-black hover:brightness-110 shadow-md shadow-yellow-500/20 shrink-0 uppercase tracking-wider"
+            >
+              Unlock Now
+            </button>
+          </div>
+        ) : !isVipUser && messagesRemaining <= 0 ? (
           <div className="p-3 bg-gradient-to-r from-red-950/80 via-[#260a18] to-red-950/80 border-t border-red-500/30 flex items-center justify-between">
             <div className="flex items-center space-x-2 text-xs text-red-200">
               <AlertCircle className="size-4 text-red-400 shrink-0" />
@@ -1073,7 +1116,7 @@ export default function ChatModal({
               Upgrade Now
             </button>
           </div>
-        )}
+        ) : null}
 
         {/* Input Bar */}
         <div className="p-3 md:p-4 bg-[#130d17] border-t border-white/10 shrink-0">
@@ -1092,11 +1135,12 @@ export default function ChatModal({
                   setHighlightPhotoBtn(false);
                   handleRequestPhoto();
                 }}
+                disabled={isVipBlocked}
                 title="Request Private Selfie (Press for photo)"
                 className={`size-10 rounded-xl flex items-center justify-center transition-all ${
                   highlightPhotoBtn
                     ? "bg-[#f53b70] text-white ring-4 ring-[#f53b70]/50 scale-105 shadow-lg shadow-pink-600/50 animate-pulse"
-                    : "bg-white/5 hover:bg-[#f53b70]/20 border border-white/10 text-[#aeaeae] hover:text-[#f53b70]"
+                    : "bg-white/5 hover:bg-[#f53b70]/20 border border-white/10 text-[#aeaeae] hover:text-[#f53b70] disabled:opacity-40 disabled:cursor-not-allowed"
                 }`}
               >
                 <ImageIcon className="size-5" />
@@ -1113,9 +1157,11 @@ export default function ChatModal({
               type="text"
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
-              disabled={!isVipUser && messagesRemaining <= 0}
+              disabled={isVipBlocked || (!isVipUser && messagesRemaining <= 0)}
               placeholder={
-                !isVipUser && messagesRemaining <= 0
+                isVipBlocked
+                  ? `👑 Upgrade to Plus or VIP to chat with ${character.name}...`
+                  : !isVipUser && messagesRemaining <= 0
                   ? "Daily limit reached. Get VIP for unlimited chat..."
                   : `Message ${character.name}...`
               }
@@ -1125,7 +1171,7 @@ export default function ChatModal({
             {/* Send Button */}
             <button
               type="submit"
-              disabled={!inputText.trim() || isTyping || (!isVipUser && messagesRemaining <= 0)}
+              disabled={!inputText.trim() || isTyping || isVipBlocked || (!isVipUser && messagesRemaining <= 0)}
               className="size-10 rounded-xl bg-gradient-to-r from-[#f53b70] to-[#ff457c] text-white flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition-all shrink-0 shadow-md shadow-pink-600/30"
             >
               {isTyping ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
@@ -1142,11 +1188,12 @@ export default function ChatModal({
         >
           <div className="relative max-w-2xl max-h-[90vh] w-full h-[85vh] rounded-3xl overflow-hidden border border-white/20 shadow-2xl">
             <Image
-              src={previewPhotoUrl}
+              src={getSafeImageUrl(previewPhotoUrl)}
               alt="High Res Photo"
               fill
               className="object-contain"
               unoptimized
+              referrerPolicy="no-referrer"
             />
             <button
               onClick={() => setPreviewPhotoUrl(null)}
@@ -1201,6 +1248,8 @@ function CinemaVideoModal({
           src={videoSrc}
           autoPlay
           controls
+          controlsList="nodownload nofullscreen noremoteplayback"
+          disablePictureInPicture
           playsInline
           className="w-full h-full object-contain"
         />
