@@ -21,6 +21,7 @@ export const viewport: Viewport = {
 };
 
 import PwaRegister from "@/components/PwaRegister";
+import { AnnouncementBar } from "@/components/AnnouncementBar";
 
 export default function RootLayout({
   children,
@@ -32,6 +33,7 @@ export default function RootLayout({
       <body className="min-h-screen bg-[#0d0a0f] text-white antialiased selection:bg-[#f53b70] selection:text-white">
         <PwaRegister />
         <AuthProvider>
+          <AnnouncementBar />
           {children}
         </AuthProvider>
       </body>

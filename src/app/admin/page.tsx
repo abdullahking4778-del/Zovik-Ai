@@ -916,7 +916,7 @@ export default function AdminPage() {
           </form>
 
           <div className="mt-6 pt-4 border-t border-white/5 text-[11px] text-[#aeaeae]">
-            <span>Protected by SHA-512 Master Cryptographic Layer</span>
+            <span>Protected by HMAC-SHA256 Master Cryptographic Layer</span>
           </div>
         </div>
       </div>

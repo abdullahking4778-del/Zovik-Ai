@@ -27,6 +27,8 @@ export const AdminPlansTab: React.FC<AdminPlansTabProps> = ({
   const [formOriginalPricePKR, setFormOriginalPricePKR] = useState(3000);
   const [formPriceUSD, setFormPriceUSD] = useState(5);
   const [formDurationDays, setFormDurationDays] = useState(30);
+  const [formDailyMessages, setFormDailyMessages] = useState<number>(500);
+  const [formDailyPhotos, setFormDailyPhotos] = useState<number>(10);
   const [formFeatures, setFormFeatures] = useState("");
   const [formIsPopular, setFormIsPopular] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -41,6 +43,8 @@ export const AdminPlansTab: React.FC<AdminPlansTabProps> = ({
     setFormOriginalPricePKR(3000);
     setFormPriceUSD(6);
     setFormDurationDays(30);
+    setFormDailyMessages(500);
+    setFormDailyPhotos(10);
     setFormFeatures("Unlimited Messages / Day\n20 HD Photos / Day\n18+ Uncensored Chat & Audio\nCloud Storage Retention");
     setFormIsPopular(false);
     setIsModalOpen(true);
@@ -56,6 +60,8 @@ export const AdminPlansTab: React.FC<AdminPlansTabProps> = ({
     setFormOriginalPricePKR(plan.originalPricePKR || plan.pricePKR * 2);
     setFormPriceUSD(plan.priceUSD || 5);
     setFormDurationDays(plan.durationDays || 30);
+    setFormDailyMessages(plan.dailyMessages ?? (plan.id === "plus" ? 200 : 500));
+    setFormDailyPhotos(plan.dailyPhotos ?? (plan.id === "plus" ? 10 : 30));
     setFormFeatures(Array.isArray(plan.features) ? plan.features.join("\n") : "");
     setFormIsPopular(Boolean(plan.isPopular));
     setIsModalOpen(true);
@@ -86,6 +92,8 @@ export const AdminPlansTab: React.FC<AdminPlansTabProps> = ({
         priceUSD: Number(formPriceUSD),
         originalPriceUSD: Number(formPriceUSD) * 2,
         durationDays: Number(formDurationDays),
+        dailyMessages: Number(formDailyMessages) || 500,
+        dailyPhotos: Number(formDailyPhotos) || 10,
         features: featuresList,
         isPopular: formIsPopular,
         isActive: true,
@@ -313,16 +321,40 @@ export const AdminPlansTab: React.FC<AdminPlansTabProps> = ({
                 </div>
               </div>
 
-              <div>
-                <label className="text-[#aeaeae] block mb-1 font-bold">Validity (Days)</label>
-                <input
-                  type="number"
-                  min={1}
-                  value={formDurationDays}
-                  onChange={(e) => setFormDurationDays(Number(e.target.value))}
-                  placeholder="30"
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-black/60 border border-white/10 text-white outline-none focus:border-[#f53b70]"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="text-[#aeaeae] block mb-1 font-bold">Validity (Days)</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={formDurationDays}
+                    onChange={(e) => setFormDurationDays(Number(e.target.value))}
+                    placeholder="30"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-black/60 border border-white/10 text-white outline-none focus:border-[#f53b70]"
+                  />
+                </div>
+                <div>
+                  <label className="text-emerald-400 block mb-1 font-bold">💬 Messages / Day</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={formDailyMessages}
+                    onChange={(e) => setFormDailyMessages(Number(e.target.value))}
+                    placeholder="500"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-black/60 border border-emerald-500/30 text-white outline-none focus:border-emerald-400"
+                  />
+                </div>
+                <div>
+                  <label className="text-pink-400 block mb-1 font-bold">📷 Photos / Day</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={formDailyPhotos}
+                    onChange={(e) => setFormDailyPhotos(Number(e.target.value))}
+                    placeholder="10"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-black/60 border border-pink-500/30 text-white outline-none focus:border-pink-400"
+                  />
+                </div>
               </div>
 
               <div>

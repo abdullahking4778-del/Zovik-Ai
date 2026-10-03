@@ -276,30 +276,38 @@ export async function getPersistentCustomCharacters(): Promise<Character[]> {
         .eq("is_custom", true);
 
       if (!error && Array.isArray(data) && data.length > 0) {
-        return data.map((d) => ({
-          id: d.id,
-          slug: d.id,
-          name: d.name,
-          age: 21,
-          gender: (d.gender === "male" ? "male" : "female") as "female" | "male" | "anime",
-          style: "realistic" as const,
-          tagline: d.tagline || "",
-          desc: d.tagline || "",
-          image: d.avatar || d.image_url || "/characters/zovik_01.jpg",
-          badge: d.is_vip || d.tier === "vip" ? "VIP" : undefined,
-          category: d.category || "General",
-          series: true,
-          verified: true,
-          online: true,
-          tags: ["Custom", "AI Companion"],
-          voice: "Sweet & Warm",
-          greeting: `Hi sweetheart, I'm ${d.name}! So happy to talk to you 💕`,
-          videoUrl: d.intro_video || undefined,
-          gallery: Array.isArray(d.gallery) ? d.gallery : [],
-          messages: [],
-          accessTier: (d.tier === "vip" || d.tier === "plus" ? d.tier : d.is_vip ? "vip" : "free") as "free" | "plus" | "vip",
-          isVipOnly: Boolean(d.is_vip || d.tier === "vip"),
-        }));
+        // Read local storage to enrich any custom fields (voice, age, tags)
+        const filePath = getStoragePath("custom_characters.json");
+        const localList = safeReadJsonFile<Character[]>(filePath, []);
+        const localMap = new Map(localList.map((c) => [c.id, c]));
+
+        return data.map((d) => {
+          const localMatch = localMap.get(d.id);
+          return {
+            id: d.id,
+            slug: localMatch?.slug || d.id,
+            name: d.name,
+            age: localMatch?.age || 21,
+            gender: (d.gender === "male" ? "male" : "female") as "female" | "male" | "anime",
+            style: localMatch?.style || ("realistic" as const),
+            tagline: d.tagline || localMatch?.tagline || "",
+            desc: localMatch?.desc || d.tagline || "",
+            image: d.avatar || d.image_url || localMatch?.image || "/characters/zovik_01.jpg",
+            badge: d.is_vip || d.tier === "vip" ? "VIP" : localMatch?.badge,
+            category: d.category || localMatch?.category || "General",
+            series: true,
+            verified: true,
+            online: true,
+            tags: localMatch?.tags || ["Custom", "AI Companion"],
+            voice: localMatch?.voice || "Sweet & Warm",
+            greeting: localMatch?.greeting || `Hi sweetheart, I'm ${d.name}! So happy to talk to you 💕`,
+            videoUrl: d.intro_video || localMatch?.videoUrl || undefined,
+            gallery: Array.isArray(d.gallery) && d.gallery.length > 0 ? d.gallery : localMatch?.gallery || [],
+            messages: localMatch?.messages || [],
+            accessTier: (d.tier === "vip" || d.tier === "plus" ? d.tier : d.is_vip ? "vip" : "free") as "free" | "plus" | "vip",
+            isVipOnly: Boolean(d.is_vip || d.tier === "vip"),
+          };
+        });
       }
     } catch (err: unknown) {
       console.warn("[ServerDb] Supabase custom companions read note:", err);
@@ -503,20 +511,24 @@ export async function getPersistentPayments(): Promise<PaymentRequest[]> {
         .order("created_at", { ascending: false });
 
       if (!error && Array.isArray(data) && data.length > 0) {
-        return data.map((d) => ({
-          id: d.id,
-          userEmail: d.user_email,
-          plan: (d.plan_name === "plus" ? "plus" : "vip") as "plus" | "vip",
-          planName: d.plan_name || "VIP Membership",
-          currency: "PKR",
-          amount: typeof d.amount === "number" ? d.amount : parseFloat(d.amount) || 0,
-          method: d.method || "Manual",
-          trxId: d.trx_id || "",
-          senderName: d.user_email.split("@")[0],
-          screenshot: d.screenshot || null,
-          status: (d.status || "pending") as "pending" | "approved" | "rejected",
-          createdAt: d.created_at,
-        }));
+        return data.map((d) => {
+          const planStr = ((d.plan || d.plan_name || "") as string).toLowerCase();
+          const isPlus = planStr === "plus" || planStr.includes("plus");
+          return {
+            id: d.id,
+            userEmail: d.user_email,
+            plan: (isPlus ? "plus" : "vip") as "plus" | "vip",
+            planName: d.plan_name || (isPlus ? "Plus Plan" : "VIP Membership"),
+            currency: "PKR",
+            amount: typeof d.amount === "number" ? d.amount : parseFloat(d.amount) || 0,
+            method: d.method || "Manual",
+            trxId: d.trx_id || "",
+            senderName: d.user_email.split("@")[0],
+            screenshot: d.screenshot || null,
+            status: (d.status || "pending") as "pending" | "approved" | "rejected",
+            createdAt: d.created_at,
+          };
+        });
       }
     } catch (err: unknown) {
       console.warn("[ServerDb] Supabase payment_requests read note:", err);

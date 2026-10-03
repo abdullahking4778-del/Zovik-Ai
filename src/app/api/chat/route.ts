@@ -534,7 +534,7 @@ CRITICAL RULES (ABSOLUTE PRIORITY):
 
     for (const model of preferredModels) {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 25000); // 25s comfortable timeout for large models
+      const timeoutId = setTimeout(() => controller.abort(), 7500); // 7.5s safe timeout within serverless execution window
 
       try {
         const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {

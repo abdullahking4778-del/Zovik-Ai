@@ -9,6 +9,8 @@
     "priceUSD": 5,
     "originalPriceUSD": 16.99,
     "durationDays": 30,
+    "dailyMessages": 200,
+    "dailyPhotos": 10,
     "features": [
       "200 Messages / day (24h Reset)",
       "10 HD Photos / day",
@@ -30,8 +32,10 @@
     "priceUSD": 12,
     "originalPriceUSD": 39.99,
     "durationDays": 30,
+    "dailyMessages": 500,
+    "dailyPhotos": 30,
     "features": [
-      "Unlimited Messages / Day (No Limits)",
+      "500 Messages / Day (No Limits)",
       "30 HD Photos / day (Exclusive Poses)",
       "VIP Uncensored Secret Content",
       "Ultra-Fast AI Model Priority",
@@ -51,9 +55,11 @@
     "priceUSD": 18,
     "originalPriceUSD": 59.99,
     "durationDays": 60,
+    "dailyMessages": 1000,
+    "dailyPhotos": 50,
     "features": [
       "2 Months Full VIP Access (Save 35%)",
-      "Unlimited Messages & Voice Calls",
+      "1000 Messages & Voice Calls / Day",
       "50 HD Photos / Day (Instant Generation)",
       "Custom Companion Creation Unlocked",
       "Direct 1-on-1 VIP Support Priority",

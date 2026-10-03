@@ -121,6 +121,8 @@ export interface PricingPlan {
   priceUSD: number;
   originalPriceUSD: number;
   durationDays: number;
+  dailyMessages?: number;
+  dailyPhotos?: number;
   features: string[];
   isPopular?: boolean;
   isActive: boolean;
@@ -137,5 +139,15 @@ export interface PaymentAccountConfig {
   instructions: string;
   isActive: boolean;
 }
+
+export interface AnnouncementConfig {
+  enabled: boolean;
+  text: string;
+  badge?: string;
+  actionType: "open_premium" | "custom_link";
+  linkUrl?: string;
+  updatedAt?: string;
+}
+
 
 

@@ -179,7 +179,9 @@ export default function Home() {
         const loginParam = params.get("login");
         const createParam = params.get("create");
         const shortsParam = params.get("shorts");
+        const premiumParam = params.get("openPremium") || params.get("premium");
 
+        if (premiumParam === "true") setIsPremiumOpen(true);
         if (loginParam === "true") {
           if (!currentUser && !isLocallyLoggedIn) {
             setIsLoginOpen(true);
@@ -205,6 +207,12 @@ export default function Home() {
         }
       } catch {}
     }
+
+    const handleOpenPremiumEvent = () => setIsPremiumOpen(true);
+    window.addEventListener("open-premium-modal", handleOpenPremiumEvent);
+    return () => {
+      window.removeEventListener("open-premium-modal", handleOpenPremiumEvent);
+    };
   }, []);
 
   // Sync Generated Photos for Private VIP Gallery

@@ -40,12 +40,10 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  if (!verifyAdminRequest(req)) {
-    return NextResponse.json({ success: false, error: "Unauthorized: Admin session required" }, { status: 401 });
-  }
+  const isAdmin = verifyAdminRequest(req);
 
   try {
-    let newCharacter: Partial<Character>;
+    let newCharacter: Partial<Character> & { isCustom?: boolean };
     try {
       newCharacter = await req.json();
     } catch {
@@ -56,7 +54,22 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Invalid character data: name is required" }, { status: 400 });
     }
 
-    const charId = newCharacter.id || generateUniqueId("char");
+    // Non-admins can only create custom companions
+    if (!isAdmin) {
+      const isCustomRequest = Boolean(
+        newCharacter.isCustom ||
+        newCharacter.category === "Custom" ||
+        newCharacter.id?.startsWith("char_custom")
+      );
+      if (!isCustomRequest) {
+        return NextResponse.json(
+          { success: false, error: "Unauthorized: Admin session required to publish system companions" },
+          { status: 401 }
+        );
+      }
+    }
+
+    const charId = newCharacter.id || (isAdmin ? generateUniqueId("char") : generateUniqueId("char_custom"));
     const isVipTier = newCharacter.accessTier === "vip" || newCharacter.accessTier === "plus" || newCharacter.isVipOnly === true;
 
     const formattedChar: Character = {
@@ -136,9 +149,7 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  if (!verifyAdminRequest(req)) {
-    return NextResponse.json({ success: false, error: "Unauthorized: Admin session required" }, { status: 401 });
-  }
+  const isAdmin = verifyAdminRequest(req);
 
   try {
     const { searchParams } = new URL(req.url);
@@ -147,9 +158,17 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Missing character ID" }, { status: 400 });
     }
 
+    if (!isAdmin) {
+      const all = await getAllPersistentCharacters();
+      const target = all.find((c) => c.id.toLowerCase() === id.toLowerCase() || c.slug.toLowerCase() === id.toLowerCase());
+      if (target && !target.id.startsWith("char_custom") && target.category !== "Custom") {
+        return NextResponse.json({ success: false, error: "Unauthorized: You cannot delete official companions" }, { status: 403 });
+      }
+    }
+
     await deletePersistentCharacter(id);
 
-    return NextResponse.json({ success: true, message: "Companion permanently deleted" });
+    return NextResponse.json({ success: true, message: "Companion deleted successfully" });
   } catch (err: unknown) {
     console.error("[Characters DELETE Error]:", err);
     return NextResponse.json({ success: false, error: "Internal server error deleting companion" }, { status: 500 });

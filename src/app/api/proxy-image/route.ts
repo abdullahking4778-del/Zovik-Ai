@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isSafeExternalUrl } from "@/lib/securityUrl";
 
 // Fallback 1x1 transparent or avatar image if remote host completely fails
 const FALLBACK_AVATAR = "/characters/zovik_01.jpg";
@@ -6,8 +7,8 @@ const FALLBACK_AVATAR = "/characters/zovik_01.jpg";
 export async function GET(request: NextRequest) {
   const targetUrl = request.nextUrl.searchParams.get("url");
 
-  if (!targetUrl || (!targetUrl.startsWith("http://") && !targetUrl.startsWith("https://"))) {
-    return new NextResponse("Invalid URL", { status: 400 });
+  if (!targetUrl || !isSafeExternalUrl(targetUrl)) {
+    return new NextResponse("Invalid or blocked URL", { status: 400 });
   }
 
   try {

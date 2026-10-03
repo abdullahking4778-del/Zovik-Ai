@@ -111,6 +111,37 @@ export default function PremiumModal({ isOpen, onClose }: PremiumModalProps) {
 
   const [currentEmail, setCurrentEmail] = useState("");
 
+  const [paymentAccounts, setPaymentAccounts] = useState<Record<string, { name: string; label: string; number: string; title: string; instructions: string }>>({
+    easypaisa: {
+      name: "EasyPaisa",
+      label: "EasyPaisa Mobile Account",
+      number: "03427646038",
+      title: "AMINA AKRAM",
+      instructions: "Transfer the amount via EasyPaisa App. Enter your 11-digit Transaction ID (Trx ID) and attach payment receipt below.",
+    },
+    jazzcash: {
+      name: "JazzCash",
+      label: "JazzCash Mobile Account",
+      number: "03154761082",
+      title: "AMINA AKRAM",
+      instructions: "Transfer the amount via JazzCash App or *786#. Enter your Transaction ID (TID) and attach payment receipt below.",
+    },
+    nayapay: {
+      name: "NayaPay",
+      label: "NayaPay Wallet / ID",
+      number: "0317 6127513",
+      title: "ABDULLAH MAHMOOD",
+      instructions: "Transfer to NayaPay Mobile Number / NayaPay ID. Enter your Transaction Reference ID below.",
+    },
+    binance: {
+      name: "Binance Pay",
+      label: "Binance Pay ID (USDT)",
+      number: "1204011189",
+      title: "Binance Pay ID",
+      instructions: "Open Binance App → Go to Pay → Send via Pay ID (1204011189) → Transfer $5 (Plus) or $12 (VIP) USDT. Paste your Order / Pay ID below.",
+    },
+  });
+
   useEffect(() => {
     try {
       const savedUserStr = localStorage.getItem("zovik_user");
@@ -142,6 +173,16 @@ export default function PremiumModal({ isOpen, onClose }: PremiumModalProps) {
         console.warn("Could not load dynamic pricing plans, using defaults:", err);
       });
 
+    // Fetch dynamic payment accounts from API
+    fetch("/api/payment-accounts")
+      .then((res) => res.json())
+      .then((data) => {
+        if (isMounted && data.success && data.accounts) {
+          setPaymentAccounts((prev) => ({ ...prev, ...data.accounts }));
+        }
+      })
+      .catch(() => {});
+
     return () => {
       isMounted = false;
     };
@@ -152,30 +193,30 @@ export default function PremiumModal({ isOpen, onClose }: PremiumModalProps) {
 
   if (!isOpen) return null;
 
-  // Payment credentials provided by admin
+  // Payment credentials provided dynamically by admin
   const paymentDetails = {
-    easypaisa: {
+    easypaisa: paymentAccounts.easypaisa || {
       name: "EasyPaisa",
       label: "EasyPaisa Mobile Account",
       number: "03427646038",
       title: "AMINA AKRAM",
       instructions: "Transfer the amount via EasyPaisa App. Enter your 11-digit Transaction ID (Trx ID) and attach payment receipt below.",
     },
-    jazzcash: {
+    jazzcash: paymentAccounts.jazzcash || {
       name: "JazzCash",
       label: "JazzCash Mobile Account",
       number: "03154761082",
       title: "AMINA AKRAM",
       instructions: "Transfer the amount via JazzCash App or *786#. Enter your Transaction ID (TID) and attach payment receipt below.",
     },
-    nayapay: {
+    nayapay: paymentAccounts.nayapay || {
       name: "NayaPay",
       label: "NayaPay Wallet / ID",
       number: "0317 6127513",
       title: "ABDULLAH MAHMOOD",
       instructions: "Transfer to NayaPay Mobile Number / NayaPay ID. Enter your Transaction Reference ID below.",
     },
-    binance: {
+    binance: paymentAccounts.binance || {
       name: "Binance Pay",
       label: "Binance Pay ID (USDT)",
       number: "1204011189",

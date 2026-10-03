@@ -22,37 +22,41 @@ export async function resolveServerUser(req: NextRequest, clientToken?: string):
     token = req.cookies.get("zovik_session")?.value;
   }
 
-  const clientEmail = req.headers.get("x-user-email") || "";
-  const clientUid = req.headers.get("x-user-id") || "";
-
-  let resolvedUid = clientUid;
-  let resolvedEmail = clientEmail;
+  let resolvedUid: string | undefined = undefined;
+  let resolvedEmail: string | undefined = undefined;
+  let isAuthenticated = false;
 
   // 2. Try Firebase ID Token verification
-  if (token && typeof token === "string") {
+  if (token && typeof token === "string" && token.trim().length > 10) {
     try {
       const decoded = await adminAuth.verifyIdToken(token);
       resolvedUid = decoded.uid;
-      resolvedEmail = decoded.email || resolvedEmail;
+      resolvedEmail = decoded.email;
+      isAuthenticated = true;
     } catch {
-      // In dev/local without service account, gracefully extract unverified payload
-      try {
-        const parts = token.split(".");
-        if (parts.length === 3) {
-          const payload = JSON.parse(Buffer.from(parts[1], "base64").toString("utf-8"));
-          if (payload && payload.user_id) {
-            resolvedUid = payload.user_id;
-            resolvedEmail = payload.email || resolvedEmail;
+      // In local dev without cloud ADC, gracefully inspect token structure
+      if (process.env.NODE_ENV !== "production") {
+        try {
+          const parts = token.split(".");
+          if (parts.length === 3) {
+            const payload = JSON.parse(Buffer.from(parts[1], "base64").toString("utf-8"));
+            if (payload && (payload.user_id || payload.sub)) {
+              resolvedUid = payload.user_id || payload.sub;
+              resolvedEmail = payload.email;
+              isAuthenticated = true;
+            }
           }
-        }
-      } catch {}
+        } catch {}
+      }
     }
   }
 
-  const identifier = resolvedEmail || resolvedUid;
-  if (!identifier) {
+  // Fail-closed: Never trust raw unverified headers to elevate privileges
+  if (!isAuthenticated || (!resolvedEmail && !resolvedUid)) {
     return { authenticated: false, tier: "free" };
   }
+
+  const identifier = (resolvedEmail || resolvedUid)!;
 
   // 3. First check authoritative user store (Guaranteed local sync)
   const storeStatus = getActiveUserTier(identifier);

@@ -54,22 +54,31 @@ export async function getPersistentPlans(): Promise<PricingPlan[]> {
         .order("price_pkr", { ascending: true });
 
       if (!error && Array.isArray(data) && data.length > 0) {
-        return data.map((d) => ({
-          id: d.id,
-          name: d.name,
-          badge: d.badge || undefined,
-          badgeColor: d.badge_color || "orange",
-          pricePKR: Number(d.price_pkr),
-          originalPricePKR: Number(d.original_price_pkr) || Number(d.price_pkr) * 2,
-          priceUSD: Number(d.price_usd),
-          originalPriceUSD: Number(d.original_price_usd) || Number(d.price_usd) * 2,
-          durationDays: Number(d.duration_days) || 30,
-          features: Array.isArray(d.features) ? d.features : [],
-          isPopular: Boolean(d.is_popular),
-          isActive: d.is_active !== false,
-          createdAt: d.created_at,
-          updatedAt: d.updated_at,
-        }));
+        const storagePath = getPlansStoragePath();
+        const localList = safeReadJsonFile<PricingPlan[]>(storagePath, defaultPlans as PricingPlan[]);
+        const localMap = new Map(localList.map((p) => [p.id, p]));
+
+        return data.map((d) => {
+          const local = localMap.get(d.id);
+          return {
+            id: d.id,
+            name: d.name,
+            badge: d.badge || undefined,
+            badgeColor: d.badge_color || "orange",
+            pricePKR: Number(d.price_pkr),
+            originalPricePKR: Number(d.original_price_pkr) || Number(d.price_pkr) * 2,
+            priceUSD: Number(d.price_usd),
+            originalPriceUSD: Number(d.original_price_usd) || Number(d.price_usd) * 2,
+            durationDays: Number(d.duration_days) || 30,
+            dailyMessages: Number(d.daily_messages ?? local?.dailyMessages ?? (d.id === "plus" ? 200 : 500)),
+            dailyPhotos: Number(d.daily_photos ?? local?.dailyPhotos ?? (d.id === "plus" ? 10 : 30)),
+            features: Array.isArray(d.features) ? d.features : [],
+            isPopular: Boolean(d.is_popular),
+            isActive: d.is_active !== false,
+            createdAt: d.created_at,
+            updatedAt: d.updated_at,
+          };
+        });
       }
     } catch (err) {
       console.warn("[PlansStore] Supabase plans read note:", err);

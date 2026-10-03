@@ -57,22 +57,18 @@ export async function setDynamicAdminPassword(newPassword: string): Promise<bool
   }
 }
 
-let runtimeRandomSecret: string | null = null;
-
 function getJwtSecret(): string {
   const envSecret = process.env.ADMIN_JWT_SECRET?.trim();
   if (envSecret && envSecret.length >= 16) return envSecret;
 
-  if (process.env.NODE_ENV === "production") {
-    console.error(
-      "[CRITICAL SECURITY WARNING]: ADMIN_JWT_SECRET is not configured in production environment! Using ephemeral cryptographically random 256-bit key to prevent token forgery."
-    );
-  }
+  // Stable cryptographic derivation fallback so serverless instances share the secret
+  const stableSeed =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.ADMIN_PASSWORD ||
+    process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ||
+    "zovik-ai-secure-admin-master-key-2026";
 
-  if (!runtimeRandomSecret) {
-    runtimeRandomSecret = crypto.randomBytes(32).toString("hex");
-  }
-  return runtimeRandomSecret;
+  return crypto.createHmac("sha256", "zovik-admin-jwt-seed").update(stableSeed).digest("hex");
 }
 
 const JWT_SECRET = getJwtSecret();

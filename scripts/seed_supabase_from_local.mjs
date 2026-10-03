@@ -30,15 +30,15 @@ async function seed() {
     const companionRows = chars.map((c) => ({
       id: c.id,
       name: c.name,
-      tagline: c.tagline || c.bio || "",
+      tagline: c.tagline || c.bio || c.desc || "",
       category: c.category || "General",
       gender: c.gender || "female",
-      tier: c.tier || (c.isVip ? "vip" : "free"),
-      avatar: c.avatar || "",
-      image_url: c.avatar || "",
+      tier: c.accessTier || (c.isVipOnly ? "vip" : "free"),
+      avatar: c.image || c.avatar || "",
+      image_url: c.image || c.avatar || "",
       gallery: c.gallery || [],
-      intro_video: c.introVideo || null,
-      is_vip: Boolean(c.isVip || c.tier === "vip"),
+      intro_video: c.videoUrl || c.introVideo || null,
+      is_vip: Boolean(c.isVipOnly || c.accessTier === "vip"),
       is_custom: Boolean(c.isCustom),
     }));
 

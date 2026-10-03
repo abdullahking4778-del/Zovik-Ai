@@ -96,5 +96,61 @@
     "storageRetentionDays": 7,
     "createdAt": "2026-10-03T08:21:36.150Z",
     "lastLoginAt": "2026-10-03T08:21:36.991Z"
+  },
+  {
+    "id": "user_test_1791019180893",
+    "email": "demo.tester.1791019180893@zovik.ai",
+    "name": "demo.tester.1791019180893",
+    "photoURL": null,
+    "tier": "free",
+    "isVip": false,
+    "subscriptionDays": 0,
+    "subscriptionStart": null,
+    "subscriptionEndsAt": null,
+    "storageRetentionDays": 7,
+    "createdAt": "2026-10-03T09:19:49.209Z",
+    "lastLoginAt": "2026-10-03T09:19:51.298Z"
+  },
+  {
+    "id": "user_test_1791019180893",
+    "email": "demo.tester.1791019180893@zovik.ai",
+    "name": "demo.tester.1791019180893",
+    "photoURL": null,
+    "tier": "free",
+    "isVip": false,
+    "subscriptionDays": 0,
+    "subscriptionStart": null,
+    "subscriptionEndsAt": null,
+    "storageRetentionDays": 7,
+    "createdAt": "2026-10-03T09:19:50.419Z",
+    "lastLoginAt": "2026-10-03T09:19:51.294Z"
+  },
+  {
+    "id": "user_test_1791019279429",
+    "email": "demo.tester.1791019279429@zovik.ai",
+    "name": "demo.tester.1791019279429",
+    "photoURL": null,
+    "tier": "free",
+    "isVip": false,
+    "subscriptionDays": 0,
+    "subscriptionStart": null,
+    "subscriptionEndsAt": null,
+    "storageRetentionDays": 7,
+    "createdAt": "2026-10-03T09:21:24.279Z",
+    "lastLoginAt": "2026-10-03T09:21:26.869Z"
+  },
+  {
+    "id": "user_test_1791019279429",
+    "email": "demo.tester.1791019279429@zovik.ai",
+    "name": "demo.tester.1791019279429",
+    "photoURL": null,
+    "tier": "free",
+    "isVip": false,
+    "subscriptionDays": 0,
+    "subscriptionStart": null,
+    "subscriptionEndsAt": null,
+    "storageRetentionDays": 7,
+    "createdAt": "2026-10-03T09:21:25.468Z",
+    "lastLoginAt": "2026-10-03T09:21:26.862Z"
   }
 ]
