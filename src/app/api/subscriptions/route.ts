@@ -8,6 +8,7 @@ import {
   getPersistentPayments,
   savePersistentPayment,
   updatePersistentPaymentStatus,
+  deletePersistentPayment,
   generateUniqueId,
 } from "@/lib/serverDb";
 import { PaymentRequest } from "@/types";
@@ -165,3 +166,35 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ success: false, error: "Internal server error updating payment status" }, { status: 500 });
   }
 }
+
+// DELETE /api/subscriptions -> Admin purges payment request & slip permanently
+export async function DELETE(req: NextRequest) {
+  if (!verifyAdminRequest(req)) {
+    return NextResponse.json({ success: false, error: "Unauthorized: Admin session required." }, { status: 401 });
+  }
+
+  try {
+    const { searchParams } = new URL(req.url);
+    let targetId = searchParams.get("id");
+    if (!targetId) {
+      const body = await req.json().catch(() => ({}));
+      targetId = body.id || body.paymentId;
+    }
+
+    if (!targetId) {
+      return NextResponse.json({ success: false, error: "Payment ID is required to delete" }, { status: 400 });
+    }
+
+    await deletePersistentPayment(targetId);
+
+    return NextResponse.json({
+      success: true,
+      message: "Payment record and proof slip permanently removed.",
+      deletedId: targetId,
+    });
+  } catch (err: unknown) {
+    console.error("[Subscriptions DELETE Error]:", err);
+    return NextResponse.json({ success: false, error: "Internal server error deleting payment" }, { status: 500 });
+  }
+}
+

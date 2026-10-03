@@ -20,6 +20,73 @@ import {
   FileCheck,
   Clock,
 } from "lucide-react";
+import { PricingPlan } from "@/types";
+
+const DEFAULT_PLANS: PricingPlan[] = [
+  {
+    id: "plus",
+    name: "Plus Plan",
+    badge: "70% OFF",
+    badgeColor: "orange",
+    pricePKR: 1400,
+    originalPricePKR: 4600,
+    priceUSD: 5,
+    originalPriceUSD: 16.99,
+    durationDays: 30,
+    features: [
+      "200 Messages / day (24h Reset)",
+      "10 HD Photos / day",
+      "18+ Unfiltered AI Roleplay & Chat",
+      "18+ Uncensored HD Photos",
+      "Voice Notes Unlocked",
+      "30 Days Cloud Storage Retention",
+    ],
+    isPopular: false,
+    isActive: true,
+  },
+  {
+    id: "vip",
+    name: "VIP Elite",
+    badge: "BEST VALUE 🔥",
+    badgeColor: "pink",
+    pricePKR: 3000,
+    originalPricePKR: 10000,
+    priceUSD: 12,
+    originalPriceUSD: 39.99,
+    durationDays: 30,
+    features: [
+      "Unlimited Messages / Day (No Limits)",
+      "30 HD Photos / day (Exclusive Poses)",
+      "VIP Uncensored Secret Content",
+      "Ultra-Fast AI Model Priority",
+      "Live HD Voice Calls & Audio",
+      "Lifetime VIP Badge on Profile",
+    ],
+    isPopular: true,
+    isActive: true,
+  },
+  {
+    id: "vip_plus",
+    name: "VIP Plus Diamond",
+    badge: "EXCLUSIVE 💎",
+    badgeColor: "purple",
+    pricePKR: 4500,
+    originalPricePKR: 15000,
+    priceUSD: 18,
+    originalPriceUSD: 59.99,
+    durationDays: 60,
+    features: [
+      "2 Months Full VIP Access (Save 35%)",
+      "Unlimited Messages & Voice Calls",
+      "50 HD Photos / Day (Instant Generation)",
+      "Custom Companion Creation Unlocked",
+      "Direct 1-on-1 VIP Support Priority",
+      "Diamond VIP Badge on Profile",
+    ],
+    isPopular: false,
+    isActive: true,
+  },
+];
 
 interface PremiumModalProps {
   isOpen: boolean;
@@ -28,7 +95,8 @@ interface PremiumModalProps {
 
 export default function PremiumModal({ isOpen, onClose }: PremiumModalProps) {
   const [currency, setCurrency] = useState<"PKR" | "USD">("PKR");
-  const [selectedPlan, setSelectedPlan] = useState<"plus" | "vip">("vip");
+  const [plans, setPlans] = useState<PricingPlan[]>(DEFAULT_PLANS);
+  const [selectedPlan, setSelectedPlan] = useState<string>("vip");
   const [showCheckout, setShowCheckout] = useState(false);
 
   // Checkout form fields
@@ -55,7 +123,32 @@ export default function PremiumModal({ isOpen, onClose }: PremiumModalProps) {
     } catch (e) {
       console.warn("Failed to parse user session in PremiumModal:", e);
     }
+
+    // Fetch dynamic pricing plans from API
+    let isMounted = true;
+    fetch("/api/plans")
+      .then((res) => res.json())
+      .then((data) => {
+        if (isMounted && data.success && Array.isArray(data.plans) && data.plans.length > 0) {
+          setPlans(data.plans);
+          setSelectedPlan((prev) => {
+            if (data.plans.some((p: PricingPlan) => p.id === prev)) return prev;
+            const popular = data.plans.find((p: PricingPlan) => p.isPopular);
+            return popular ? popular.id : data.plans[0].id;
+          });
+        }
+      })
+      .catch((err) => {
+        console.warn("Could not load dynamic pricing plans, using defaults:", err);
+      });
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
+
+  const activePlanObj =
+    plans.find((p) => p.id === selectedPlan) || plans[0] || DEFAULT_PLANS[1];
 
   if (!isOpen) return null;
 
@@ -125,12 +218,8 @@ export default function PremiumModal({ isOpen, onClose }: PremiumModalProps) {
       const activeMethod = paymentDetails[paymentMethod];
       const amountStr =
         currency === "PKR"
-          ? selectedPlan === "vip"
-            ? "Rs. 3,000"
-            : "Rs. 1,400"
-          : selectedPlan === "vip"
-          ? "$12"
-          : "$5";
+          ? `Rs. ${activePlanObj.pricePKR.toLocaleString()}`
+          : `$${activePlanObj.priceUSD}`;
 
       const res = await fetch("/api/subscriptions", {
         method: "POST",
@@ -217,151 +306,95 @@ export default function PremiumModal({ isOpen, onClose }: PremiumModalProps) {
               </button>
             </div>
 
-            {/* Plans Comparison Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full mb-6">
-              {/* PLAN 1: PLUS (1 MONTH) */}
-              <div
-                onClick={() => setSelectedPlan("plus")}
-                className={`relative flex flex-col justify-between p-5 rounded-3xl border text-left cursor-pointer transition-all ${
-                  selectedPlan === "plus"
-                    ? "bg-gradient-to-b from-[#251333] to-[#160a21] border-[#f53b70] shadow-xl shadow-pink-600/20 scale-[1.02]"
-                    : "bg-[#140b1c] border-white/10 hover:border-white/20"
-                }`}
-              >
-                {/* 70% OFF Badge */}
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs font-black uppercase tracking-wider text-white">Plus Plan</span>
-                  <span className="px-2 py-0.5 rounded-full bg-orange-500/20 border border-orange-500/40 text-orange-400 text-[10px] font-black">
-                    70% OFF
-                  </span>
-                </div>
+            {/* Dynamic Plans Comparison Grid */}
+            <div className={`grid grid-cols-1 ${plans.length === 2 ? "sm:grid-cols-2" : "sm:grid-cols-2 lg:grid-cols-3"} gap-4 w-full mb-6`}>
+              {plans.map((plan) => {
+                const isSelected = selectedPlan === plan.id;
+                const isPopular = plan.isPopular;
+                return (
+                  <div
+                    key={plan.id}
+                    onClick={() => setSelectedPlan(plan.id)}
+                    className={`relative flex flex-col justify-between p-5 rounded-3xl border text-left cursor-pointer transition-all ${
+                      isSelected
+                        ? isPopular
+                          ? "bg-gradient-to-b from-[#35133a] to-[#1c0824] border-[#f53b70] shadow-2xl shadow-pink-600/30 scale-[1.02]"
+                          : "bg-gradient-to-b from-[#251333] to-[#160a21] border-[#f53b70] shadow-xl shadow-pink-600/20 scale-[1.02]"
+                        : "bg-[#140b1c] border-white/10 hover:border-white/20"
+                    }`}
+                  >
+                    {/* Top Glow Badge for Popular Plan */}
+                    {isPopular && (
+                      <div className="absolute -top-3 right-4 px-3 py-0.5 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-black text-[10px] font-black tracking-wider uppercase shadow-md flex items-center space-x-1">
+                        <Flame className="size-3 fill-black" />
+                        <span>BEST VALUE</span>
+                      </div>
+                    )}
 
-                <div className="mb-4">
-                  <div className="flex items-baseline space-x-1.5">
-                    <span className="text-3xl font-black text-white">
-                      {currency === "PKR" ? "Rs. 1,400" : "$5"}
-                    </span>
-                    <span className="text-xs text-[#aeaeae]">/month</span>
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center space-x-1.5">
+                        {isPopular && <Crown className="size-4 text-amber-400" />}
+                        <span className="text-xs font-black uppercase tracking-wider text-white">
+                          {plan.name}
+                        </span>
+                      </div>
+                      {plan.badge && (
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                            plan.badgeColor === "pink"
+                              ? "bg-[#f53b70] text-white"
+                              : plan.badgeColor === "purple"
+                              ? "bg-purple-600/30 border border-purple-500/50 text-purple-300"
+                              : "bg-orange-500/20 border border-orange-500/40 text-orange-400"
+                          }`}
+                        >
+                          {plan.badge}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="mb-4">
+                      <div className="flex items-baseline space-x-1.5">
+                        <span className="text-2xl sm:text-3xl font-black text-white">
+                          {currency === "PKR"
+                            ? `Rs. ${plan.pricePKR.toLocaleString()}`
+                            : `$${plan.priceUSD}`}
+                        </span>
+                        <span className="text-xs text-[#aeaeae]">
+                          /{plan.durationDays >= 60 ? `${plan.durationDays}d` : "month"}
+                        </span>
+                      </div>
+                      {plan.originalPricePKR && (
+                        <span className="text-xs text-[#888] line-through">
+                          {currency === "PKR"
+                            ? `Rs. ${plan.originalPricePKR.toLocaleString()}`
+                            : `$${plan.originalPriceUSD}`}
+                        </span>
+                      )}
+                    </div>
+
+                    <ul className="space-y-2 text-xs text-[#d5c7d0] mb-5 flex-1">
+                      {plan.features.map((feat, fIdx) => (
+                        <li key={fIdx} className="flex items-start space-x-2">
+                          <Check className="size-4 text-emerald-400 shrink-0 mt-0.5" />
+                          <span>{feat}</span>
+                        </li>
+                      ))}
+                    </ul>
+
+                    <button
+                      onClick={() => setShowCheckout(true)}
+                      className={`w-full py-2.5 rounded-xl text-xs font-bold transition-all ${
+                        isSelected
+                          ? "bg-gradient-to-r from-[#f53b70] to-[#ff5b8c] text-white shadow-lg shadow-pink-600/30 hover:brightness-110"
+                          : "bg-white/10 hover:bg-white/20 text-white"
+                      }`}
+                    >
+                      {isSelected ? `Get ${plan.name}` : `Choose ${plan.name}`}
+                    </button>
                   </div>
-                  <span className="text-xs text-[#888] line-through">
-                    {currency === "PKR" ? "Rs. 4,600" : "$16.99"}
-                  </span>
-                </div>
-
-                <ul className="space-y-2 text-xs text-[#d5c7d0] mb-5">
-                  <li className="flex items-center space-x-2">
-                    <Check className="size-4 text-emerald-400 shrink-0" />
-                    <span><strong>200 Messages</strong> / day (24h Reset)</span>
-                  </li>
-                  <li className="flex items-center space-x-2">
-                    <Check className="size-4 text-emerald-400 shrink-0" />
-                    <span><strong>10 HD Photos</strong> / day</span>
-                  </li>
-                  <li className="flex items-center space-x-2">
-                    <Check className="size-4 text-emerald-400 shrink-0" />
-                    <span><strong>18+ Unfiltered AI Roleplay & Chat</strong></span>
-                  </li>
-                  <li className="flex items-center space-x-2">
-                    <Check className="size-4 text-emerald-400 shrink-0" />
-                    <span><strong>18+ Uncensored HD Photos</strong></span>
-                  </li>
-                  <li className="flex items-center space-x-2">
-                    <Check className="size-4 text-emerald-400 shrink-0" />
-                    <span>Voice Notes Unlocked</span>
-                  </li>
-                  <li className="flex items-center space-x-2">
-                    <Check className="size-4 text-emerald-400 shrink-0" />
-                    <span>35 Days Cloud Storage Retention</span>
-                  </li>
-                </ul>
-
-                <button
-                  onClick={() => setShowCheckout(true)}
-                  className="w-full py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs transition-colors"
-                >
-                  Choose Plus
-                </button>
-              </div>
-
-              {/* PLAN 2: VIP (1 MONTH) - MOST POPULAR */}
-              <div
-                onClick={() => setSelectedPlan("vip")}
-                className={`relative flex flex-col justify-between p-5 rounded-3xl border text-left cursor-pointer transition-all ${
-                  selectedPlan === "vip"
-                    ? "bg-gradient-to-b from-[#35133a] to-[#1c0824] border-[#f53b70] shadow-2xl shadow-pink-600/30 scale-[1.03]"
-                    : "bg-[#140b1c] border-white/10 hover:border-white/20"
-                }`}
-              >
-                {/* Glowing Crown Badge */}
-                <div className="absolute -top-3 right-4 px-3 py-0.5 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-black text-[10px] font-black tracking-wider uppercase shadow-md flex items-center space-x-1">
-                  <Flame className="size-3 fill-black" />
-                  <span>BEST VALUE</span>
-                </div>
-
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center space-x-1.5">
-                    <Crown className="size-4 text-amber-400" />
-                    <span className="text-xs font-black uppercase tracking-wider text-white">VIP Elite</span>
-                  </div>
-                  <span className="px-2 py-0.5 rounded-full bg-[#f53b70] text-white text-[10px] font-black">
-                    70% OFF
-                  </span>
-                </div>
-
-                <div className="mb-4">
-                  <div className="flex items-baseline space-x-1.5">
-                    <span className="text-3xl font-black text-white">
-                      {currency === "PKR" ? "Rs. 3,000" : "$12"}
-                    </span>
-                    <span className="text-xs text-[#aeaeae]">/month</span>
-                  </div>
-                  <span className="text-xs text-[#888] line-through">
-                    {currency === "PKR" ? "Rs. 10,000" : "$39.99"}
-                  </span>
-                </div>
-
-                <ul className="space-y-2 text-xs text-[#f1dbe5] mb-5">
-                  <li className="flex items-center space-x-2">
-                    <Check className="size-4 text-emerald-400 shrink-0" />
-                    <span><strong>500 Messages</strong> / day (24h Reset)</span>
-                  </li>
-                  <li className="flex items-center space-x-2">
-                    <Check className="size-4 text-emerald-400 shrink-0" />
-                    <span><strong>30 HD Photos</strong> / day</span>
-                  </li>
-                  <li className="flex items-center space-x-2">
-                    <Check className="size-4 text-emerald-400 shrink-0" />
-                    <span><strong>18+ Unfiltered AI Roleplay & Chat</strong></span>
-                  </li>
-                  <li className="flex items-center space-x-2">
-                    <Check className="size-4 text-emerald-400 shrink-0" />
-                    <span><strong>18+ Uncensored HD Photos</strong></span>
-                  </li>
-                  <li className="flex items-center space-x-2">
-                    <Check className="size-4 text-emerald-400 shrink-0" />
-                    <span><strong>Live HD Voice Calls</strong></span>
-                  </li>
-                  <li className="flex items-center space-x-2">
-                    <Check className="size-4 text-emerald-400 shrink-0" />
-                    <span>Ultra-Fast Turbo AI Speed (No Queues)</span>
-                  </li>
-                  <li className="flex items-center space-x-2">
-                    <Check className="size-4 text-emerald-400 shrink-0" />
-                    <span>Custom Character Creator</span>
-                  </li>
-                  <li className="flex items-center space-x-2">
-                    <Check className="size-4 text-emerald-400 shrink-0" />
-                    <span>35 Days Cloud Storage Retention</span>
-                  </li>
-                </ul>
-
-                <button
-                  onClick={() => setShowCheckout(true)}
-                  className="w-full py-2.5 rounded-xl bg-gradient-to-r from-[#f53b70] to-[#ff5b8c] text-white font-extrabold text-xs shadow-lg shadow-pink-600/30 hover:brightness-110 transition-all"
-                >
-                  Get VIP Elite
-                </button>
-              </div>
+                );
+              })}
             </div>
 
             {/* Bottom Guarantee Banner */}
@@ -388,7 +421,7 @@ export default function PremiumModal({ isOpen, onClose }: PremiumModalProps) {
             <p className="text-xs sm:text-sm text-[#cbb6bf] max-w-md mb-6 leading-relaxed">
               Thank you! Your payment verification is currently under review. Once confirmed, your{" "}
               <strong className="text-white">
-                {selectedPlan === "vip" ? "VIP Elite" : "Plus"}
+                {activePlanObj.name}
               </strong>{" "}
               membership will be automatically activated within a few minutes.
             </p>
@@ -396,7 +429,7 @@ export default function PremiumModal({ isOpen, onClose }: PremiumModalProps) {
             <div className="p-4 rounded-2xl bg-white/5 border border-white/10 text-xs text-[#aeaeae] mb-6 max-w-sm w-full space-y-2 text-left">
               <div className="flex justify-between">
                 <span>Selected Plan:</span>
-                <strong className="text-white uppercase">{selectedPlan} (1 Month)</strong>
+                <strong className="text-white uppercase">{activePlanObj.name} ({activePlanObj.durationDays || 30} Days)</strong>
               </div>
               <div className="flex justify-between">
                 <span>Payment Method:</span>
@@ -438,25 +471,23 @@ export default function PremiumModal({ isOpen, onClose }: PremiumModalProps) {
             <div className="flex items-center justify-between pb-3 border-b border-white/10 mb-4">
               <div>
                 <h3 className="text-lg font-black text-white">
-                  Payment for {selectedPlan === "vip" ? "VIP Plan" : "Plus Plan"}
+                  Payment for {activePlanObj.name}
                 </h3>
                 <span className="text-xs text-[#aeaeae]">
                   Total:{" "}
                   <strong className="text-[#f53b70]">
                     {currency === "PKR"
-                      ? selectedPlan === "vip"
-                        ? "Rs. 3,000 PKR"
-                        : "Rs. 1,400 PKR"
-                      : selectedPlan === "vip"
-                      ? "$12 USD"
-                      : "$5 USD"}
+                      ? `Rs. ${activePlanObj.pricePKR.toLocaleString()} PKR`
+                      : `$${activePlanObj.priceUSD} USD`}
                   </strong>{" "}
-                  (1 Month)
+                  ({activePlanObj.durationDays || 30} Days)
                 </span>
               </div>
-              <span className="px-2.5 py-1 rounded-full bg-[#f53b70]/20 border border-[#f53b70]/40 text-[#f53b70] text-xs font-black">
-                70% OFF
-              </span>
+              {activePlanObj.badge && (
+                <span className="px-2.5 py-1 rounded-full bg-[#f53b70]/20 border border-[#f53b70]/40 text-[#f53b70] text-xs font-black">
+                  {activePlanObj.badge}
+                </span>
+              )}
             </div>
 
             {/* Select Payment Method Tabs */}

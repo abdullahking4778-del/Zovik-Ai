@@ -639,3 +639,54 @@ export async function updatePersistentPaymentStatus(
 
   return null;
 }
+
+export async function deletePersistentPayment(paymentId: string): Promise<boolean> {
+  const cleanId = paymentId.trim();
+
+  // 1. Check if payment has screenshot in Supabase Storage and remove it
+  try {
+    const all = await getPersistentPayments();
+    const target = all.find((p) => p.id === cleanId);
+    if (target?.screenshot && isSupabaseConfigured()) {
+      try {
+        const marker = "/zovik-media/";
+        if (target.screenshot.includes(marker)) {
+          const filePath = target.screenshot.split(marker)[1];
+          if (filePath) {
+            await supabaseAdmin.storage.from("zovik-media").remove([decodeURIComponent(filePath)]);
+          }
+        }
+      } catch (err) {
+        console.warn("[ServerDb] Supabase storage slip delete note:", err);
+      }
+    }
+  } catch {}
+
+  // 2. Delete from Supabase PostgreSQL
+  if (isSupabaseConfigured()) {
+    try {
+      await supabaseAdmin.from("payment_requests").delete().eq("id", cleanId);
+    } catch (err) {
+      console.warn("[ServerDb] Supabase delete payment note:", err);
+    }
+  }
+
+  // 3. Delete from Firestore
+  try {
+    const docRef = doc(db, "payment_requests", cleanId);
+    await deleteDoc(docRef);
+  } catch {}
+
+  // 4. Delete from local cache
+  try {
+    const filePath = getStoragePath("payment_requests.json");
+    const list = safeReadJsonFile<PaymentRequest[]>(filePath, []);
+    if (Array.isArray(list) && list.length > 0) {
+      const filtered = list.filter((p) => p.id !== cleanId);
+      safeWriteJsonFile(filePath, filtered);
+    }
+  } catch {}
+
+  return true;
+}
+

@@ -38,12 +38,14 @@ import {
   Calendar,
   HardDrive,
   Globe,
+  Tag,
 } from "lucide-react";
-import { Character, ShortReel, PaymentRequest, UserAccount } from "@/types";
+import { Character, ShortReel, PaymentRequest, UserAccount, PricingPlan } from "@/types";
 import { getSafeStreamUrl } from "@/lib/videoHelper";
 import { getSafeImageUrl } from "@/lib/imageHelper";
 import { AdminOverviewTab } from "@/components/admin/AdminOverviewTab";
 import { AdminSubscriptionsTab } from "@/components/admin/AdminSubscriptionsTab";
+import { AdminPlansTab } from "@/components/admin/AdminPlansTab";
 import { AdminSettingsTab } from "@/components/admin/AdminSettingsTab";
 
 export default function AdminPage() {
@@ -54,7 +56,7 @@ export default function AdminPage() {
 
   // Active Admin Tab
   const [activeTab, setActiveTab] = useState<
-    "overview" | "companions" | "galleries" | "users" | "subscriptions" | "shorts" | "settings"
+    "overview" | "companions" | "galleries" | "users" | "subscriptions" | "plans" | "shorts" | "settings"
   >("overview");
 
   // Admin Data State
@@ -62,6 +64,7 @@ export default function AdminPage() {
   const [characters, setCharacters] = useState<Character[]>([]);
   const [availableImages, setAvailableImages] = useState<string[]>([]);
   const [payments, setPayments] = useState<PaymentRequest[]>([]);
+  const [plans, setPlans] = useState<PricingPlan[]>([]);
   const [shorts, setShorts] = useState<ShortReel[]>([]);
   const [loadingData, setLoadingData] = useState(false);
   const [previewSlip, setPreviewSlip] = useState<string | null>(null);
@@ -248,7 +251,12 @@ export default function AdminPage() {
       const pData = await pRes.json();
       setPayments(pData.payments || []);
 
-      // 4. Fetch Shorts
+      // 4. Fetch Pricing Plans (Protected)
+      const plRes = await fetch("/api/admin/plans", { headers });
+      const plData = await plRes.json();
+      setPlans(plData.plans || []);
+
+      // 5. Fetch Shorts
       const sRes = await fetch("/api/shorts");
       const sData = await sRes.json();
       setShorts(sData.shorts || []);
@@ -601,6 +609,60 @@ export default function AdminPage() {
     }
   };
 
+  const handleDeletePayment = async (paymentId: string) => {
+    try {
+      const res = await fetch(`/api/subscriptions?id=${paymentId}`, {
+        method: "DELETE",
+        headers: getAuthHeaders(),
+      });
+      if (res.ok) {
+        setPayments((prev) => prev.filter((p) => p.id !== paymentId));
+      } else {
+        alert("Failed to delete payment record");
+      }
+    } catch {
+      alert("Error deleting payment");
+    }
+  };
+
+  const handleSavePlan = async (plan: PricingPlan) => {
+    try {
+      const res = await fetch("/api/admin/plans", {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: JSON.stringify(plan),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert("Pricing plan saved successfully! 🏷️");
+        fetchAdminData();
+      } else {
+        alert(data.error || "Failed to save plan");
+      }
+    } catch {
+      alert("Error saving pricing plan");
+    }
+  };
+
+  const handleDeletePlan = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this pricing plan?")) return;
+    try {
+      const res = await fetch(`/api/admin/plans?id=${id}`, {
+        method: "DELETE",
+        headers: getAuthHeaders(),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert("Plan deleted!");
+        fetchAdminData();
+      } else {
+        alert(data.error || "Failed to delete plan");
+      }
+    } catch {
+      alert("Error deleting plan");
+    }
+  };
+
   const handleSaveReel = async (e: React.FormEvent) => {
     e.preventDefault();
     setReelUploadError("");
@@ -923,6 +985,7 @@ export default function AdminPage() {
           {[
             { id: "overview", label: "Overview & Metrics", icon: Flame },
             { id: "subscriptions", label: `Payments (${payments.filter((p) => p.status === "pending").length})`, icon: CreditCard },
+            { id: "plans", label: `Plans & Offers 🏷️ (${plans.length})`, icon: Tag },
             { id: "companions", label: `Companions (${characters.length})`, icon: Sparkles },
             { id: "galleries", label: "Photo Galleries 📸", icon: Camera },
             { id: "shorts", label: `Shorts Reels (${shorts.length})`, icon: Film },
@@ -964,7 +1027,17 @@ export default function AdminPage() {
             payments={payments}
             handleApprovePayment={handleApprovePayment}
             handleRejectPayment={handleRejectPayment}
+            handleDeletePayment={handleDeletePayment}
             setPreviewSlip={setPreviewSlip}
+          />
+        )}
+
+        {/* ================= TAB 2.5: PRICING PLANS & OFFERS CMS ================= */}
+        {activeTab === "plans" && (
+          <AdminPlansTab
+            plans={plans}
+            onSavePlan={handleSavePlan}
+            onDeletePlan={handleDeletePlan}
           />
         )}
 

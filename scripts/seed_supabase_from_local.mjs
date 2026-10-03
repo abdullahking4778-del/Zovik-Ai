@@ -82,12 +82,49 @@ async function seed() {
     console.error("Shorts sync failed:", err);
   }
 
+  // 3. Seed Pricing Plans
+  try {
+    const plansRaw = fs.readFileSync("src/data/plans.json", "utf-8");
+    const plans = JSON.parse(plansRaw);
+    console.log(`Found ${plans.length} local pricing plans to sync to Supabase...`);
+
+    const planRows = plans.map((p) => ({
+      id: p.id,
+      name: p.name,
+      badge: p.badge || null,
+      badge_color: p.badgeColor || "orange",
+      price_pkr: p.pricePKR,
+      original_price_pkr: p.originalPricePKR,
+      price_usd: p.priceUSD,
+      original_price_usd: p.originalPriceUSD,
+      duration_days: p.durationDays,
+      features: p.features || [],
+      is_popular: Boolean(p.isPopular),
+      is_active: p.isActive !== false,
+      updated_at: new Date().toISOString(),
+    }));
+
+    const { error: planErr } = await supabase
+      .from("pricing_plans")
+      .upsert(planRows, { onConflict: "id" });
+
+    if (planErr) {
+      console.log("Note on pricing_plans table:", planErr.message);
+    } else {
+      console.log(`Successfully synced ${planRows.length} pricing plans to Supabase 'pricing_plans' table!`);
+    }
+  } catch (err) {
+    console.error("Pricing plans sync failed:", err);
+  }
+
   // Verify counts
   const { count: cCount } = await supabase.from("companions").select("*", { count: "exact", head: true });
   const { count: sCount } = await supabase.from("shorts_reels").select("*", { count: "exact", head: true });
+  const { count: pCount } = await supabase.from("pricing_plans").select("*", { count: "exact", head: true });
   console.log(`\nSupabase Cloud Database Status:`);
   console.log(`- Companions in DB: ${cCount}`);
   console.log(`- Shorts Reels in DB: ${sCount}`);
+  console.log(`- Pricing Plans in DB: ${pCount}`);
 }
 
 seed();

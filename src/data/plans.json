@@ -1,0 +1,65 @@
+[
+  {
+    "id": "plus",
+    "name": "Plus Plan",
+    "badge": "70% OFF",
+    "badgeColor": "orange",
+    "pricePKR": 1400,
+    "originalPricePKR": 4600,
+    "priceUSD": 5,
+    "originalPriceUSD": 16.99,
+    "durationDays": 30,
+    "features": [
+      "200 Messages / day (24h Reset)",
+      "10 HD Photos / day",
+      "18+ Unfiltered AI Roleplay & Chat",
+      "18+ Uncensored HD Photos",
+      "Voice Notes Unlocked",
+      "30 Days Cloud Storage Retention"
+    ],
+    "isPopular": false,
+    "isActive": true
+  },
+  {
+    "id": "vip",
+    "name": "VIP Membership",
+    "badge": "BEST VALUE 🔥",
+    "badgeColor": "pink",
+    "pricePKR": 3000,
+    "originalPricePKR": 10000,
+    "priceUSD": 12,
+    "originalPriceUSD": 39.99,
+    "durationDays": 30,
+    "features": [
+      "Unlimited Messages / Day (No Limits)",
+      "30 HD Photos / day (Exclusive Poses)",
+      "VIP Uncensored Secret Content",
+      "Ultra-Fast AI Model Priority",
+      "Full Video Introductions & Voice",
+      "Lifetime VIP Badge on Profile"
+    ],
+    "isPopular": true,
+    "isActive": true
+  },
+  {
+    "id": "vip_plus",
+    "name": "VIP Plus Diamond",
+    "badge": "EXCLUSIVE 💎",
+    "badgeColor": "purple",
+    "pricePKR": 4500,
+    "originalPricePKR": 15000,
+    "priceUSD": 18,
+    "originalPriceUSD": 59.99,
+    "durationDays": 60,
+    "features": [
+      "2 Months Full VIP Access (Save 35%)",
+      "Unlimited Messages & Voice Calls",
+      "50 HD Photos / Day (Instant Generation)",
+      "Custom Companion Creation Unlocked",
+      "Direct 1-on-1 VIP Support Priority",
+      "Diamond VIP Badge on Profile"
+    ],
+    "isPopular": false,
+    "isActive": true
+  }
+]

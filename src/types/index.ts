@@ -111,3 +111,31 @@ export interface SavedPhoto {
   isUnlocked?: boolean;
 }
 
+export interface PricingPlan {
+  id: string;
+  name: string;
+  badge?: string;
+  badgeColor?: string;
+  pricePKR: number;
+  originalPricePKR: number;
+  priceUSD: number;
+  originalPriceUSD: number;
+  durationDays: number;
+  features: string[];
+  isPopular?: boolean;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface PaymentAccountConfig {
+  id: string;
+  name: string;
+  label: string;
+  number: string;
+  title: string;
+  instructions: string;
+  isActive: boolean;
+}
+
+
