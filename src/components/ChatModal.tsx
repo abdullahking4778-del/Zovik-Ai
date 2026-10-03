@@ -28,6 +28,7 @@ import { getSafeStreamUrl, fetchVideoBlobUrl } from "@/lib/videoHelper";
 import { getSafeImageUrl } from "@/lib/imageHelper";
 import { auth } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
+import { playVoice, stopVoice } from "@/lib/voicePlayer";
 
 interface ChatModalProps {
   character: Character | null;
@@ -173,6 +174,7 @@ export default function ChatModal({
     isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
+      stopVoice();
     };
   }, []);
 
@@ -341,77 +343,32 @@ export default function ChatModal({
 
   if (!character) return null;
 
-  // Real Speech Synthesis Voice supporting all languages (Roman Urdu, Urdu script, Arabic, English)
+  // Natural Neural & Human Voice for companion voice notes
   const speakText = (text: string, idx: number) => {
-    if (!window.speechSynthesis) return;
+    if (!character) return;
 
     if (playingVoiceIdx === idx) {
-      window.speechSynthesis.cancel();
+      stopVoice();
       setPlayingVoiceIdx(null);
       return;
     }
 
-    window.speechSynthesis.cancel();
+    stopVoice();
     setPlayingVoiceIdx(idx);
 
-    // Preserve letters of ANY language (Unicode \p{L}), numbers, and punctuation
-    const cleanText = text.replace(/[^\p{L}\p{N}\s.,?!'’\-]/gu, "").trim();
-    if (!cleanText) {
-      setPlayingVoiceIdx(null);
-      return;
-    }
-
-    const utterance = new SpeechSynthesisUtterance(cleanText);
-
-    // Language detection
-    const isUrduScript = /[\u0600-\u06FF]/.test(cleanText) && /[ٹڈڑچگںےہ]/.test(cleanText);
-    const isArabicScript = /[\u0600-\u06FF]/.test(cleanText);
-
-    if (isUrduScript) {
-      utterance.lang = "ur-PK";
-    } else if (isArabicScript) {
-      utterance.lang = "ar-SA";
-    } else {
-      utterance.lang = "en-US";
-    }
-
-    const selectVoice = () => {
-      const voices = window.speechSynthesis.getVoices();
-      const isFemale = character.gender !== "male";
-
-      if (isUrduScript || isArabicScript) {
-        const langCode = isUrduScript ? "ur" : "ar";
-        const scriptVoice = voices.find((v) => v.lang.startsWith(langCode) || v.lang.startsWith("hi"));
-        if (scriptVoice) utterance.voice = scriptVoice;
-      } else if (isFemale) {
-        const femaleVoice = voices.find(
-          (v) =>
-            v.name.includes("Zira") ||
-            v.name.includes("Female") ||
-            v.name.includes("Jenny") ||
-            v.name.includes("Samantha") ||
-            v.name.includes("Google UK English Female") ||
-            (v.name.includes("English") && !v.name.includes("David") && !v.name.includes("Male"))
-        );
-        if (femaleVoice) utterance.voice = femaleVoice;
-        utterance.pitch = 1.25; // Feminine sweetness
-      } else {
-        const maleVoice = voices.find((v) => v.name.includes("David") || v.name.includes("Male"));
-        if (maleVoice) utterance.voice = maleVoice;
-        utterance.pitch = 0.95;
-      }
-    };
-
-    selectVoice();
-    if (window.speechSynthesis.onvoiceschanged !== undefined) {
-      window.speechSynthesis.onvoiceschanged = selectVoice;
-    }
-
-    utterance.rate = 1.0;
-    utterance.onend = () => setPlayingVoiceIdx(null);
-    utterance.onerror = () => setPlayingVoiceIdx(null);
-
-    window.speechSynthesis.speak(utterance);
+    playVoice({
+      text,
+      character,
+      onStart: () => {
+        setPlayingVoiceIdx(idx);
+      },
+      onEnd: () => {
+        setPlayingVoiceIdx((current) => (current === idx ? null : current));
+      },
+      onError: () => {
+        setPlayingVoiceIdx((current) => (current === idx ? null : current));
+      },
+    });
   };
 
   const handleCopyMessage = (text: string, idx: number) => {
@@ -762,7 +719,7 @@ export default function ChatModal({
           <div className="flex items-center space-x-3">
             <button
               onClick={() => {
-                if (window.speechSynthesis) window.speechSynthesis.cancel();
+                stopVoice();
                 onClose();
               }}
               className="md:hidden size-8 rounded-full bg-white/5 flex items-center justify-center text-white"
@@ -821,6 +778,7 @@ export default function ChatModal({
 
             <button
               onClick={() => {
+                stopVoice();
                 if (!isVipUser) {
                   openPremiumModal();
                 } else {
@@ -843,7 +801,7 @@ export default function ChatModal({
 
             <button
               onClick={() => {
-                if (window.speechSynthesis) window.speechSynthesis.cancel();
+                stopVoice();
                 onClose();
               }}
               className="size-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-[#aeaeae] hover:text-white transition-colors"

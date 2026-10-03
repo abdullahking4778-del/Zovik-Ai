@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import Image from "next/image";
 import { PhoneOff, Mic, MicOff, Volume2, VolumeX, Sparkles, Send } from "lucide-react";
 import { Character } from "@/types";
 import { safeLocalStorage } from "@/lib/storage";
+import { playVoice, stopVoice } from "@/lib/voicePlayer";
 
 interface VoiceCallModalProps {
   character: Character | null;
@@ -33,7 +34,7 @@ interface SpeechRecognitionInstance {
   lang: string;
   onstart: (() => void) | null;
   onresult: ((event: SpeechRecognitionEventLike) => void) | null;
-  onerror: ((event: Event) => void) | null;
+  onerror: ((event: { error?: string }) => void) | null;
   onend: (() => void) | null;
   start(): void;
   stop(): void;
@@ -55,12 +56,20 @@ export default function VoiceCallModal({
   const [isMuted, setIsMuted] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const [micLang, setMicLang] = useState<"en-US" | "ur-PK">("en-US");
+  const [micLang, setMicLang] = useState<"ur-PK" | "en-US">("ur-PK"); // Default to ur-PK for natural Roman Urdu & Urdu recognition
   const [callTranscript, setCallTranscript] = useState<string>("");
   const [userTranscript, setUserTranscript] = useState<string>("");
   const [inputText, setInputText] = useState("");
   const [micUnsupported, setMicUnsupported] = useState(false);
+  const [micErrorMsg, setMicErrorMsg] = useState<string | null>(null);
+
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+  const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const restartTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const pendingSpeechRef = useRef<string>("");
+  const isSpeakingRef = useRef(false);
+  const isMutedRef = useRef(false);
+  const isActiveRef = useRef(true);
 
   // Timer
   useEffect(() => {
@@ -70,98 +79,134 @@ export default function VoiceCallModal({
     return () => clearInterval(timer);
   }, []);
 
-  // Voice synthesis with multilingual and feminine/masculine selection
-  const speak = (text: string) => {
-    if (typeof window === "undefined" || !window.speechSynthesis || isMuted) return;
-
-    window.speechSynthesis.cancel();
-    setCallTranscript(text);
-    setIsSpeaking(true);
-    setIsListening(false);
-
-    // Keep all Unicode letters (Urdu, Arabic, English, accents), numbers and common punctuation
-    const clean = text.replace(/[^\p{L}\p{N}\s.,?!'’\-]/gu, "").trim();
-    if (!clean) {
-      setIsSpeaking(false);
-      startListening();
-      return;
+  // Request Mic Permission upfront so browser never blocks recognition
+  useEffect(() => {
+    isActiveRef.current = true;
+    if (typeof navigator !== "undefined" && navigator.mediaDevices?.getUserMedia) {
+      navigator.mediaDevices
+        .getUserMedia({ audio: true })
+        .then((stream) => {
+          // Release test stream
+          stream.getTracks().forEach((track) => track.stop());
+        })
+        .catch((err) => {
+          console.warn("[VoiceCall] Microphone access not granted yet:", err);
+        });
     }
 
-    const utterance = new SpeechSynthesisUtterance(clean);
-    const isUrduScript = /[\u0600-\u06FF]/.test(clean);
+    return () => {
+      isActiveRef.current = false;
+      if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
+      stopVoice();
+      stopListening();
+    };
+  }, []);
 
-    if (isUrduScript) {
-      utterance.lang = "ur-PK";
-    } else {
-      utterance.lang = "en-US";
-    }
+  // Handle Speech Output (AI speaks out loud)
+  const speak = useCallback(
+    (text: string) => {
+      if (!character || isMutedRef.current) return;
 
-    const selectVoice = () => {
-      const voices = window.speechSynthesis.getVoices();
-      const isFemale = character?.gender !== "male";
+      stopListening();
+      setCallTranscript(text);
+      setIsSpeaking(true);
+      isSpeakingRef.current = true;
+      setIsListening(false);
 
-      if (isUrduScript) {
-        const urduVoice = voices.find((v) => v.lang.startsWith("ur") || v.lang.startsWith("hi"));
-        if (urduVoice) {
-          utterance.voice = urduVoice;
-          return;
-        }
-      }
+      playVoice({
+        text,
+        character,
+        onStart: () => {
+          setIsSpeaking(true);
+          isSpeakingRef.current = true;
+          setIsListening(false);
+        },
+        onEnd: () => {
+          setIsSpeaking(false);
+          isSpeakingRef.current = false;
+          // Automatically prompt user to speak after AI finishes
+          if (isActiveRef.current && !isMutedRef.current) {
+            setTimeout(() => {
+              if (isActiveRef.current && !isSpeakingRef.current && !isMutedRef.current) {
+                startListening();
+              }
+            }, 400);
+          }
+        },
+        onError: () => {
+          setIsSpeaking(false);
+          isSpeakingRef.current = false;
+          if (isActiveRef.current && !isMutedRef.current) {
+            startListening();
+          }
+        },
+      });
+    },
+    [character]
+  );
 
-      if (isFemale) {
-        // High priority female voice names across Windows, Mac, Chrome, Edge, Android
-        const femaleVoice = voices.find(
-          (v) =>
-            v.name.includes("Zira") ||
-            v.name.includes("Female") ||
-            v.name.includes("Jenny") ||
-            v.name.includes("Samantha") ||
-            v.name.includes("Victoria") ||
-            v.name.includes("Google UK English Female") ||
-            (v.name.includes("English") && !v.name.includes("David") && !v.name.includes("Male") && !v.name.includes("George"))
+  // Send User Speech to Backend AI
+  const handleUserSpeech = useCallback(
+    async (speechText: string) => {
+      const clean = speechText.trim();
+      if (!clean || !character) return;
+
+      stopListening();
+      setUserTranscript(`You: "${clean}"`);
+      setCallTranscript("Thinking...");
+
+      try {
+        const savedUserStr = safeLocalStorage.getRawItem("zovik_user");
+        const directTier = safeLocalStorage.getRawItem("zovik_tier", "free") || "free";
+        const token = safeLocalStorage.getRawItem("zovik_token");
+        let currentUserId: string | undefined;
+        try {
+          if (savedUserStr) currentUserId = JSON.parse(savedUserStr)?.id;
+        } catch {}
+
+        const res = await fetch("/api/chat", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({
+            character,
+            messages: [{ sender: "user", text: clean }],
+            token,
+            userTier: directTier,
+            userId: currentUserId,
+          }),
+        });
+
+        const data = await res.json();
+        const reply =
+          data.reply ||
+          (character.gender === "male"
+            ? "Aapki awaaz sun kar bohot acha laga... Aur batein karo mere sath!"
+            : "Aapki awaaz kitni pyari hai... Mujhe aur batein sunao na 💕");
+
+        speak(reply);
+      } catch {
+        speak(
+          character.gender === "male"
+            ? "Meri jaan, connection thora slow ho gaya tha, dubara bolo na?"
+            : "Jaan, connection thora slow ho gaya tha, dubara bolo na?"
         );
-        if (femaleVoice) {
-          utterance.voice = femaleVoice;
-        }
-        utterance.pitch = 1.25; // Feminine pitch boost
-      } else {
-        const maleVoice = voices.find((v) => v.name.includes("David") || v.name.includes("Male"));
-        if (maleVoice) utterance.voice = maleVoice;
-        utterance.pitch = 0.95;
       }
-    };
+    },
+    [character, speak]
+  );
 
-    selectVoice();
-    if (window.speechSynthesis.onvoiceschanged !== undefined) {
-      window.speechSynthesis.onvoiceschanged = selectVoice;
-    }
-
-    utterance.rate = 0.96;
-
-    utterance.onend = () => {
-      setIsSpeaking(false);
-      // Automatically resume mic listening after AI finishes speaking
-      startListening();
-    };
-
-    utterance.onerror = () => {
-      setIsSpeaking(false);
-      startListening();
-    };
-
-    window.speechSynthesis.speak(utterance);
-  };
-
-  // Web Speech Recognition for Real User Mic Input
-  const startListening = () => {
-    if (typeof window === "undefined" || isSpeaking) return;
+  // Start Mic Listening
+  const startListening = useCallback(() => {
+    if (typeof window === "undefined" || isSpeakingRef.current || !isActiveRef.current) return;
 
     const win = window as unknown as WindowWithSpeech;
     const SpeechRecognitionClass = win.SpeechRecognition || win.webkitSpeechRecognition;
 
     if (!SpeechRecognitionClass) {
       setMicUnsupported(true);
-      console.warn("SpeechRecognition not supported in this browser");
       return;
     }
 
@@ -177,81 +222,85 @@ export default function VoiceCallModal({
 
       recognition.onstart = () => {
         setIsListening(true);
+        setMicErrorMsg(null);
+        pendingSpeechRef.current = "";
       };
 
       recognition.onresult = (event: SpeechRecognitionEventLike) => {
-        let currentText = "";
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-          currentText += event.results[i][0].transcript;
-        }
-        setUserTranscript(currentText);
+        let interimText = "";
+        let finalText = "";
 
-        if (event.results[0]?.isFinal) {
-          handleUserSpeech(currentText);
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          const trans = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            finalText += trans;
+          } else {
+            interimText += trans;
+          }
+        }
+
+        const currentSpoken = (finalText || interimText).trim();
+        if (currentSpoken) {
+          pendingSpeechRef.current = currentSpoken;
+          setUserTranscript(`You: "${currentSpoken}"`);
+
+          // Reset silence timer on every spoken word
+          if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+          silenceTimerRef.current = setTimeout(() => {
+            if (pendingSpeechRef.current.trim()) {
+              handleUserSpeech(pendingSpeechRef.current);
+              pendingSpeechRef.current = "";
+            }
+          }, 1400); // 1.4s of natural silence submits turn
         }
       };
 
-      recognition.onerror = () => {
+      recognition.onerror = (e) => {
         setIsListening(false);
+        if (e.error === "not-allowed") {
+          setMicErrorMsg("Microphone permission blocked. Please allow mic in browser settings.");
+        }
       };
 
       recognition.onend = () => {
         setIsListening(false);
+        // If user stopped speaking and speech is pending, submit it immediately
+        if (pendingSpeechRef.current.trim()) {
+          handleUserSpeech(pendingSpeechRef.current);
+          pendingSpeechRef.current = "";
+        } else if (isActiveRef.current && !isSpeakingRef.current && !isMutedRef.current) {
+          // Auto-reconnect mic so silence doesn't kill the call's listening state
+          if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
+          restartTimerRef.current = setTimeout(() => {
+            if (isActiveRef.current && !isSpeakingRef.current && !isMutedRef.current) {
+              startListening();
+            }
+          }, 350);
+        }
       };
 
       recognitionRef.current = recognition;
       recognition.start();
     } catch (e) {
-      console.warn("Mic speech error:", e);
+      console.warn("[VoiceCall] Mic start note:", e);
       setIsListening(false);
     }
-  };
+  }, [micLang, handleUserSpeech]);
 
   const stopListening = () => {
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+    }
+    if (restartTimerRef.current) {
+      clearTimeout(restartTimerRef.current);
+    }
     if (recognitionRef.current) {
       recognitionRef.current.stop();
     }
     setIsListening(false);
   };
 
-  const handleUserSpeech = async (speechText: string) => {
-    if (!speechText.trim() || !character) return;
-    stopListening();
-    setUserTranscript(`You: "${speechText}"`);
-    setCallTranscript("Thinking...");
-
-    try {
-      const savedUserStr = safeLocalStorage.getRawItem("zovik_user");
-      const directTier = safeLocalStorage.getRawItem("zovik_tier", "free") || "free";
-      const token = safeLocalStorage.getRawItem("zovik_token");
-      let currentUserId: string | undefined;
-      try {
-        if (savedUserStr) currentUserId = JSON.parse(savedUserStr)?.id;
-      } catch {}
-
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({
-          character,
-          messages: [{ sender: "user", text: speechText }],
-          token,
-          userTier: directTier,
-          userId: currentUserId,
-        }),
-      });
-      const data = await res.json();
-      const reply = data.reply || "Aapki awaaz kitni pyari hai... Mujhe aur batein sunao na 💕";
-      speak(reply);
-    } catch {
-      speak("Jaan, aapki baat sun kar bohot maza aaya. Thori aur batein karo mere sath!");
-    }
-  };
-
-  // Initial Greeting when call connects: dynamic and tailored to character
+  // Initial Greeting when call connects
   useEffect(() => {
     if (character) {
       const isMale = character.gender === "male";
@@ -262,19 +311,13 @@ export default function VoiceCallModal({
           ? `Hey! So good to hear from you. I was hoping you'd call!`
           : `Hey! I'm so happy you called me! I was just waiting to hear your voice 💕`;
 
-      setTimeout(() => {
+      const t = setTimeout(() => {
         speak(greeting);
-      }, 700);
+      }, 600);
+
+      return () => clearTimeout(t);
     }
-    return () => {
-      if (typeof window !== "undefined" && window.speechSynthesis) {
-        window.speechSynthesis.cancel();
-      }
-      if (recognitionRef.current) {
-        recognitionRef.current.abort();
-      }
-    };
-  }, [character]);
+  }, [character, speak]);
 
   if (!character) return null;
 
@@ -298,16 +341,34 @@ export default function VoiceCallModal({
             {/* Mic Language Switcher */}
             <button
               type="button"
-              onClick={() => setMicLang((prev) => (prev === "en-US" ? "ur-PK" : "en-US"))}
+              onClick={() => {
+                const nextLang = micLang === "ur-PK" ? "en-US" : "ur-PK";
+                setMicLang(nextLang);
+                if (isListening) {
+                  stopListening();
+                  setTimeout(() => startListening(), 200);
+                }
+              }}
               className="px-2.5 py-1 rounded-full text-[11px] font-medium bg-white/10 hover:bg-white/20 text-white/90 border border-white/10 transition-all flex items-center space-x-1 cursor-pointer"
-              title="Mic language switch: English/Roman Urdu or Urdu"
+              title="Mic recognition language: Urdu/Roman Urdu vs English"
             >
               <span className="text-white/60">Mic:</span>
-              <span className="text-[#f53b70] font-bold">{micLang === "en-US" ? "EN / Roman" : "اردو"}</span>
+              <span className="text-[#f53b70] font-bold">{micLang === "ur-PK" ? "اردو / Roman" : "English"}</span>
             </button>
 
             <button
-              onClick={() => setIsMuted(!isMuted)}
+              onClick={() => {
+                if (isMuted) {
+                  setIsMuted(false);
+                  isMutedRef.current = false;
+                  setTimeout(() => startListening(), 200);
+                } else {
+                  setIsMuted(true);
+                  isMutedRef.current = true;
+                  stopVoice();
+                  stopListening();
+                }
+              }}
               className="size-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors cursor-pointer"
               title={isMuted ? "Unmute" : "Mute"}
             >
@@ -348,12 +409,12 @@ export default function VoiceCallModal({
           <div className="flex items-center space-x-2 mt-1.5">
             <span
               className={`size-2 rounded-full ${
-                isListening ? "bg-emerald-400 animate-ping" : "bg-[#f53b70] animate-pulse"
+                isListening ? "bg-emerald-400 animate-ping" : isSpeaking ? "bg-[#f53b70] animate-pulse" : "bg-white/40"
               }`}
             />
             <span className="text-xs font-mono text-emerald-400 font-bold">{formatTime(seconds)}</span>
             <span className="text-[11px] text-white/50">
-              • {isListening ? "Listening to you..." : isSpeaking ? "Speaking..." : "Connected"}
+              • {isListening ? "Listening to your voice..." : isSpeaking ? "Speaking..." : "Tap mic to speak"}
             </span>
           </div>
 
@@ -390,10 +451,10 @@ export default function VoiceCallModal({
 
         {/* Bottom Interactive Mic & Quick Type Bar */}
         <div className="w-full flex flex-col space-y-3 pt-2">
-          {/* Browser mic compatibility alert */}
-          {micUnsupported && (
+          {/* Mic warning / error message */}
+          {(micUnsupported || micErrorMsg) && (
             <div className="flex items-center space-x-2 px-3 py-2 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-amber-200 text-[11px] leading-tight text-center">
-              <span>⚠️ Microphone recognition is unavailable in this browser. You can type below to talk in voice! (Use Chrome or Edge for mic)</span>
+              <span>{micErrorMsg || "Microphone speech recognition is unavailable in this browser. You can type below to talk in voice! (Use Chrome or Edge for mic)"}</span>
             </div>
           )}
 
@@ -417,7 +478,7 @@ export default function VoiceCallModal({
             />
             <button
               type="submit"
-              className="size-7 rounded-xl bg-[#f53b70] hover:bg-[#ff5b8c] text-white flex items-center justify-center transition-all"
+              className="size-7 rounded-xl bg-[#f53b70] hover:bg-[#ff5b8c] text-white flex items-center justify-center transition-all cursor-pointer"
             >
               <Send className="size-3.5" />
             </button>
@@ -434,7 +495,7 @@ export default function VoiceCallModal({
                   startListening();
                 }
               }}
-              className={`flex flex-col items-center space-y-1 group`}
+              className="flex flex-col items-center space-y-1 group cursor-pointer"
             >
               <div
                 className={`size-14 rounded-full flex items-center justify-center transition-all shadow-lg ${
@@ -453,18 +514,18 @@ export default function VoiceCallModal({
             {/* End Call Button */}
             <button
               onClick={() => {
-                if (typeof window !== "undefined" && window.speechSynthesis) {
-                  window.speechSynthesis.cancel();
-                }
+                isActiveRef.current = false;
+                if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
+                stopVoice();
                 stopListening();
                 onClose();
               }}
-              className="flex flex-col items-center space-y-1 group"
+              className="flex flex-col items-center space-y-1 group cursor-pointer"
             >
-              <div className="size-14 rounded-full bg-red-600 hover:bg-red-500 text-white flex items-center justify-center shadow-lg shadow-red-600/40 transition-all hover:scale-105 active:scale-95">
+              <div className="size-14 rounded-full bg-red-600 hover:bg-red-500 text-white flex items-center justify-center shadow-lg shadow-red-600/40 hover:scale-105 active:scale-95 transition-all">
                 <PhoneOff className="size-6" />
               </div>
-              <span className="text-[10px] text-red-400 font-bold">End Call</span>
+              <span className="text-[10px] text-white/70 font-bold">End Call</span>
             </button>
           </div>
         </div>
