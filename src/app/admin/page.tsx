@@ -926,8 +926,11 @@ export default function AdminPage() {
   const totalRevenuePKR = payments
     .filter((p) => p.status === "approved")
     .reduce((acc, curr) => {
-      const amtStr = String(curr.amount || "");
-      return acc + (amtStr.includes("3,000") || amtStr === "3000" ? 3000 : 1400);
+      if (typeof curr.amount === "number" && !isNaN(curr.amount)) {
+        return acc + curr.amount;
+      }
+      const parsed = parseInt(String(curr.amount || "").replace(/[^0-9]/g, ""), 10);
+      return acc + (!isNaN(parsed) ? parsed : 0);
     }, 0);
 
   // --- 2. RENDER FULL AUTHENTICATED CONTROL ROOM ---

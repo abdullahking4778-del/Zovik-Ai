@@ -53,7 +53,7 @@ export interface ShortReel {
 export interface PaymentRequest {
   id: string;
   userEmail: string;
-  plan: "plus" | "vip";
+  plan: "plus" | "vip" | string;
   planName: string;
   currency: string;
   amount: number;

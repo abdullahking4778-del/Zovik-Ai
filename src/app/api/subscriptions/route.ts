@@ -11,13 +11,15 @@ import {
   deletePersistentPayment,
   generateUniqueId,
 } from "@/lib/serverDb";
+import { getPersistentPlans } from "@/lib/plansStore";
 import { PaymentRequest } from "@/types";
 
 interface PaymentSubmissionPayload {
   userEmail: string;
-  plan: "vip" | "plus";
+  plan: string;
+  planName?: string;
   currency?: string;
-  amount?: number;
+  amount?: number | string;
   method: string;
   trxId: string;
   senderName?: string;
@@ -72,13 +74,34 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Robust dynamic amount parsing (handles 200, "200", "Rs. 200", "$6", etc.)
+    let cleanAmount = 1500;
+    if (typeof amount === "number" && !isNaN(amount)) {
+      cleanAmount = amount;
+    } else if (typeof amount === "string") {
+      const parsedNum = parseInt(amount.replace(/[^0-9]/g, ""), 10);
+      if (!isNaN(parsedNum) && parsedNum > 0) {
+        cleanAmount = parsedNum;
+      }
+    }
+
+    const selectedPlanId = String(plan || "vip").trim();
+    const cleanPlanName =
+      selectedPlanId === "vip"
+        ? "VIP Plan"
+        : selectedPlanId === "plus"
+        ? "Plus Plan"
+        : selectedPlanId === "vip_plus"
+        ? "VIP Plus Diamond"
+        : `${selectedPlanId.toUpperCase()} Plan`;
+
     const newRequest: PaymentRequest = {
       id: paymentId,
       userEmail: String(userEmail).trim().toLowerCase(),
-      plan: plan === "vip" ? "vip" : "plus",
-      planName: plan === "vip" ? "VIP Plan (1 Month)" : "Plus Plan (1 Month)",
+      plan: selectedPlanId,
+      planName: cleanPlanName,
       currency: currency || "PKR",
-      amount: Number(amount) || (plan === "vip" ? 2500 : 1200),
+      amount: cleanAmount,
       method: String(method).trim(),
       trxId: String(trxId).trim(),
       senderName: senderName ? String(senderName).trim() : "Customer",
@@ -122,18 +145,34 @@ export async function PATCH(req: NextRequest) {
     }
 
     if (action === "approve") {
-      const newExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+      // Look up dynamic plan to check exact duration (e.g. 30 days, 60 days)
+      let planDays = 30;
+      try {
+        const allPlans = await getPersistentPlans();
+        const matched = allPlans.find((p) => p.id === updatedPayment.plan);
+        if (matched?.durationDays) {
+          planDays = matched.durationDays;
+        }
+      } catch (err) {
+        console.warn("[Subscriptions] Plan lookup note, using 30d default:", err);
+      }
+
+      const newExpiresAt = new Date(Date.now() + planDays * 24 * 60 * 60 * 1000);
+      const isVipTier =
+        updatedPayment.plan.toLowerCase().includes("vip") ||
+        updatedPayment.plan === "vip_plus";
+      const assignedTier: "free" | "plus" | "vip" = isVipTier ? "vip" : "plus";
 
       // 1. Authoritative local store update
       try {
         upsertStoredUser(updatedPayment.userEmail, {
           email: updatedPayment.userEmail,
-          tier: updatedPayment.plan === "vip" ? "vip" : "plus",
-          isVip: updatedPayment.plan === "vip",
-          subscriptionDays: 30,
+          tier: assignedTier,
+          isVip: isVipTier,
+          subscriptionDays: planDays,
           subscriptionStart: new Date().toISOString(),
           subscriptionEndsAt: newExpiresAt.toISOString(),
-          storageRetentionDays: updatedPayment.plan === "vip" ? 35 : 30,
+          storageRetentionDays: isVipTier ? 35 : 30,
         });
       } catch (err) {
         console.warn("[Subscriptions] Authoritative user store update failed:", err);
