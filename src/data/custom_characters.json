@@ -1,1 +1,34 @@
-[]
+[
+  {
+    "id": "aria-solis",
+    "slug": "aria-solis",
+    "name": "Aria Solis",
+    "age": 21,
+    "gender": "female",
+    "style": "realistic",
+    "tagline": "Morning Vibe • Sweet",
+    "desc": "Morning Vibe • Sweet",
+    "image": "/characters/zovik_01.jpg",
+    "badge": "VIP",
+    "category": "Trending",
+    "series": true,
+    "verified": true,
+    "online": true,
+    "tags": [
+      "Verified",
+      "AI Companion"
+    ],
+    "voice": "Sweet & Warm",
+    "greeting": "Hi sweetheart, I'm Aria Solis! So happy to talk to you 💕",
+    "videoUrl": "/videos/companions/aria-solis.mp4",
+    "gallery": [
+      "/characters/zovik_01.jpg",
+      "/characters/char_1790757646615_Woman_sitting_in_rooftop_lounge_20260930134012.webp",
+      "/characters/char_1790757646803_Woman_wearing_green_top_20260930133131.webp",
+      "/characters/char_1790757646982_Woman_standing_in_tropical_garden_2K_20260930132905.webp"
+    ],
+    "messages": [],
+    "accessTier": "vip",
+    "isVipOnly": true
+  }
+]

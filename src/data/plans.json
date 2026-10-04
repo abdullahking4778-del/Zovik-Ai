@@ -1,5 +1,28 @@
 [
   {
+    "id": "vip_plus",
+    "name": "Ultra Diamond",
+    "badge": "EXCLUSIVE 💎",
+    "badgeColor": "emerald",
+    "pricePKR": 1500,
+    "originalPricePKR": 15000,
+    "priceUSD": 5,
+    "originalPriceUSD": 10,
+    "durationDays": 60,
+    "features": [
+      "2 Months Full VIP Access (Save 35%)",
+      "1000 Messages & Voice Calls / Day",
+      "50 HD Photos / Day (Instant Generation)",
+      "Custom Companion Creation Unlocked",
+      "Direct 1-on-1 VIP Support Priority",
+      "Diamond VIP Badge on Profile"
+    ],
+    "isPopular": true,
+    "isActive": true,
+    "createdAt": "2026-10-04T02:35:10.943Z",
+    "updatedAt": "2026-10-04T02:35:10.943Z"
+  },
+  {
     "id": "plus",
     "name": "Plus Plan",
     "badge": "70% OFF",
@@ -20,7 +43,9 @@
       "30 Days Cloud Storage Retention"
     ],
     "isPopular": false,
-    "isActive": true
+    "isActive": true,
+    "createdAt": "2026-10-03T09:16:21.720248+00:00",
+    "updatedAt": "2026-10-03T09:16:17.988+00:00"
   },
   {
     "id": "vip",
@@ -43,29 +68,8 @@
       "Lifetime VIP Badge on Profile"
     ],
     "isPopular": true,
-    "isActive": true
-  },
-  {
-    "id": "vip_plus",
-    "name": "VIP Plus Diamond",
-    "badge": "EXCLUSIVE 💎",
-    "badgeColor": "purple",
-    "pricePKR": 4500,
-    "originalPricePKR": 15000,
-    "priceUSD": 18,
-    "originalPriceUSD": 59.99,
-    "durationDays": 60,
-    "dailyMessages": 1000,
-    "dailyPhotos": 50,
-    "features": [
-      "2 Months Full VIP Access (Save 35%)",
-      "1000 Messages & Voice Calls / Day",
-      "50 HD Photos / Day (Instant Generation)",
-      "Custom Companion Creation Unlocked",
-      "Direct 1-on-1 VIP Support Priority",
-      "Diamond VIP Badge on Profile"
-    ],
-    "isPopular": false,
-    "isActive": true
+    "isActive": true,
+    "createdAt": "2026-10-03T09:16:21.720248+00:00",
+    "updatedAt": "2026-10-03T09:16:17.988+00:00"
   }
 ]
