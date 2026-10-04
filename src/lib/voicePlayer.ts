@@ -3,6 +3,8 @@
 import { Character } from "@/types";
 
 let currentAudio: HTMLAudioElement | null = null;
+let activeUtterance: SpeechSynthesisUtterance | null = null;
+let watchdogTimer: NodeJS.Timeout | null = null;
 let cachedVoices: SpeechSynthesisVoice[] = [];
 
 if (typeof window !== "undefined" && window.speechSynthesis) {
@@ -13,20 +15,38 @@ if (typeof window !== "undefined" && window.speechSynthesis) {
 }
 
 export function stopVoice(): void {
+  if (watchdogTimer) {
+    clearTimeout(watchdogTimer);
+    watchdogTimer = null;
+  }
   if (currentAudio) {
-    currentAudio.pause();
-    currentAudio.currentTime = 0;
+    try {
+      currentAudio.pause();
+      currentAudio.currentTime = 0;
+    } catch {}
     currentAudio = null;
   }
+  if (activeUtterance) {
+    activeUtterance.onstart = null;
+    activeUtterance.onend = null;
+    activeUtterance.onerror = null;
+    activeUtterance = null;
+  }
   if (typeof window !== "undefined" && window.speechSynthesis) {
-    window.speechSynthesis.cancel();
+    try {
+      window.speechSynthesis.cancel();
+    } catch {}
   }
 }
 
 /**
- * High-fidelity voice player:
- * 1. Primary: Unlimited Neural Cloud TTS (/api/tts) - sweet realistic human voice
- * 2. Fallback: Browser Web SpeechSynthesis with female/male tuned parameters
+ * Bulletproof Voice Player:
+ * 1. Primary for Female: Unlimited Neural Cloud TTS (/api/tts)
+ * 2. Primary for Male / Fallback: Browser Web SpeechSynthesis with tuned pitch/rate
+ * 3. Guaranteed Safety:
+ *    - Anchored utterance prevents Chromium garbage-collection bug
+ *    - Watchdog timer guarantees onEnd() ALWAYS fires within expected speech length
+ *    - safeEnd() ensures onEnd is called exactly once
  */
 export async function playVoice({
   text,
@@ -54,11 +74,30 @@ export async function playVoice({
     return;
   }
 
+  let hasEnded = false;
+  const safeEnd = () => {
+    if (hasEnded) return;
+    hasEnded = true;
+    if (watchdogTimer) {
+      clearTimeout(watchdogTimer);
+      watchdogTimer = null;
+    }
+    currentAudio = null;
+    activeUtterance = null;
+    onEnd?.();
+  };
+
+  // Watchdog timer: speech cannot run longer than (length * 130ms + 5000ms buffer)
+  const maxSpeechDuration = Math.max(6000, cleanText.length * 130 + 5000);
+  watchdogTimer = setTimeout(() => {
+    console.warn("[VoicePlayer] Watchdog safety timer fired - releasing audio lock.");
+    stopVoice();
+    safeEnd();
+  }, maxSpeechDuration);
+
   const isFemale = character.gender !== "male";
 
-  // CASE 1: Female characters (Larki ki sweet natural awaaz)
-  // Uses 100% Free Unlimited Neural Cloud TTS (/api/tts).
-  // Pronounces Roman Urdu, Urdu, Hindi, and English naturally and sweetly without robotic sounds.
+  // CASE 1: Female characters (Larki ki sweet natural awaaz via /api/tts)
   if (isFemale) {
     try {
       const ttsUrl = `/api/tts?text=${encodeURIComponent(cleanText)}&gender=female`;
@@ -70,29 +109,26 @@ export async function playVoice({
       };
 
       audio.onended = () => {
-        currentAudio = null;
-        onEnd?.();
+        safeEnd();
       };
 
       audio.onerror = () => {
-        console.warn("[VoicePlayer] Cloud audio failed or blocked, falling back to local speech synthesis.");
+        console.warn("[VoicePlayer] Cloud audio failed, falling back to local speech synthesis.");
         currentAudio = null;
-        playBrowserSpeech(cleanText, character, onStart, onEnd, onError);
+        playBrowserSpeech(cleanText, character, onStart, safeEnd, onError);
       };
 
       await audio.play();
       return;
     } catch (err) {
       console.warn("[VoicePlayer] Autoplay or network note, falling back to speech synthesis:", err);
-      playBrowserSpeech(cleanText, character, onStart, onEnd, onError);
+      playBrowserSpeech(cleanText, character, onStart, safeEnd, onError);
       return;
     }
   }
 
-  // CASE 2: Male characters (Larke ki deep & handsome awaaz)
-  // Uses authentic Male voices (Microsoft David, Guy, Mark, George, Daniel, Google Male)
-  // with masculine pitch (0.92) and natural pace (0.98).
-  playBrowserSpeech(cleanText, character, onStart, onEnd, onError);
+  // CASE 2: Male characters (Larke ki deep handsome awaaz)
+  playBrowserSpeech(cleanText, character, onStart, safeEnd, onError);
 }
 
 function playBrowserSpeech(
@@ -111,6 +147,8 @@ function playBrowserSpeech(
     window.speechSynthesis.cancel();
 
     const utterance = new SpeechSynthesisUtterance(text);
+    activeUtterance = utterance; // Anchored in module scope to prevent GC bug
+
     const isFemale = character.gender !== "male";
     const isUrduScript = /[\u0600-\u06FF]/.test(text);
 
@@ -123,7 +161,6 @@ function playBrowserSpeech(
     const voices = cachedVoices.length > 0 ? cachedVoices : window.speechSynthesis.getVoices();
 
     if (isFemale) {
-      // Find female voice
       const femaleVoice = voices.find(
         (v) =>
           v.name.includes("Natural") ||
@@ -140,7 +177,7 @@ function playBrowserSpeech(
       if (femaleVoice) {
         utterance.voice = femaleVoice;
       }
-      utterance.pitch = 1.25; // Feminine pitch
+      utterance.pitch = 1.2;
       utterance.rate = 1.0;
     } else {
       const maleVoice = voices.find(
@@ -148,22 +185,34 @@ function playBrowserSpeech(
           v.name.includes("David") ||
           v.name.includes("Guy") ||
           v.name.includes("Male") ||
-          v.name.includes("George")
+          v.name.includes("George") ||
+          v.name.includes("Daniel") ||
+          v.name.includes("Mark") ||
+          v.name.includes("Google UK English Male")
       );
       if (maleVoice) utterance.voice = maleVoice;
-      utterance.pitch = 0.95;
-      utterance.rate = 0.98;
+      utterance.pitch = 0.92;
+      utterance.rate = 0.96;
     }
 
-    utterance.onstart = () => onStart?.();
-    utterance.onend = () => onEnd?.();
+    utterance.onstart = () => {
+      onStart?.();
+    };
+
+    utterance.onend = () => {
+      activeUtterance = null;
+      onEnd?.();
+    };
+
     utterance.onerror = (e) => {
+      activeUtterance = null;
       onEnd?.();
       onError?.(e);
     };
 
     window.speechSynthesis.speak(utterance);
   } catch (err) {
+    activeUtterance = null;
     onError?.(err);
     onEnd?.();
   }

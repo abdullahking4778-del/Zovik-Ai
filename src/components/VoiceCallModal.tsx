@@ -17,6 +17,7 @@ import {
   PhoneCall,
   Crown,
   Loader2,
+  Languages,
 } from "lucide-react";
 import { Character, Message } from "@/types";
 import { safeLocalStorage } from "@/lib/storage";
@@ -62,6 +63,18 @@ type SpeechRecognitionConstructor = new () => SpeechRecognitionInstance;
 interface WindowWithSpeech extends Window {
   SpeechRecognition?: SpeechRecognitionConstructor;
   webkitSpeechRecognition?: SpeechRecognitionConstructor;
+}
+
+/**
+ * Safe helper to close AudioContext without throwing InvalidStateError
+ */
+function safeCloseAudioContext(ctx: AudioContext | null): void {
+  if (!ctx) return;
+  try {
+    if (ctx.state !== "closed") {
+      ctx.close().catch(() => {});
+    }
+  } catch {}
 }
 
 /**
@@ -113,11 +126,7 @@ function startDialTone(): () => void {
       isStopped = true;
       if (timerId) clearTimeout(timerId);
       if (ctx) {
-        try {
-          if (ctx.state !== "closed") {
-            ctx.close().catch(() => {});
-          }
-        } catch {}
+        safeCloseAudioContext(ctx);
         ctx = null;
       }
     };
@@ -145,8 +154,14 @@ export default function VoiceCallModal({
   const [isAiThinking, setIsAiThinking] = useState(false);
   const [quotaExceeded, setQuotaExceeded] = useState(false);
 
-  // Default to English/Roman ("en-US") so subtitles are written in clean English/Roman letters
-  const [micLang, setMicLang] = useState<"en-US" | "ur-PK">("en-US");
+  // Defaults to "en-US" so subtitles are written in clean English/Roman letters
+  const [micLang, setMicLang] = useState<"en-US" | "ur-PK">(() => {
+    if (typeof window !== "undefined") {
+      const saved = safeLocalStorage.getRawItem("zovik_call_mic_lang");
+      if (saved === "ur-PK" || saved === "en-US") return saved;
+    }
+    return "en-US";
+  });
 
   const [callTranscript, setCallTranscript] = useState<string>("");
   const [userTranscript, setUserTranscript] = useState<string>("");
@@ -162,6 +177,7 @@ export default function VoiceCallModal({
 
   const isSpeakingRef = useRef(false);
   const isAiBusyRef = useRef(false); // TRUE while AI is fetching/thinking OR speaking
+  const aiTurnWatchdogRef = useRef<NodeJS.Timeout | null>(null);
   const isMutedRef = useRef(false);
   const isActiveRef = useRef(true);
 
@@ -236,17 +252,14 @@ export default function VoiceCallModal({
         animFrameRef.current = null;
       }
       if (audioCtxRef.current) {
-        try {
-          if (audioCtxRef.current.state !== "closed") {
-            audioCtxRef.current.close().catch(() => {});
-          }
-        } catch {}
+        safeCloseAudioContext(audioCtxRef.current);
         audioCtxRef.current = null;
       }
       if (micStream) {
         micStream.getTracks().forEach((track) => track.stop());
       }
       if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
+      if (aiTurnWatchdogRef.current) clearTimeout(aiTurnWatchdogRef.current);
       stopVoice();
       stopListening();
     };
@@ -286,10 +299,25 @@ export default function VoiceCallModal({
     };
   }, [callMode, isCameraOn]);
 
+  // Cleanly clear AI busy states with watchdog release
+  const clearAiLock = useCallback(() => {
+    if (aiTurnWatchdogRef.current) {
+      clearTimeout(aiTurnWatchdogRef.current);
+      aiTurnWatchdogRef.current = null;
+    }
+    isAiBusyRef.current = false;
+    isSpeakingRef.current = false;
+    setIsAiThinking(false);
+    setIsSpeaking(false);
+  }, []);
+
   // Handle Speech Output (AI speaks out loud)
   const speak = useCallback(
     (text: string) => {
-      if (!character || isMutedRef.current) return;
+      if (!character || isMutedRef.current) {
+        clearAiLock();
+        return;
+      }
 
       stopListening();
       if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
@@ -301,6 +329,18 @@ export default function VoiceCallModal({
       isAiBusyRef.current = true;
       setIsListening(false);
 
+      // AI speech watchdog safety: force unlock if speech doesn't complete within expected time
+      if (aiTurnWatchdogRef.current) clearTimeout(aiTurnWatchdogRef.current);
+      const watchdogMs = Math.max(7000, text.length * 130 + 4000);
+      aiTurnWatchdogRef.current = setTimeout(() => {
+        console.warn("[VoiceCall] Speak safety timer fired - unblocking conversation turn.");
+        stopVoice();
+        clearAiLock();
+        if (isActiveRef.current && !isMutedRef.current) {
+          startListening();
+        }
+      }, watchdogMs);
+
       playVoice({
         text,
         character,
@@ -311,29 +351,25 @@ export default function VoiceCallModal({
           setIsListening(false);
         },
         onEnd: () => {
-          setIsSpeaking(false);
-          isSpeakingRef.current = false;
-          isAiBusyRef.current = false;
-          // Prompt user to speak after AI finishes completely + small buffer to prevent echo
+          clearAiLock();
+          // Prompt user to speak after AI finishes completely + buffer to prevent acoustic loop
           if (isActiveRef.current && !isMutedRef.current) {
             setTimeout(() => {
               if (isActiveRef.current && !isAiBusyRef.current && !isMutedRef.current) {
                 startListening();
               }
-            }, 450);
+            }, 350);
           }
         },
         onError: () => {
-          setIsSpeaking(false);
-          isSpeakingRef.current = false;
-          isAiBusyRef.current = false;
+          clearAiLock();
           if (isActiveRef.current && !isMutedRef.current) {
             startListening();
           }
         },
       });
     },
-    [character]
+    [character, clearAiLock]
   );
 
   // Send User Speech to Backend AI
@@ -351,6 +387,16 @@ export default function VoiceCallModal({
 
       setUserTranscript(`You: "${clean}"`);
       setCallTranscript(""); // clear old response while thinking
+
+      // Network turn watchdog: if network stalls > 15s, unlock state
+      if (aiTurnWatchdogRef.current) clearTimeout(aiTurnWatchdogRef.current);
+      aiTurnWatchdogRef.current = setTimeout(() => {
+        console.warn("[VoiceCall] Network call timeout - recovering call session.");
+        clearAiLock();
+        if (isActiveRef.current && !isMutedRef.current) {
+          startListening();
+        }
+      }, 15000);
 
       try {
         const savedUserStr = safeLocalStorage.getRawItem("zovik_user");
@@ -406,7 +452,7 @@ export default function VoiceCallModal({
         );
       }
     },
-    [character, speak]
+    [character, speak, clearAiLock]
   );
 
   // Start Mic Listening
@@ -427,11 +473,14 @@ export default function VoiceCallModal({
       return;
     }
 
-    try {
-      if (recognitionRef.current) {
+    if (recognitionRef.current) {
+      try {
         recognitionRef.current.abort();
-      }
+      } catch {}
+      recognitionRef.current = null;
+    }
 
+    try {
       const recognition = new SpeechRecognitionClass();
       recognition.continuous = false;
       recognition.interimResults = true;
@@ -444,10 +493,14 @@ export default function VoiceCallModal({
       };
 
       recognition.onresult = (event: SpeechRecognitionEventLike) => {
-        // Collect full accumulated transcript from index 0 to avoid dropping multi-word phrases
         let fullTranscript = "";
+        let isFinalSentence = false;
+
         for (let i = 0; i < event.results.length; ++i) {
           fullTranscript += event.results[i][0].transcript + " ";
+          if (event.results[i].isFinal) {
+            isFinalSentence = true;
+          }
         }
 
         const currentSpoken = fullTranscript.trim();
@@ -455,14 +508,19 @@ export default function VoiceCallModal({
           pendingSpeechRef.current = currentSpoken;
           setUserTranscript(`You: "${currentSpoken}"`);
 
-          // Reset silence timer on every newly recognized token
+          // Fast turn-taking:
+          // If browser finalized sentence, submit after 450ms pause!
+          // If interim, wait 1000ms.
+          const silenceWait = isFinalSentence ? 450 : 1000;
+
           if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
           silenceTimerRef.current = setTimeout(() => {
             if (pendingSpeechRef.current.trim() && !isAiBusyRef.current) {
-              handleUserSpeech(pendingSpeechRef.current);
+              const textToSend = pendingSpeechRef.current.trim();
               pendingSpeechRef.current = "";
+              handleUserSpeech(textToSend);
             }
-          }, 1250); // 1.25s natural silence submits speech turn to companion
+          }, silenceWait);
         }
       };
 
@@ -475,10 +533,11 @@ export default function VoiceCallModal({
 
       recognition.onend = () => {
         setIsListening(false);
-        // Only submit if AI is not already busy
+        // Only submit if AI is not already busy and we have pending speech
         if (!isAiBusyRef.current && pendingSpeechRef.current.trim()) {
-          handleUserSpeech(pendingSpeechRef.current);
+          const textToSend = pendingSpeechRef.current.trim();
           pendingSpeechRef.current = "";
+          handleUserSpeech(textToSend);
         } else if (
           isActiveRef.current &&
           !isAiBusyRef.current &&
@@ -496,12 +555,22 @@ export default function VoiceCallModal({
             ) {
               startListening();
             }
-          }, 350);
+          }, 300);
         }
       };
 
       recognitionRef.current = recognition;
-      recognition.start();
+      try {
+        recognition.start();
+      } catch (err: unknown) {
+        // If recognition failed to start due to active teardown, retry safely
+        if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
+        restartTimerRef.current = setTimeout(() => {
+          if (isActiveRef.current && !isAiBusyRef.current && !isSpeakingRef.current) {
+            startListening();
+          }
+        }, 350);
+      }
     } catch (e) {
       console.warn("[VoiceCall] Mic start note:", e);
       setIsListening(false);
@@ -511,9 +580,11 @@ export default function VoiceCallModal({
   const stopListening = () => {
     if (silenceTimerRef.current) {
       clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
     }
     if (restartTimerRef.current) {
       clearTimeout(restartTimerRef.current);
+      restartTimerRef.current = null;
     }
     if (recognitionRef.current) {
       try {
@@ -559,6 +630,7 @@ export default function VoiceCallModal({
     isAiBusyRef.current = true;
     if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
     if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+    if (aiTurnWatchdogRef.current) clearTimeout(aiTurnWatchdogRef.current);
     stopVoice();
     stopListening();
 
@@ -571,7 +643,7 @@ export default function VoiceCallModal({
     if (character && seconds > 0) {
       try {
         const storageKey = `zovik_chat_${character.id}`;
-        const saved = localStorage.getItem(storageKey);
+        const saved = safeLocalStorage.getRawItem(storageKey);
         let chatArr: Message[] = [];
         if (saved) chatArr = JSON.parse(saved);
 
@@ -586,7 +658,7 @@ export default function VoiceCallModal({
           type: "text",
         };
 
-        localStorage.setItem(storageKey, JSON.stringify([...chatArr, callSummaryMsg]));
+        safeLocalStorage.setRawItem(storageKey, JSON.stringify([...chatArr, callSummaryMsg]));
       } catch (err) {
         console.warn("Failed to save call log to chat:", err);
       }
@@ -617,16 +689,19 @@ export default function VoiceCallModal({
               className="w-full h-full object-cover object-center filter brightness-95"
             />
             {/* Top & Bottom Readability Scrims */}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-black/80 pointer-events-none" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/15 to-black/75 pointer-events-none" />
 
             {/* Video Mode Top Info Pill */}
-            <div className="absolute top-16 left-4 flex items-center space-x-2.5 z-10 bg-black/50 backdrop-blur-md px-3 py-1.5 rounded-2xl border border-white/10">
-              <div className="relative size-8 rounded-full overflow-hidden border border-[#f53b70]/60">
+            <div className="absolute top-16 left-4 flex items-center space-x-2.5 z-10 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-2xl border border-white/15 shadow-lg">
+              <div className="relative size-8 rounded-full overflow-hidden border border-[#f53b70]/80">
                 <Image src={character.image} alt={character.name} fill className="object-cover" unoptimized />
               </div>
               <div className="text-left">
                 <h4 className="text-xs font-bold text-white leading-tight drop-shadow">{character.name}</h4>
-                <p className="text-[10px] text-pink-400 font-medium">Live HD Video</p>
+                <p className="text-[10px] text-pink-400 font-semibold flex items-center space-x-1">
+                  <span className="size-1.5 rounded-full bg-emerald-400 animate-ping inline-block" />
+                  <span>Live HD Video</span>
+                </p>
               </div>
             </div>
           </div>
@@ -634,7 +709,7 @@ export default function VoiceCallModal({
 
         {/* User Selfie PIP (Picture-In-Picture) in Video Mode */}
         {callMode === "video" && (
-          <div className="absolute top-16 right-4 z-20 w-24 h-32 sm:w-28 sm:h-36 rounded-2xl overflow-hidden border-2 border-white/20 shadow-2xl bg-black/80 backdrop-blur-md transition-all">
+          <div className="absolute top-16 right-4 z-20 w-24 h-32 sm:w-28 sm:h-36 rounded-2xl overflow-hidden border-2 border-white/25 shadow-2xl bg-black/80 backdrop-blur-md transition-all">
             {isCameraOn && userStream ? (
               <video
                 ref={userVideoRef}
@@ -661,7 +736,7 @@ export default function VoiceCallModal({
 
         {/* Top Header Controls: Mode Toggle & Mute */}
         <div className="relative z-30 flex items-center justify-between w-full p-4 sm:p-5">
-          <div className="flex items-center space-x-1.5 px-3 py-1 rounded-full bg-black/50 backdrop-blur-md border border-white/10 text-xs font-bold">
+          <div className="flex items-center space-x-1.5 px-3 py-1 rounded-full bg-black/60 backdrop-blur-md border border-white/15 text-xs font-bold">
             <Sparkles className="size-3 text-[#f53b70]" />
             <span className="text-white/90">
               {callStatus === "calling" ? "Calling..." : callMode === "video" ? "HD Video Call" : "Live Voice Call"}
@@ -674,33 +749,36 @@ export default function VoiceCallModal({
               <button
                 type="button"
                 onClick={() => setCallMode((m) => (m === "video" ? "voice" : "video"))}
-                className={`px-2.5 py-1 rounded-full text-[11px] font-medium backdrop-blur-md border transition-all flex items-center space-x-1.5 cursor-pointer ${
+                className={`px-2.5 py-1 rounded-full text-[11px] font-semibold backdrop-blur-md border transition-all flex items-center space-x-1.5 cursor-pointer ${
                   callMode === "video"
-                    ? "bg-[#f53b70]/30 border-[#f53b70]/50 text-white shadow-sm shadow-pink-500/20"
-                    : "bg-white/10 hover:bg-white/20 border-white/10 text-white/90"
+                    ? "bg-[#f53b70] border-[#f53b70] text-white shadow-md shadow-pink-500/30"
+                    : "bg-black/50 hover:bg-black/70 border-white/15 text-white/90"
                 }`}
                 title="Switch between Full Video and Voice Avatar"
               >
-                {callMode === "video" ? <Video className="size-3.5 text-pink-400" /> : <VideoOff className="size-3.5 text-white/60" />}
+                {callMode === "video" ? <Video className="size-3.5" /> : <VideoOff className="size-3.5 text-white/60" />}
                 <span>{callMode === "video" ? "Video" : "Voice"}</span>
               </button>
             )}
 
-            {/* Mic Language Switcher: Defaults to English / Roman Urdu letters */}
+            {/* Mic Language Switcher: Defaults to English / Roman Urdu text */}
             <button
               type="button"
               onClick={() => {
                 const nextLang = micLang === "en-US" ? "ur-PK" : "en-US";
                 setMicLang(nextLang);
+                try {
+                  safeLocalStorage.setRawItem("zovik_call_mic_lang", nextLang);
+                } catch {}
                 if (isListening) {
                   stopListening();
                   setTimeout(() => startListening(), 200);
                 }
               }}
-              className="px-2.5 py-1 rounded-full text-[11px] font-medium bg-black/50 hover:bg-black/70 backdrop-blur-md text-white/90 border border-white/10 transition-all flex items-center space-x-1 cursor-pointer"
+              className="px-2.5 py-1 rounded-full text-[11px] font-medium bg-black/60 hover:bg-black/80 backdrop-blur-md text-white/90 border border-white/15 transition-all flex items-center space-x-1 cursor-pointer"
               title="Mic recognition language: Roman/English text vs Urdu Nastaliq Script"
             >
-              <span className="text-white/50">Lang:</span>
+              <Languages className="size-3 text-[#f53b70]" />
               <span className="text-[#f53b70] font-bold">
                 {micLang === "en-US" ? "Roman / English" : "اردو Script"}
               </span>
@@ -720,7 +798,7 @@ export default function VoiceCallModal({
                   stopListening();
                 }
               }}
-              className="size-8 rounded-full bg-black/50 hover:bg-black/70 backdrop-blur-md flex items-center justify-center text-white border border-white/10 transition-colors cursor-pointer"
+              className="size-8 rounded-full bg-black/60 hover:bg-black/80 backdrop-blur-md flex items-center justify-center text-white border border-white/15 transition-colors cursor-pointer"
               title={isMuted ? "Unmute Speaker" : "Mute Speaker"}
             >
               {isMuted ? <VolumeX className="size-4 text-red-400" /> : <Volume2 className="size-4" />}
@@ -731,143 +809,150 @@ export default function VoiceCallModal({
         {/* Center Calling / Audio Aura Section */}
         <div className="relative z-20 flex flex-col items-center justify-center my-auto w-full px-4">
           
-          {/* Avatar Container with Radial Acoustic Waves (Emanating Directly Around Avatar) */}
-          <div className="relative flex items-center justify-center size-56 sm:size-64 my-2">
-            
-            {/* Concentric Acoustic Waves Emanating Directly From Behind the Avatar */}
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          {/* VOICE MODE ONLY: Central Avatar Container with Radial Acoustic Waves */}
+          {callMode === "voice" ? (
+            <div className="relative flex items-center justify-center size-56 sm:size-64 my-2">
               
-              {/* Ring 1 - Deep Core Atmosphere */}
-              <div
-                className={`absolute rounded-full transition-all duration-300 ${
-                  isSpeaking
-                    ? "size-40 sm:size-48 bg-[#f53b70]/30 blur-md animate-pulse"
-                    : isListening
-                    ? "size-40 sm:size-48 bg-emerald-500/30 blur-md animate-pulse"
-                    : isAiThinking
-                    ? "size-40 sm:size-48 bg-purple-500/30 blur-md animate-pulse"
-                    : "size-36 sm:size-40 bg-white/5 blur-sm"
-                }`}
-                style={{
-                  transform: isListening ? `scale(${1 + audioLevel * 0.45})` : undefined,
-                }}
-              />
-
-              {/* Ring 2 - Concentric Sound Ripple Inner */}
-              <div
-                className={`absolute rounded-full border transition-all duration-300 ${
-                  isSpeaking
-                    ? "size-48 sm:size-56 border-pink-500/50 bg-pink-500/10 animate-ping [animation-duration:2.5s]"
-                    : isListening
-                    ? "size-48 sm:size-56 border-emerald-400/60 bg-emerald-500/10"
-                    : isAiThinking
-                    ? "size-48 sm:size-56 border-purple-400/50 bg-purple-500/10 animate-pulse"
-                    : "size-44 sm:size-48 border-white/10"
-                }`}
-                style={{
-                  transform: isListening ? `scale(${1 + audioLevel * 0.65})` : undefined,
-                  opacity: isListening ? Math.max(0.35, audioLevel) : undefined,
-                }}
-              />
-
-              {/* Ring 3 - Mid Acoustic Radial Wave */}
-              <div
-                className={`absolute rounded-full border transition-all duration-500 ${
-                  isSpeaking
-                    ? "size-60 sm:size-68 border-[#f53b70]/40 animate-pulse [animation-duration:1.8s]"
-                    : isListening
-                    ? "size-60 sm:size-68 border-teal-400/40"
-                    : isAiThinking
-                    ? "size-60 sm:size-68 border-purple-500/30 animate-pulse"
-                    : "size-52 sm:size-60 border-white/5"
-                }`}
-                style={{
-                  transform: isListening ? `scale(${1 + audioLevel * 0.9})` : undefined,
-                  opacity: isListening ? Math.max(0.2, audioLevel * 0.9) : undefined,
-                }}
-              />
-
-              {/* Ring 4 - Far Dissipating Ripple (Radar Wave) */}
-              {(isSpeaking || isListening || isAiThinking) && (
+              {/* Concentric Acoustic Waves Emanating Directly From Behind the Avatar */}
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                
+                {/* Ring 1 - Deep Core Atmosphere */}
                 <div
-                  className={`absolute rounded-full border transition-all duration-700 ${
+                  className={`absolute rounded-full transition-all duration-300 ${
                     isSpeaking
-                      ? "size-72 sm:size-84 border-pink-600/20 animate-ping [animation-duration:3s]"
+                      ? "size-40 sm:size-48 bg-[#f53b70]/30 blur-md animate-pulse"
+                      : isListening
+                      ? "size-40 sm:size-48 bg-emerald-500/30 blur-md animate-pulse"
                       : isAiThinking
-                      ? "size-72 sm:size-84 border-purple-600/30 animate-pulse"
-                      : "size-72 sm:size-84 border-emerald-400/30"
+                      ? "size-40 sm:size-48 bg-purple-500/30 blur-md animate-pulse"
+                      : "size-36 sm:size-40 bg-white/5 blur-sm"
                   }`}
                   style={{
-                    transform: isListening ? `scale(${1 + audioLevel * 1.15})` : undefined,
-                    opacity: isListening ? Math.max(0.15, audioLevel * 0.7) : undefined,
+                    transform: isListening ? `scale(${1 + audioLevel * 0.45})` : undefined,
                   }}
                 />
-              )}
 
-              {/* Ring 5 - Orbiting Frequency Nodes */}
-              {(isSpeaking || isListening || isAiThinking) && (
-                <div className="absolute size-44 sm:size-52 rounded-full animate-spin [animation-duration:14s] pointer-events-none">
-                  <span
-                    className={`absolute top-0 left-1/2 -translate-x-1/2 size-2 rounded-full ${
-                      isSpeaking
-                        ? "bg-pink-400 shadow-lg shadow-pink-500"
-                        : isAiThinking
-                        ? "bg-purple-400 shadow-lg shadow-purple-500"
-                        : "bg-emerald-400 shadow-lg shadow-emerald-500"
-                    }`}
-                  />
-                  <span
-                    className={`absolute bottom-0 left-1/2 -translate-x-1/2 size-2 rounded-full ${
-                      isSpeaking
-                        ? "bg-purple-400 shadow-lg shadow-purple-500"
-                        : isAiThinking
-                        ? "bg-pink-400 shadow-lg shadow-pink-500"
-                        : "bg-teal-400 shadow-lg shadow-teal-500"
-                    }`}
-                  />
-                  <span
-                    className={`absolute left-0 top-1/2 -translate-y-1/2 size-1.5 rounded-full ${
-                      isSpeaking ? "bg-pink-300" : isAiThinking ? "bg-purple-300" : "bg-cyan-400"
-                    }`}
-                  />
-                  <span
-                    className={`absolute right-0 top-1/2 -translate-y-1/2 size-1.5 rounded-full ${
-                      isSpeaking ? "bg-purple-300" : isAiThinking ? "bg-pink-300" : "bg-emerald-300"
-                    }`}
-                  />
-                </div>
-              )}
-            </div>
+                {/* Ring 2 - Concentric Sound Ripple Inner */}
+                <div
+                  className={`absolute rounded-full border transition-all duration-300 ${
+                    isSpeaking
+                      ? "size-48 sm:size-56 border-pink-500/50 bg-pink-500/10 animate-ping [animation-duration:2.5s]"
+                      : isListening
+                      ? "size-48 sm:size-56 border-emerald-400/60 bg-emerald-500/10"
+                      : isAiThinking
+                      ? "size-48 sm:size-56 border-purple-400/50 bg-purple-500/10 animate-pulse"
+                      : "size-44 sm:size-48 border-white/10"
+                  }`}
+                  style={{
+                    transform: isListening ? `scale(${1 + audioLevel * 0.65})` : undefined,
+                    opacity: isListening ? Math.max(0.35, audioLevel) : undefined,
+                  }}
+                />
 
-            {/* Central High-Res Avatar Circle */}
-            <div
-              className={`relative size-28 sm:size-32 rounded-full overflow-hidden border-2 shadow-2xl transition-all duration-300 z-10 ${
-                isSpeaking
-                  ? "border-[#f53b70] shadow-pink-600/60 scale-105"
-                  : isAiThinking
-                  ? "border-purple-400 shadow-purple-600/50 animate-pulse scale-105"
-                  : isListening
-                  ? "border-emerald-400 shadow-emerald-500/50 scale-105"
-                  : "border-white/20 shadow-purple-950/50"
-              }`}
-            >
-              <Image
-                src={character.image}
-                alt={character.name}
-                fill
-                className="object-cover object-top"
-                unoptimized
-              />
+                {/* Ring 3 - Mid Acoustic Radial Wave */}
+                <div
+                  className={`absolute rounded-full border transition-all duration-500 ${
+                    isSpeaking
+                      ? "size-60 sm:size-68 border-[#f53b70]/40 animate-pulse [animation-duration:1.8s]"
+                      : isListening
+                      ? "size-60 sm:size-68 border-teal-400/40"
+                      : isAiThinking
+                      ? "size-60 sm:size-68 border-purple-500/30 animate-pulse"
+                      : "size-52 sm:size-60 border-white/5"
+                  }`}
+                  style={{
+                    transform: isListening ? `scale(${1 + audioLevel * 0.9})` : undefined,
+                    opacity: isListening ? Math.max(0.2, audioLevel * 0.9) : undefined,
+                  }}
+                />
+
+                {/* Ring 4 - Far Dissipating Ripple (Radar Wave) */}
+                {(isSpeaking || isListening || isAiThinking) && (
+                  <div
+                    className={`absolute rounded-full border transition-all duration-700 ${
+                      isSpeaking
+                        ? "size-72 sm:size-84 border-pink-600/20 animate-ping [animation-duration:3s]"
+                        : isAiThinking
+                        ? "size-72 sm:size-84 border-purple-600/30 animate-pulse"
+                        : "size-72 sm:size-84 border-emerald-400/30"
+                    }`}
+                    style={{
+                      transform: isListening ? `scale(${1 + audioLevel * 1.15})` : undefined,
+                      opacity: isListening ? Math.max(0.15, audioLevel * 0.7) : undefined,
+                    }}
+                  />
+                )}
+
+                {/* Ring 5 - Orbiting Frequency Nodes */}
+                {(isSpeaking || isListening || isAiThinking) && (
+                  <div className="absolute size-44 sm:size-52 rounded-full animate-spin [animation-duration:14s] pointer-events-none">
+                    <span
+                      className={`absolute top-0 left-1/2 -translate-x-1/2 size-2 rounded-full ${
+                        isSpeaking
+                          ? "bg-pink-400 shadow-lg shadow-pink-500"
+                          : isAiThinking
+                          ? "bg-purple-400 shadow-lg shadow-purple-500"
+                          : "bg-emerald-400 shadow-lg shadow-emerald-500"
+                      }`}
+                    />
+                    <span
+                      className={`absolute bottom-0 left-1/2 -translate-x-1/2 size-2 rounded-full ${
+                        isSpeaking
+                          ? "bg-purple-400 shadow-lg shadow-purple-500"
+                          : isAiThinking
+                          ? "bg-pink-400 shadow-lg shadow-pink-500"
+                          : "bg-teal-400 shadow-lg shadow-teal-500"
+                      }`}
+                    />
+                    <span
+                      className={`absolute left-0 top-1/2 -translate-y-1/2 size-1.5 rounded-full ${
+                        isSpeaking ? "bg-pink-300" : isAiThinking ? "bg-purple-300" : "bg-cyan-400"
+                      }`}
+                    />
+                    <span
+                      className={`absolute right-0 top-1/2 -translate-y-1/2 size-1.5 rounded-full ${
+                        isSpeaking ? "bg-purple-300" : isAiThinking ? "bg-pink-300" : "bg-emerald-300"
+                      }`}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Central High-Res Avatar Circle */}
+              <div
+                className={`relative size-28 sm:size-32 rounded-full overflow-hidden border-2 shadow-2xl transition-all duration-300 z-10 ${
+                  isSpeaking
+                    ? "border-[#f53b70] shadow-pink-600/60 scale-105"
+                    : isAiThinking
+                    ? "border-purple-400 shadow-purple-600/50 animate-pulse scale-105"
+                    : isListening
+                    ? "border-emerald-400 shadow-emerald-500/50 scale-105"
+                    : "border-white/20 shadow-purple-950/50"
+                }`}
+              >
+                <Image
+                  src={character.image}
+                  alt={character.name}
+                  fill
+                  className="object-cover object-top"
+                  unoptimized
+                />
+              </div>
             </div>
-          </div>
+          ) : (
+            /* VIDEO MODE: No center circle obscuring the video - clean live viewing */
+            <div className="h-40 sm:h-48 flex items-center justify-center pointer-events-none" />
+          )}
 
           {/* Name & Calling / Voice Status */}
-          <h3 className="text-xl sm:text-2xl font-black text-white mt-1 drop-shadow-md">
-            {character.name}
-          </h3>
+          {callMode === "voice" && (
+            <h3 className="text-xl sm:text-2xl font-black text-white mt-1 drop-shadow-md">
+              {character.name}
+            </h3>
+          )}
 
           {/* Status Badge */}
-          <div className="flex items-center space-x-2 mt-1.5">
+          <div className="flex items-center space-x-2 mt-1.5 bg-black/50 backdrop-blur-md px-3 py-1 rounded-full border border-white/10">
             <span
               className={`size-2 rounded-full ${
                 callStatus === "calling"
@@ -884,22 +969,22 @@ export default function VoiceCallModal({
             <span className="text-xs font-mono text-emerald-400 font-bold">
               {callStatus === "calling" ? "Calling..." : formatTime(seconds)}
             </span>
-            <span className="text-[11px] text-white/60">
+            <span className="text-[11px] text-white/70">
               •{" "}
               {callStatus === "calling"
                 ? "Ringing..."
                 : isAiThinking
                 ? "Thinking..."
                 : isListening
-                ? "Listening to you..."
+                ? "Listening..."
                 : isSpeaking
                 ? "Speaking..."
-                : "Tap mic to speak"}
+                : "Ready to Speak"}
             </span>
           </div>
 
           {/* Dynamic Floating Subtitle Capsule (Clean Modern Subtitles) */}
-          <div className="mt-3.5 px-4 py-2.5 rounded-2xl bg-black/60 backdrop-blur-md border border-white/10 text-xs text-[#f1e6ed] max-w-sm w-full shadow-lg text-center min-h-[48px] flex items-center justify-center">
+          <div className="mt-3.5 px-4 py-2.5 rounded-2xl bg-black/75 backdrop-blur-xl border border-white/15 text-xs text-[#f1e6ed] max-w-sm w-full shadow-2xl text-center min-h-[52px] flex items-center justify-center">
             {callStatus === "calling" ? (
               <span className="text-amber-200/80 animate-pulse flex items-center justify-center space-x-1.5">
                 <PhoneCall className="size-3.5" />
@@ -920,7 +1005,7 @@ export default function VoiceCallModal({
               </span>
             ) : isListening ? (
               <span className="text-emerald-400/90 animate-pulse">
-                🎙️ Bolna shuru karein, main sun rahi hoon...
+                🎙️ Listening to you... (Speak now)
               </span>
             ) : (
               <span className="text-white/60 leading-relaxed line-clamp-3">
@@ -931,10 +1016,10 @@ export default function VoiceCallModal({
 
           {/* Quota Exceeded In-Call Notice */}
           {quotaExceeded && (
-            <div className="mt-2 flex items-center justify-between w-full max-w-sm px-3.5 py-2 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-200 text-xs animate-fadeIn">
+            <div className="mt-2 flex items-center justify-between w-full max-w-sm px-3.5 py-2 rounded-xl bg-amber-500/25 border border-amber-500/40 text-amber-200 text-xs animate-fadeIn shadow-lg">
               <div className="flex items-center space-x-1.5 text-left">
                 <Crown className="size-3.5 text-amber-400 shrink-0" />
-                <span className="text-[11px] leading-tight">Daily 20 msgs reached. Get VIP!</span>
+                <span className="text-[11px] leading-tight">Daily message limit reached!</span>
               </div>
               <button
                 onClick={() => {
@@ -949,7 +1034,7 @@ export default function VoiceCallModal({
         </div>
 
         {/* Bottom Interactive Controls & In-Call Quick Text */}
-        <div className="relative z-30 w-full flex flex-col space-y-3 p-4 sm:p-5 bg-gradient-to-t from-black via-black/80 to-transparent">
+        <div className="relative z-30 w-full flex flex-col space-y-3 p-4 sm:p-5 bg-gradient-to-t from-black via-black/85 to-transparent">
           
           {/* Mic warning / error message if any */}
           {(micUnsupported || micErrorMsg) && (
@@ -970,7 +1055,7 @@ export default function VoiceCallModal({
                 setInputText("");
               }
             }}
-            className="flex items-center space-x-2 bg-black/60 backdrop-blur-md border border-white/15 rounded-2xl px-3 py-1.5 shadow-inner"
+            className="flex items-center space-x-2 bg-black/70 backdrop-blur-md border border-white/20 rounded-2xl px-3 py-1.5 shadow-inner"
           >
             <input
               type="text"
