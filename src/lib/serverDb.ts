@@ -363,11 +363,11 @@ export async function savePersistentCustomCharacter(character: Character): Promi
     await setDoc(docRef, charWithId);
   } catch {}
 
-  // 3. Save to local fallback
+  // 3. Save to local fallback (custom_characters.json)
   try {
     const filePath = getStoragePath("custom_characters.json");
-    const existing = await getPersistentCustomCharacters();
-    const updated = [charWithId, ...existing.filter((c) => c.id !== charId)];
+    const localExisting = safeReadJsonFile<Character[]>(filePath, []);
+    const updated = [charWithId, ...localExisting.filter((c) => c.id !== charId && c.slug !== charWithId.slug)];
     safeWriteJsonFile(filePath, updated);
   } catch {}
 
@@ -375,9 +375,12 @@ export async function savePersistentCustomCharacter(character: Character): Promi
   try {
     const rootPath = path.join(process.cwd(), "src", "data", "characters.json");
     const list = safeReadJsonFile<Character[]>(rootPath, []);
-    if (Array.isArray(list) && list.some((c) => c.id === charId || c.slug === charWithId.slug)) {
-      const updatedList = list.map((c) => (c.id === charId || c.slug === charWithId.slug ? { ...c, ...charWithId } : c));
-      safeWriteJsonFile(rootPath, updatedList);
+    if (Array.isArray(list)) {
+      const matchIndex = list.findIndex((c) => c.id === charId || c.slug === charWithId.slug);
+      if (matchIndex >= 0) {
+        list[matchIndex] = { ...list[matchIndex], ...charWithId };
+        safeWriteJsonFile(rootPath, list);
+      }
     }
   } catch {}
 
@@ -431,42 +434,6 @@ export async function deletePersistentCharacter(characterId: string): Promise<bo
  * Returns all active characters (Default + Custom - Deleted), prioritizing Supabase Cloud Database!
  */
 export async function getPersistentCharacters(): Promise<Character[]> {
-  // 1. Primary: Read directly from Supabase Cloud Database
-  if (isSupabaseConfigured()) {
-    try {
-      const { data, error } = await supabaseAdmin.from("companions").select("*");
-      if (!error && Array.isArray(data) && data.length > 0) {
-        return data.map((d) => ({
-          id: d.id,
-          slug: d.id,
-          name: d.name,
-          age: 21,
-          gender: (d.gender === "male" ? "male" : "female") as "female" | "male" | "anime",
-          style: "realistic" as const,
-          tagline: d.tagline || "",
-          desc: d.tagline || "",
-          image: d.avatar || d.image_url || "/characters/zovik_01.jpg",
-          badge: d.is_vip || d.tier === "vip" ? "VIP" : undefined,
-          category: d.category || "General",
-          series: true,
-          verified: true,
-          online: true,
-          tags: ["Verified", "AI Companion"],
-          voice: "Sweet & Warm",
-          greeting: `Hi sweetheart, I'm ${d.name}! So happy to talk to you 💕`,
-          videoUrl: d.intro_video || undefined,
-          gallery: Array.isArray(d.gallery) ? d.gallery : [],
-          messages: [],
-          accessTier: (d.tier === "vip" || d.tier === "plus" ? d.tier : d.is_vip ? "vip" : "free") as "free" | "plus" | "vip",
-          isVipOnly: Boolean(d.is_vip || d.tier === "vip"),
-        }));
-      }
-    } catch (err) {
-      console.warn("[ServerDb] Supabase all companions read note:", err);
-    }
-  }
-
-  // 2. Secondary / Local Fallback: Merge custom and local seed minus deleted
   const [customChars, deletedIds] = await Promise.all([
     getPersistentCustomCharacters(),
     getPersistentDeletedCharacterIds(),
@@ -475,6 +442,77 @@ export async function getPersistentCharacters(): Promise<Character[]> {
   const rootPath = path.join(process.cwd(), "src", "data", "characters.json");
   const defaultChars = safeReadJsonFile<Character[]>(rootPath, []);
 
+  // Build a lookup map of all local metadata
+  const localMap = new Map<string, Character>();
+  for (const c of defaultChars) {
+    localMap.set(c.id.toLowerCase(), c);
+    if (c.slug) localMap.set(c.slug.toLowerCase(), c);
+  }
+  for (const c of customChars) {
+    localMap.set(c.id.toLowerCase(), c);
+    if (c.slug) localMap.set(c.slug.toLowerCase(), c);
+  }
+
+  // 1. Primary: Read directly from Supabase Cloud Database
+  if (isSupabaseConfigured()) {
+    try {
+      const { data, error } = await supabaseAdmin.from("companions").select("*");
+      if (!error && Array.isArray(data) && data.length > 0) {
+        const resultChars: Character[] = [];
+        const seenIds = new Set<string>();
+
+        for (const d of data) {
+          const charId = (d.id || "").trim();
+          const cleanId = charId.toLowerCase();
+          if (deletedIds.includes(cleanId)) continue;
+
+          seenIds.add(cleanId);
+          const localMatch = localMap.get(cleanId);
+          const tier = (d.tier === "vip" || d.tier === "plus" ? d.tier : d.is_vip ? "vip" : localMatch?.accessTier || "free") as "free" | "plus" | "vip";
+
+          resultChars.push({
+            id: charId,
+            slug: localMatch?.slug || d.slug || charId,
+            name: d.name || localMatch?.name || "AI Companion",
+            age: localMatch?.age ?? (typeof d.age === "number" ? d.age : 21),
+            gender: (d.gender || localMatch?.gender || "female") as "female" | "male" | "anime",
+            style: localMatch?.style || ("realistic" as const),
+            tagline: d.tagline || localMatch?.tagline || "",
+            desc: localMatch?.desc || d.tagline || localMatch?.tagline || "",
+            image: d.avatar || d.image_url || localMatch?.image || "/characters/zovik_01.jpg",
+            badge: d.is_vip || d.tier === "vip" ? "VIP" : localMatch?.badge || "NEW",
+            category: d.category || localMatch?.category || "General",
+            series: localMatch?.series ?? true,
+            verified: localMatch?.verified ?? true,
+            online: localMatch?.online ?? true,
+            tags: localMatch?.tags && localMatch.tags.length > 0 ? localMatch.tags : (d.category ? [d.category, "AI Companion"] : ["Trending", "AI Companion"]),
+            voice: localMatch?.voice || "Warm Whisper",
+            greeting: localMatch?.greeting || `Hi sweetheart, I'm ${d.name || "Zovik AI"}! So happy to talk to you 💕`,
+            videoUrl: d.intro_video || localMatch?.videoUrl || undefined,
+            gallery: Array.isArray(d.gallery) && d.gallery.length > 0 ? d.gallery : localMatch?.gallery || [],
+            messages: localMatch?.messages || [],
+            accessTier: tier,
+            isVipOnly: Boolean(d.is_vip || d.tier === "vip" || localMatch?.isVipOnly),
+          });
+        }
+
+        // Also append any local characters (custom or default) not in Supabase
+        for (const [, c] of localMap.entries()) {
+          const cleanId = c.id.toLowerCase();
+          if (!seenIds.has(cleanId) && !deletedIds.includes(cleanId)) {
+            seenIds.add(cleanId);
+            resultChars.push(c);
+          }
+        }
+
+        return resultChars;
+      }
+    } catch (err) {
+      console.warn("[ServerDb] Supabase all companions read note:", err);
+    }
+  }
+
+  // 2. Secondary / Local Fallback: Merge custom and local seed minus deleted
   const charMap = new Map<string, Character>();
 
   for (const c of defaultChars) {

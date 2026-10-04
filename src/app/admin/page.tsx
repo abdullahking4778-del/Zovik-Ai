@@ -81,14 +81,20 @@ export default function AdminPage() {
   const [selectedGalleryCharId, setSelectedGalleryCharId] = useState<string>("");
   const [workingGallery, setWorkingGallery] = useState<string[]>([]);
   const [newGalleryPhotoUrl, setNewGalleryPhotoUrl] = useState("");
+  const [galleryAddMode, setGalleryAddMode] = useState<"upload" | "url" | "preset">("url");
+  const [galleryAddFile, setGalleryAddFile] = useState<File | null>(null);
+  const [isUploadingGalleryAdd, setIsUploadingGalleryAdd] = useState(false);
   const [savingGallery, setSavingGallery] = useState(false);
 
-  // Companion Form Modal State
   // Companion Form Modal State
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [companionVideoMode, setCompanionVideoMode] = useState<"url" | "upload" | "preset">("url");
   const [companionVideoFile, setCompanionVideoFile] = useState<File | null>(null);
   const [isUploadingCompanionVideo, setIsUploadingCompanionVideo] = useState(false);
+  const [companionAvatarMode, setCompanionAvatarMode] = useState<"upload" | "url" | "preset">("upload");
+  const [companionAvatarFile, setCompanionAvatarFile] = useState<File | null>(null);
+  const [companionAvatarPreview, setCompanionAvatarPreview] = useState<string | null>(null);
+  const [isUploadingCompanionAvatar, setIsUploadingCompanionAvatar] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     age: 21,
@@ -129,6 +135,10 @@ export default function AdminPage() {
   const [editVideoMode, setEditVideoMode] = useState<"url" | "upload" | "preset">("url");
   const [editVideoFile, setEditVideoFile] = useState<File | null>(null);
   const [isUploadingEditVideo, setIsUploadingEditVideo] = useState(false);
+  const [editAvatarMode, setEditAvatarMode] = useState<"upload" | "url" | "preset">("preset");
+  const [editAvatarFile, setEditAvatarFile] = useState<File | null>(null);
+  const [editAvatarPreview, setEditAvatarPreview] = useState<string | null>(null);
+  const [isUploadingEditAvatar, setIsUploadingEditAvatar] = useState(false);
   const [isSavingCompanionEdit, setIsSavingCompanionEdit] = useState(false);
 
   // Short/Reel Form Modal State
@@ -369,6 +379,9 @@ export default function AdminPage() {
     });
     setEditVideoMode(char.videoUrl?.startsWith("http") ? "url" : char.videoUrl ? "preset" : "url");
     setEditVideoFile(null);
+    setEditAvatarMode(char.image?.startsWith("http") ? "url" : "preset");
+    setEditAvatarFile(null);
+    setEditAvatarPreview(null);
     setIsEditModalOpen(true);
   };
 
@@ -379,6 +392,7 @@ export default function AdminPage() {
 
     try {
       let finalVideoUrl = editFormData.videoUrl;
+      let finalImageUrl = editFormData.image;
 
       // Handle video file upload if in upload mode
       if (editVideoMode === "upload" && editVideoFile) {
@@ -401,11 +415,35 @@ export default function AdminPage() {
         finalVideoUrl = upData.url;
       }
 
+      // Handle avatar image file upload if in upload mode
+      if (editAvatarMode === "upload" && editAvatarFile) {
+        setIsUploadingEditAvatar(true);
+        const token = localStorage.getItem("zovik_admin_session") || "";
+        const uploadForm = new FormData();
+        uploadForm.append("file", editAvatarFile);
+        uploadForm.append("type", "image");
+
+        const upRes = await fetch("/api/admin/upload", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+          body: uploadForm,
+        });
+
+        if (!upRes.ok) {
+          throw new Error("Failed to upload avatar image file");
+        }
+        const upData = await upRes.json();
+        finalImageUrl = upData.url;
+        setAvailableImages((prev) => [finalImageUrl, ...prev.filter((img) => img !== finalImageUrl)]);
+      }
+
       const res = await fetch("/api/admin/characters", {
         method: "PUT",
         headers: getAuthHeaders(),
         body: JSON.stringify({
           ...editFormData,
+          age: Number(editFormData.age) || 21,
+          image: finalImageUrl,
           videoUrl: finalVideoUrl,
           isVipOnly: editFormData.accessTier === "vip",
         }),
@@ -418,6 +456,9 @@ export default function AdminPage() {
         );
         setIsEditModalOpen(false);
         setEditingCompanion(null);
+        setEditAvatarFile(null);
+        setEditAvatarPreview(null);
+        setEditVideoFile(null);
         alert("Companion updated successfully! ✨");
       } else {
         const errData = await res.json().catch(() => ({}));
@@ -429,6 +470,7 @@ export default function AdminPage() {
     } finally {
       setIsSavingCompanionEdit(false);
       setIsUploadingEditVideo(false);
+      setIsUploadingEditAvatar(false);
     }
   };
 
@@ -436,6 +478,7 @@ export default function AdminPage() {
     e.preventDefault();
     try {
       let finalVideoUrl = formData.videoUrl;
+      let finalImageUrl = formData.image || availableImages[0] || "/characters/zovik_01.jpg";
 
       if (companionVideoMode === "upload" && companionVideoFile) {
         setIsUploadingCompanionVideo(true);
@@ -456,17 +499,44 @@ export default function AdminPage() {
         }
       }
 
+      if (companionAvatarMode === "upload" && companionAvatarFile) {
+        setIsUploadingCompanionAvatar(true);
+        const token = localStorage.getItem("zovik_admin_session") || "";
+        const uploadForm = new FormData();
+        uploadForm.append("file", companionAvatarFile);
+        uploadForm.append("type", "image");
+
+        const upRes = await fetch("/api/admin/upload", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+          body: uploadForm,
+        });
+
+        if (upRes.ok) {
+          const upData = await upRes.json();
+          finalImageUrl = upData.url;
+          setAvailableImages((prev) => [finalImageUrl, ...prev.filter((img) => img !== finalImageUrl)]);
+        }
+      }
+
       const res = await fetch("/api/admin/characters", {
         method: "POST",
         headers: getAuthHeaders(),
         body: JSON.stringify({
           ...formData,
+          age: Number(formData.age) || 21,
+          image: finalImageUrl,
           videoUrl: finalVideoUrl,
           isVipOnly: formData.accessTier === "vip",
         }),
       });
       if (res.ok) {
+        const data = await res.json();
+        setCharacters((prev) => [data.character, ...prev]);
         setIsAddModalOpen(false);
+        setCompanionAvatarFile(null);
+        setCompanionAvatarPreview(null);
+        setCompanionVideoFile(null);
         setFormData({
           name: "",
           age: 21,
@@ -483,9 +553,7 @@ export default function AdminPage() {
           accessTier: "free",
           videoUrl: "",
         });
-        setCompanionVideoFile(null);
-        fetchAdminData();
-        alert("Companion created and published successfully!");
+        alert("Companion published successfully! 🚀");
       } else {
         const err = await res.json().catch(() => ({}));
         alert(err.error || "Failed to create companion");
@@ -494,6 +562,7 @@ export default function AdminPage() {
       alert("Error saving companion");
     } finally {
       setIsUploadingCompanionVideo(false);
+      setIsUploadingCompanionAvatar(false);
     }
   };
 
@@ -533,14 +602,48 @@ export default function AdminPage() {
     }
   };
 
-  const handleAddPhotoToWorkingGallery = () => {
-    if (!newGalleryPhotoUrl.trim()) return;
-    if (workingGallery.includes(newGalleryPhotoUrl.trim())) {
+  const handleAddPhotoToWorkingGallery = async () => {
+    let finalPhotoUrl = newGalleryPhotoUrl.trim();
+
+    if (galleryAddMode === "upload" && galleryAddFile) {
+      setIsUploadingGalleryAdd(true);
+      try {
+        const token = localStorage.getItem("zovik_admin_session") || "";
+        const uploadForm = new FormData();
+        uploadForm.append("file", galleryAddFile);
+        uploadForm.append("type", "image");
+
+        const upRes = await fetch("/api/admin/upload", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+          body: uploadForm,
+        });
+
+        if (upRes.ok) {
+          const upData = await upRes.json();
+          finalPhotoUrl = upData.url;
+          setAvailableImages((prev) => [finalPhotoUrl, ...prev.filter((img) => img !== finalPhotoUrl)]);
+        } else {
+          alert("Failed to upload photo");
+          setIsUploadingGalleryAdd(false);
+          return;
+        }
+      } catch (err) {
+        alert("Error uploading photo");
+        setIsUploadingGalleryAdd(false);
+        return;
+      }
+      setIsUploadingGalleryAdd(false);
+    }
+
+    if (!finalPhotoUrl) return;
+    if (workingGallery.includes(finalPhotoUrl)) {
       alert("This photo is already in the gallery!");
       return;
     }
-    setWorkingGallery([...workingGallery, newGalleryPhotoUrl.trim()]);
+    setWorkingGallery([...workingGallery, finalPhotoUrl]);
     setNewGalleryPhotoUrl("");
+    setGalleryAddFile(null);
   };
 
   const handleRemovePhotoFromWorkingGallery = (idx: number) => {
@@ -1293,16 +1396,112 @@ export default function AdminPage() {
                 <span>Add Next Photo to this Companion's Sequence</span>
               </h4>
 
+              <div className="grid grid-cols-3 gap-1.5 p-1 rounded-xl bg-black/60 border border-white/10 max-w-sm">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setGalleryAddMode("upload");
+                  }}
+                  className={`py-1.5 px-2 rounded-lg font-bold text-[11px] flex items-center justify-center space-x-1 transition-all ${
+                    galleryAddMode === "upload"
+                      ? "bg-gradient-to-r from-[#f53b70] to-[#8b5cf6] text-white shadow-md"
+                      : "text-[#aeaeae] hover:text-white"
+                  }`}
+                >
+                  <UploadCloud className="size-3 shrink-0" />
+                  <span>Upload Device</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setGalleryAddMode("url");
+                    setGalleryAddFile(null);
+                  }}
+                  className={`py-1.5 px-2 rounded-lg font-bold text-[11px] flex items-center justify-center space-x-1 transition-all ${
+                    galleryAddMode === "url"
+                      ? "bg-gradient-to-r from-[#f53b70] to-[#8b5cf6] text-white shadow-md"
+                      : "text-[#aeaeae] hover:text-white"
+                  }`}
+                >
+                  <Globe className="size-3 shrink-0" />
+                  <span>External URL</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setGalleryAddMode("preset");
+                    setGalleryAddFile(null);
+                    if (!newGalleryPhotoUrl || newGalleryPhotoUrl.startsWith("blob:") || newGalleryPhotoUrl.startsWith("http")) {
+                      setNewGalleryPhotoUrl(availableImages[0] || "/characters/zovik_01.jpg");
+                    }
+                  }}
+                  className={`py-1.5 px-2 rounded-lg font-bold text-[11px] flex items-center justify-center space-x-1 transition-all ${
+                    galleryAddMode === "preset"
+                      ? "bg-gradient-to-r from-[#f53b70] to-[#8b5cf6] text-white shadow-md"
+                      : "text-[#aeaeae] hover:text-white"
+                  }`}
+                >
+                  <ImageIcon className="size-3 shrink-0" />
+                  <span>Preset Avatars</span>
+                </button>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="sm:col-span-2">
-                  <label className="text-[11px] text-[#aeaeae] block mb-1 font-bold">Image URL or Local Path</label>
-                  <input
-                    type="text"
-                    placeholder="/characters/zovik_01.jpg, https://pin.it/..., or direct image URL"
-                    value={newGalleryPhotoUrl}
-                    onChange={(e) => setNewGalleryPhotoUrl(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-black/60 border border-white/10 text-white text-xs font-medium outline-none focus:border-[#f53b70]"
-                  />
+                  {galleryAddMode === "upload" && (
+                    <div className="space-y-1">
+                      <label className="text-[11px] text-[#aeaeae] block mb-1 font-bold">Select File from Device</label>
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp,image/jpg"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0] || null;
+                          setGalleryAddFile(file);
+                          if (file) {
+                            const blobUrl = URL.createObjectURL(file);
+                            setNewGalleryPhotoUrl(blobUrl);
+                          } else {
+                            setNewGalleryPhotoUrl("");
+                          }
+                        }}
+                        className="w-full px-3 py-2 text-xs text-[#aeaeae] file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-[#f53b70] file:text-white hover:file:brightness-110 bg-black/60 border border-white/10 rounded-xl outline-none"
+                      />
+                    </div>
+                  )}
+
+                  {galleryAddMode === "url" && (
+                    <div>
+                      <label className="text-[11px] text-[#aeaeae] block mb-1 font-bold">Image URL or External Link</label>
+                      <input
+                        type="text"
+                        placeholder="https://pin.it/..., or direct image URL"
+                        value={newGalleryPhotoUrl}
+                        onChange={(e) => setNewGalleryPhotoUrl(e.target.value)}
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-black/60 border border-white/10 text-white text-xs font-medium outline-none focus:border-[#f53b70]"
+                      />
+                    </div>
+                  )}
+
+                  {galleryAddMode === "preset" && (
+                    <div>
+                      <label className="text-[11px] text-[#aeaeae] block mb-1 font-bold">Pick Local Active Asset</label>
+                      <select
+                        onChange={(e) => {
+                          if (e.target.value) setNewGalleryPhotoUrl(e.target.value);
+                        }}
+                        value={newGalleryPhotoUrl}
+                        className="w-full px-3 py-2.5 rounded-xl bg-black/60 border border-white/10 text-white text-xs font-medium outline-none focus:border-[#f53b70]"
+                      >
+                        <option value="">Choose local image...</option>
+                        {availableImages.map((img) => (
+                          <option key={img} value={img}>
+                            {img}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
                   {newGalleryPhotoUrl.trim() && (
                     <div className="mt-2.5 p-2.5 rounded-xl bg-black/40 border border-white/10 flex items-center space-x-3">
                       <div className="relative size-12 rounded-lg overflow-hidden bg-black shrink-0 border border-pink-500/40">
@@ -1328,35 +1527,21 @@ export default function AdminPage() {
                     </div>
                   )}
                 </div>
-
-                <div>
-                  <label className="text-[11px] text-[#aeaeae] block mb-1 font-bold">Or Pick Local Active Asset</label>
-                  <select
-                    onChange={(e) => {
-                      if (e.target.value) setNewGalleryPhotoUrl(e.target.value);
-                    }}
-                    value=""
-                    className="w-full px-3 py-2.5 rounded-xl bg-black/60 border border-white/10 text-white text-xs font-medium outline-none focus:border-[#f53b70]"
-                  >
-                    <option value="">Choose local image...</option>
-                    {availableImages.map((img) => (
-                      <option key={img} value={img}>
-                        {img}
-                      </option>
-                    ))}
-                  </select>
-                </div>
               </div>
 
               <div className="flex justify-end space-x-3">
                 <button
                   type="button"
                   onClick={handleAddPhotoToWorkingGallery}
-                  disabled={!newGalleryPhotoUrl.trim()}
+                  disabled={!newGalleryPhotoUrl.trim() || isUploadingGalleryAdd}
                   className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#f53b70] to-[#ff5b8c] text-white text-xs font-bold hover:brightness-110 shadow-md shadow-pink-600/20 disabled:opacity-40 transition-all flex items-center space-x-1.5"
                 >
-                  <Plus className="size-4" />
-                  <span>Add to Gallery Sequence</span>
+                  {isUploadingGalleryAdd ? (
+                    <RefreshCw className="size-4 animate-spin" />
+                  ) : (
+                    <Plus className="size-4" />
+                  )}
+                  <span>{isUploadingGalleryAdd ? "Uploading..." : "Add to Gallery Sequence"}</span>
                 </button>
               </div>
             </div>
@@ -2014,13 +2199,72 @@ export default function AdminPage() {
                 )}
               </div>
 
-              {/* Avatar Image */}
-              <div>
-                <label className="text-[#aeaeae] block mb-1 font-bold">Avatar / Profile Photo</label>
-                <div className="flex items-center space-x-3">
-                  <div className="relative size-12 rounded-xl overflow-hidden bg-black shrink-0 border border-white/10">
+              {/* Avatar Image Source Mode */}
+              <div className="space-y-2 p-3 rounded-2xl bg-black/40 border border-white/10">
+                <div className="flex items-center justify-between">
+                  <label className="text-white font-bold flex items-center space-x-1.5">
+                    <Camera className="size-4 text-[#f53b70]" />
+                    <span>Avatar / Profile Photo *</span>
+                  </label>
+                  <span className="text-[10px] text-pink-400 font-medium">Main profile picture</span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-1.5 p-1 rounded-xl bg-black/60 border border-white/10">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCompanionAvatarMode("upload");
+                    }}
+                    className={`py-1.5 px-2 rounded-lg font-bold text-[11px] flex items-center justify-center space-x-1 transition-all ${
+                      companionAvatarMode === "upload"
+                        ? "bg-gradient-to-r from-[#f53b70] to-[#8b5cf6] text-white shadow-md"
+                        : "text-[#aeaeae] hover:text-white"
+                    }`}
+                  >
+                    <UploadCloud className="size-3 shrink-0" />
+                    <span>Upload Device</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCompanionAvatarMode("url");
+                      setCompanionAvatarFile(null);
+                      setCompanionAvatarPreview(null);
+                    }}
+                    className={`py-1.5 px-2 rounded-lg font-bold text-[11px] flex items-center justify-center space-x-1 transition-all ${
+                      companionAvatarMode === "url"
+                        ? "bg-gradient-to-r from-[#f53b70] to-[#8b5cf6] text-white shadow-md"
+                        : "text-[#aeaeae] hover:text-white"
+                    }`}
+                  >
+                    <Globe className="size-3 shrink-0" />
+                    <span>External URL</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCompanionAvatarMode("preset");
+                      setCompanionAvatarFile(null);
+                      setCompanionAvatarPreview(null);
+                      if (!formData.image || formData.image.startsWith("blob:") || formData.image.startsWith("http")) {
+                        setFormData({ ...formData, image: availableImages[0] || "/characters/zovik_01.jpg" });
+                      }
+                    }}
+                    className={`py-1.5 px-2 rounded-lg font-bold text-[11px] flex items-center justify-center space-x-1 transition-all ${
+                      companionAvatarMode === "preset"
+                        ? "bg-gradient-to-r from-[#f53b70] to-[#8b5cf6] text-white shadow-md"
+                        : "text-[#aeaeae] hover:text-white"
+                    }`}
+                  >
+                    <ImageIcon className="size-3 shrink-0" />
+                    <span>Preset Avatars</span>
+                  </button>
+                </div>
+
+                <div className="flex items-center space-x-3 pt-1">
+                  <div className="relative size-14 rounded-2xl overflow-hidden bg-black shrink-0 border-2 border-[#f53b70]/40 shadow-md">
                     <Image
-                      src={getSafeImageUrl(formData.image || availableImages[0] || "/characters/zovik_01.jpg")}
+                      src={getSafeImageUrl(companionAvatarPreview || formData.image || availableImages[0] || "/characters/zovik_01.jpg")}
                       alt="Avatar Preview"
                       fill
                       className="object-cover"
@@ -2028,33 +2272,60 @@ export default function AdminPage() {
                       referrerPolicy="no-referrer"
                     />
                   </div>
-                  <div className="flex-1 space-y-1">
-                    <select
-                      value={formData.image}
-                      onChange={(e) => setFormData({ ...formData, image: e.target.value })}
-                      className="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-white outline-none focus:border-[#f53b70]"
-                    >
-                      {availableImages.map((img) => (
-                        <option key={img} value={img}>{img}</option>
-                      ))}
-                    </select>
-                    <input
-                      type="text"
-                      value={formData.image}
-                      onChange={(e) => setFormData({ ...formData, image: e.target.value })}
-                      placeholder="Or paste external image URL..."
-                      className="w-full px-3 py-1.5 rounded-xl bg-black/30 border border-white/5 text-[11px] text-[#aeaeae] outline-none focus:border-[#f53b70]"
-                    />
+
+                  <div className="flex-1 space-y-1.5">
+                    {companionAvatarMode === "upload" && (
+                      <div className="space-y-1">
+                        <input
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp,image/jpg"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0] || null;
+                            setCompanionAvatarFile(file);
+                            if (file) {
+                              const blobUrl = URL.createObjectURL(file);
+                              setCompanionAvatarPreview(blobUrl);
+                            } else {
+                              setCompanionAvatarPreview(null);
+                            }
+                          }}
+                          className="w-full text-xs text-[#aeaeae] file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-[#f53b70] file:text-white hover:file:brightness-110"
+                        />
+                        <p className="text-[10px] text-[#888]">Directly upload PNG, JPG, or WEBP from this computer.</p>
+                      </div>
+                    )}
+
+                    {companionAvatarMode === "url" && (
+                      <input
+                        type="url"
+                        value={formData.image}
+                        onChange={(e) => setFormData({ ...formData, image: e.target.value })}
+                        placeholder="Paste image URL (e.g. Catbox, Imgur, direct image URL)..."
+                        className="w-full px-3 py-2 rounded-xl bg-black/60 border border-white/10 text-white font-mono text-[11px] outline-none focus:border-[#f53b70]"
+                      />
+                    )}
+
+                    {companionAvatarMode === "preset" && (
+                      <select
+                        value={formData.image}
+                        onChange={(e) => setFormData({ ...formData, image: e.target.value })}
+                        className="w-full px-3 py-2 rounded-xl bg-black/60 border border-white/10 text-white outline-none focus:border-[#f53b70]"
+                      >
+                        {availableImages.map((img) => (
+                          <option key={img} value={img}>{img}</option>
+                        ))}
+                      </select>
+                    )}
                   </div>
                 </div>
               </div>
 
               <button
                 type="submit"
-                disabled={isUploadingCompanionVideo}
+                disabled={isUploadingCompanionVideo || isUploadingCompanionAvatar}
                 className="w-full py-3 rounded-xl bg-gradient-to-r from-[#f53b70] via-[#ff5b8c] to-[#f53b70] text-white font-extrabold text-xs shadow-lg shadow-pink-600/30 hover:brightness-110 active:scale-98 transition-all disabled:opacity-50 mt-2"
               >
-                {isUploadingCompanionVideo ? "Uploading Video..." : "Publish Companion to App 🚀"}
+                {isUploadingCompanionVideo || isUploadingCompanionAvatar ? "Uploading & Publishing..." : "Publish Companion to App 🚀"}
               </button>
             </form>
           </div>
@@ -2288,13 +2559,72 @@ export default function AdminPage() {
                 )}
               </div>
 
-              {/* Avatar Image */}
-              <div>
-                <label className="text-[#aeaeae] block mb-1 font-bold">Avatar / Profile Photo</label>
-                <div className="flex items-center space-x-3">
-                  <div className="relative size-12 rounded-xl overflow-hidden bg-black shrink-0 border border-white/10">
+              {/* Avatar Image Source Mode */}
+              <div className="space-y-2 p-3 rounded-2xl bg-black/40 border border-white/10">
+                <div className="flex items-center justify-between">
+                  <label className="text-white font-bold flex items-center space-x-1.5">
+                    <Camera className="size-4 text-blue-400" />
+                    <span>Avatar / Profile Photo *</span>
+                  </label>
+                  <span className="text-[10px] text-blue-400 font-medium">Main profile picture</span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-1.5 p-1 rounded-xl bg-black/60 border border-white/10">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditAvatarMode("upload");
+                    }}
+                    className={`py-1.5 px-2 rounded-lg font-bold text-[11px] flex items-center justify-center space-x-1 transition-all ${
+                      editAvatarMode === "upload"
+                        ? "bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-md"
+                        : "text-[#aeaeae] hover:text-white"
+                    }`}
+                  >
+                    <UploadCloud className="size-3 shrink-0" />
+                    <span>Upload Device</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditAvatarMode("url");
+                      setEditAvatarFile(null);
+                      setEditAvatarPreview(null);
+                    }}
+                    className={`py-1.5 px-2 rounded-lg font-bold text-[11px] flex items-center justify-center space-x-1 transition-all ${
+                      editAvatarMode === "url"
+                        ? "bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-md"
+                        : "text-[#aeaeae] hover:text-white"
+                    }`}
+                  >
+                    <Globe className="size-3 shrink-0" />
+                    <span>External URL</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditAvatarMode("preset");
+                      setEditAvatarFile(null);
+                      setEditAvatarPreview(null);
+                      if (!editFormData.image || editFormData.image.startsWith("blob:") || editFormData.image.startsWith("http")) {
+                        setEditFormData({ ...editFormData, image: availableImages[0] || "/characters/zovik_01.jpg" });
+                      }
+                    }}
+                    className={`py-1.5 px-2 rounded-lg font-bold text-[11px] flex items-center justify-center space-x-1 transition-all ${
+                      editAvatarMode === "preset"
+                        ? "bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-md"
+                        : "text-[#aeaeae] hover:text-white"
+                    }`}
+                  >
+                    <ImageIcon className="size-3 shrink-0" />
+                    <span>Preset Avatars</span>
+                  </button>
+                </div>
+
+                <div className="flex items-center space-x-3 pt-1">
+                  <div className="relative size-14 rounded-2xl overflow-hidden bg-black shrink-0 border-2 border-blue-400/40 shadow-md">
                     <Image
-                      src={getSafeImageUrl(editFormData.image || "/characters/zovik_01.jpg")}
+                      src={getSafeImageUrl(editAvatarPreview || editFormData.image || availableImages[0] || "/characters/zovik_01.jpg")}
                       alt="Avatar Preview"
                       fill
                       className="object-cover"
@@ -2302,23 +2632,50 @@ export default function AdminPage() {
                       referrerPolicy="no-referrer"
                     />
                   </div>
-                  <div className="flex-1 space-y-1">
-                    <select
-                      value={editFormData.image}
-                      onChange={(e) => setEditFormData({ ...editFormData, image: e.target.value })}
-                      className="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-white outline-none focus:border-blue-400"
-                    >
-                      {availableImages.map((img) => (
-                        <option key={img} value={img}>{img}</option>
-                      ))}
-                    </select>
-                    <input
-                      type="text"
-                      value={editFormData.image}
-                      onChange={(e) => setEditFormData({ ...editFormData, image: e.target.value })}
-                      placeholder="Or paste external image URL..."
-                      className="w-full px-3 py-1.5 rounded-xl bg-black/30 border border-white/5 text-[11px] text-[#aeaeae] outline-none focus:border-blue-400"
-                    />
+
+                  <div className="flex-1 space-y-1.5">
+                    {editAvatarMode === "upload" && (
+                      <div className="space-y-1">
+                        <input
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp,image/jpg"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0] || null;
+                            setEditAvatarFile(file);
+                            if (file) {
+                              const blobUrl = URL.createObjectURL(file);
+                              setEditAvatarPreview(blobUrl);
+                            } else {
+                              setEditAvatarPreview(null);
+                            }
+                          }}
+                          className="w-full text-xs text-[#aeaeae] file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-blue-600 file:text-white hover:file:brightness-110"
+                        />
+                        <p className="text-[10px] text-[#888]">Directly upload PNG, JPG, or WEBP from this computer.</p>
+                      </div>
+                    )}
+
+                    {editAvatarMode === "url" && (
+                      <input
+                        type="url"
+                        value={editFormData.image}
+                        onChange={(e) => setEditFormData({ ...editFormData, image: e.target.value })}
+                        placeholder="Paste image URL (e.g. Catbox, Imgur, direct image URL)..."
+                        className="w-full px-3 py-2 rounded-xl bg-black/60 border border-white/10 text-white font-mono text-[11px] outline-none focus:border-blue-400"
+                      />
+                    )}
+
+                    {editAvatarMode === "preset" && (
+                      <select
+                        value={editFormData.image}
+                        onChange={(e) => setEditFormData({ ...editFormData, image: e.target.value })}
+                        className="w-full px-3 py-2 rounded-xl bg-black/60 border border-white/10 text-white outline-none focus:border-blue-400"
+                      >
+                        {availableImages.map((img) => (
+                          <option key={img} value={img}>{img}</option>
+                        ))}
+                      </select>
+                    )}
                   </div>
                 </div>
               </div>
@@ -2326,10 +2683,10 @@ export default function AdminPage() {
               <div className="flex items-center space-x-2 pt-2">
                 <button
                   type="submit"
-                  disabled={isSavingCompanionEdit || isUploadingEditVideo}
+                  disabled={isSavingCompanionEdit || isUploadingEditVideo || isUploadingEditAvatar}
                   className="flex-1 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-extrabold text-xs shadow-lg shadow-blue-600/30 hover:brightness-110 active:scale-98 transition-all disabled:opacity-50"
                 >
-                  {isSavingCompanionEdit || isUploadingEditVideo ? "Saving Changes..." : "Save Companion Changes ✨"}
+                  {isSavingCompanionEdit || isUploadingEditVideo || isUploadingEditAvatar ? "Saving Changes..." : "Save Companion Changes ✨"}
                 </button>
                 <button
                   type="button"

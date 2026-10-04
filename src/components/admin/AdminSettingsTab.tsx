@@ -111,7 +111,7 @@ export const AdminSettingsTab: React.FC<AdminSettingsTabProps> = ({
     setIsSavingAnnouncement(true);
     setAnnouncementMsg(null);
     try {
-      const token = localStorage.getItem("zovik_admin_token") || "";
+      const token = localStorage.getItem("zovik_admin_session") || "";
       const res = await fetch("/api/admin/announcement", {
         method: "POST",
         headers: {
@@ -139,7 +139,7 @@ export const AdminSettingsTab: React.FC<AdminSettingsTabProps> = ({
     setIsSavingAccounts(true);
     setAccountsMsg(null);
     try {
-      const token = localStorage.getItem("zovik_admin_token") || "";
+      const token = localStorage.getItem("zovik_admin_session") || "";
       const res = await fetch("/api/admin/payment-accounts", {
         method: "POST",
         headers: {

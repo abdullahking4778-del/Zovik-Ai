@@ -10,7 +10,7 @@ function getStoragePath(): string {
   if (process.env.VERCEL) {
     return path.join("/tmp", "zovik_payment_accounts.json");
   }
-  return path.join(process.cwd(), "src", "data", "payment_accounts.json");
+  return path.join(process.cwd(), ".data", "payment_accounts.json");
 }
 
 function safeReadJsonFile<T>(filePath: string, fallback: T): T {
@@ -61,7 +61,7 @@ export function savePersistentPaymentAccounts(update: Partial<PaymentAccountsMap
   const filePath = getStoragePath();
   safeWriteJsonFile(filePath, merged);
 
-  const fallbackPath = path.join(process.cwd(), "src", "data", "payment_accounts.json");
+  const fallbackPath = path.join(process.cwd(), ".data", "payment_accounts.json");
   if (filePath !== fallbackPath) {
     safeWriteJsonFile(fallbackPath, merged);
   }

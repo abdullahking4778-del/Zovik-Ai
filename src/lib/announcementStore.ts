@@ -15,7 +15,7 @@ function getAnnouncementStoragePath(): string {
   if (process.env.VERCEL) {
     return path.join("/tmp", "zovik_announcement.json");
   }
-  return path.join(process.cwd(), "src", "data", "announcement.json");
+  return path.join(process.cwd(), ".data", "announcement.json");
 }
 
 function safeReadJsonFile<T>(filePath: string, fallback: T): T {
@@ -63,7 +63,7 @@ export function savePersistentAnnouncement(update: Partial<AnnouncementConfig>):
   const filePath = getAnnouncementStoragePath();
   safeWriteJsonFile(filePath, updated);
 
-  const fallbackPath = path.join(process.cwd(), "src", "data", "announcement.json");
+  const fallbackPath = path.join(process.cwd(), ".data", "announcement.json");
   if (filePath !== fallbackPath) {
     safeWriteJsonFile(fallbackPath, updated);
   }

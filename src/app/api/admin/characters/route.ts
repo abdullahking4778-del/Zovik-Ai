@@ -129,6 +129,8 @@ export async function PUT(req: NextRequest) {
       ...body,
       id: existing.id,
       slug: existing.slug,
+      name: body.name ? body.name.trim() : existing.name,
+      age: body.age !== undefined ? (Number(body.age) || existing.age || 21) : (existing.age || 21),
       tags: body.tags !== undefined ? normalizeTags(body.tags) : normalizeTags(existing.tags),
       accessTier: isVipTier ? "vip" : "free",
       isVipOnly: isVipTier,

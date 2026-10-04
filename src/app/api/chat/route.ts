@@ -523,18 +523,18 @@ CRITICAL RULES (ABSOLUTE PRIORITY):
 
     // Active Groq production models for this API key
     const preferredModels = [
-      process.env.GROQ_MODEL || "qwen/qwen3.8-27b",
-      "qwen/qwen3.8-27b",
-      process.env.GROQ_FALLBACK_MODEL || "openai/gpt-oss-120b",
-      "openai/gpt-oss-120b",
-      "openai/gpt-oss-20b",
+      process.env.GROQ_MODEL || "llama3-70b-8192",
+      "llama3-70b-8192",
+      process.env.GROQ_FALLBACK_MODEL || "llama3-8b-8192",
+      "llama3-8b-8192",
+      "mixtral-8x7b-32768",
     ].filter((m, i, arr) => arr.indexOf(m) === i && !!m);
 
     let reply = "";
 
     for (const model of preferredModels) {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 7500); // 7.5s safe timeout within serverless execution window
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s safe timeout
 
       try {
         const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
