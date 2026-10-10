@@ -117,7 +117,7 @@ export default function Home() {
         return;
       }
       setActiveChatCharacter(char);
-    }, `${char.name} ke sath chat shuru karne ke liye pehle login ya create account karein.`);
+    }, `${char.name} ke sath chat shuru karne ke liye pehle sign in karein.`);
   };
 
   const handleStartCallWithAuth = (char: Character) => {
@@ -128,7 +128,7 @@ export default function Home() {
         return;
       }
       setActiveCallCharacter(char);
-    }, `${char.name} ke sath live voice call ke liye pehle login ya create account karein.`);
+    }, `${char.name} ke sath live voice call ke liye pehle sign in karein.`);
   };
   const [isShortsOpen, setIsShortsOpen] = useState(false);
   const [initialReelId, setInitialReelId] = useState<string | null>(null);
@@ -597,7 +597,7 @@ export default function Home() {
         return;
       }
       setIsCreateOpen(true);
-    }, "Apna custom AI Companion banane ke liye pehle login ya sign up karein.");
+    }, "Apna custom AI Companion banane ke liye pehle sign in karein.");
   };
 
   const handleDeleteGeneratedPhoto = (e: React.MouseEvent, photoId: string) => {
@@ -1214,7 +1214,7 @@ export default function Home() {
           if (tab === "shorts") {
             setIsShortsOpen(true);
           } else if (tab === "chat") {
-            requireAuth(() => setActiveTab(tab), "Apni chats dekhne ke liye pehle login ya sign up karein.");
+            requireAuth(() => setActiveTab(tab), "Apni chats dekhne ke liye pehle sign in karein.");
           } else {
             setActiveTab(tab);
           }

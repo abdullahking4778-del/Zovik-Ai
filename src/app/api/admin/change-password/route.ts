@@ -19,16 +19,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (typeof newPassword !== "string" || newPassword.length < 6) {
+    if (typeof newPassword !== "string" || newPassword.length < 8) {
       return NextResponse.json(
-        { error: "New password must be at least 6 characters long" },
+        { error: "New password must be at least 8 characters long" },
         { status: 400 }
       );
     }
 
     const activePassword = await getDynamicAdminPassword();
 
-    if (currentPassword !== activePassword) {
+    if (!activePassword || !safeVerifyPassword(currentPassword, activePassword)) {
       return NextResponse.json(
         { error: "Incorrect current master password" },
         { status: 403 }

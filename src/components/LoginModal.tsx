@@ -4,12 +4,10 @@ import React, { useState } from "react";
 import { 
   X, 
   LogIn, 
-  UserPlus, 
   Mail, 
   Lock, 
   Eye, 
   EyeOff, 
-  User, 
   AlertCircle, 
   CheckCircle2, 
   Loader2, 
@@ -25,13 +23,12 @@ interface LoginModalProps {
   onClose: () => void;
 }
 
-type AuthMode = "login" | "signup" | "forgot";
+type AuthMode = "login" | "forgot";
 
 export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
   const { 
     loginWithGoogle, 
     loginWithEmail, 
-    signupWithEmail, 
     resetPassword,
     loginPromptMessage, 
     setLoginPromptMessage 
@@ -40,8 +37,6 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
   const [mode, setMode] = useState<AuthMode>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [displayName, setDisplayName] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -54,8 +49,6 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
     setSuccessMessage("");
     setEmail("");
     setPassword("");
-    setConfirmPassword("");
-    setDisplayName("");
     setShowPassword(false);
     setMode("login");
     setLoginPromptMessage(null);
@@ -78,9 +71,6 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
     ) {
       return "Invalid email or password. Please check your credentials.";
     }
-    if (code === "auth/email-already-in-use") {
-      return "An account already exists with this email. Please sign in instead.";
-    }
     if (code === "auth/weak-password") {
       return "Password must be at least 6 characters long.";
     }
@@ -89,6 +79,9 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
     }
     if (code === "auth/popup-closed-by-user") {
       return "Google sign-in popup was closed.";
+    }
+    if (code === "auth/popup-blocked") {
+      return "Browser ne Google popup ko block kar diya hai. Meharbani karke URL bar se popups allow karein ya seedha Chrome/Edge browser mein http://localhost:3000 open karein.";
     }
     if (code === "auth/too-many-requests") {
       return "Too many failed attempts. Please wait a few moments or reset your password.";
@@ -113,33 +106,6 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
       try {
         await resetPassword(cleanEmail);
         setSuccessMessage("Password reset link has been sent to your email! Please check your inbox (and spam folder).");
-      } catch (err: unknown) {
-        setErrorMessage(getFriendlyError(err));
-      } finally {
-        setLoading(false);
-      }
-      return;
-    }
-
-    // SIGN UP FLOW
-    if (mode === "signup") {
-      if (!password) {
-        setErrorMessage("Please enter a password.");
-        return;
-      }
-      if (password.length < 6) {
-        setErrorMessage("Password must be at least 6 characters.");
-        return;
-      }
-      if (password !== confirmPassword) {
-        setErrorMessage("Passwords do not match.");
-        return;
-      }
-
-      setLoading(true);
-      try {
-        await signupWithEmail(cleanEmail, password, displayName.trim());
-        handleClose();
       } catch (err: unknown) {
         setErrorMessage(getFriendlyError(err));
       } finally {
@@ -203,52 +169,20 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
           <div className="size-12 rounded-2xl bg-gradient-to-tr from-[#f53b70] to-[#8b5cf6] flex items-center justify-center mx-auto mb-2.5 shadow-lg shadow-pink-600/30">
             {mode === "forgot" ? (
               <KeyRound className="size-6 text-white" />
-            ) : mode === "signup" ? (
-              <UserPlus className="size-6 text-white" />
             ) : (
               <LogIn className="size-6 text-white" />
             )}
           </div>
 
           <h3 className="text-xl sm:text-2xl font-black text-white">
-            {mode === "forgot" ? "Reset Password" : mode === "signup" ? "Create Account" : "Welcome Back"}
+            {mode === "forgot" ? "Reset Password" : "Welcome Back"}
           </h3>
           <p className="text-xs text-[#aeaeae] mt-1">
             {mode === "forgot"
               ? "Enter your email to receive an instant password reset link."
-              : mode === "signup"
-              ? "Join Zovik AI to unlock private AI companions & HD photos."
               : "Sign in with Google or your email & password."}
           </p>
         </div>
-
-        {/* Auth Mode Toggle Tabs (Sign In vs Sign Up) */}
-        {mode !== "forgot" && (
-          <div className="flex p-1 bg-black/40 border border-white/10 rounded-2xl mb-5">
-            <button
-              type="button"
-              onClick={() => switchMode("login")}
-              className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all ${
-                mode === "login"
-                  ? "bg-gradient-to-r from-[#f53b70] to-[#ff5b8c] text-white shadow-md shadow-pink-600/30"
-                  : "text-[#aeaeae] hover:text-white"
-              }`}
-            >
-              Sign In
-            </button>
-            <button
-              type="button"
-              onClick={() => switchMode("signup")}
-              className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all ${
-                mode === "signup"
-                  ? "bg-gradient-to-r from-[#f53b70] to-[#ff5b8c] text-white shadow-md shadow-pink-600/30"
-                  : "text-[#aeaeae] hover:text-white"
-              }`}
-            >
-              Create Account
-            </button>
-          </div>
-        )}
 
         {/* Smart Auth Prompt (if triggered by guarded action) */}
         {loginPromptMessage && (
@@ -274,7 +208,7 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
           </div>
         )}
 
-        {/* 1-Click Google Sign In (for login & signup) */}
+        {/* 1-Click Google Sign In (for real Firebase Google Auth) */}
         {mode !== "forgot" && (
           <>
             <button
@@ -303,23 +237,6 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
 
         {/* Email & Password Form */}
         <form onSubmit={handleSubmit} className="space-y-3.5">
-          {/* Name Field (Sign Up only) */}
-          {mode === "signup" && (
-            <div className="space-y-1">
-              <label className="text-[11px] font-bold text-[#aeaeae]">Your Name</label>
-              <div className="relative flex items-center">
-                <User className="absolute left-3 size-4 text-[#aeaeae]" />
-                <input
-                  type="text"
-                  placeholder="e.g. Alex"
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-black/50 border border-white/10 text-white text-xs placeholder:text-[#666] outline-none focus:border-[#f53b70] transition-colors"
-                />
-              </div>
-            </div>
-          )}
-
           {/* Email Field */}
           <div className="space-y-1">
             <label className="text-[11px] font-bold text-[#aeaeae]">Email Address</label>
@@ -336,27 +253,25 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
             </div>
           </div>
 
-          {/* Password Field (Login & Signup) */}
+          {/* Password Field */}
           {mode !== "forgot" && (
             <div className="space-y-1">
               <div className="flex items-center justify-between">
                 <label className="text-[11px] font-bold text-[#aeaeae]">Password</label>
-                {mode === "login" && (
-                  <button
-                    type="button"
-                    onClick={() => switchMode("forgot")}
-                    className="text-[11px] font-semibold text-[#f53b70] hover:underline"
-                  >
-                    Forgot Password?
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={() => switchMode("forgot")}
+                  className="text-[11px] font-semibold text-[#f53b70] hover:underline"
+                >
+                  Forgot Password?
+                </button>
               </div>
               <div className="relative flex items-center">
                 <Lock className="absolute left-3 size-4 text-[#aeaeae]" />
                 <input
                   type={showPassword ? "text" : "password"}
                   required
-                  placeholder={mode === "signup" ? "At least 6 characters" : "Enter your password"}
+                  placeholder="Enter your password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full pl-9 pr-10 py-2.5 rounded-xl bg-black/50 border border-white/10 text-white text-xs placeholder:text-[#666] outline-none focus:border-[#f53b70] transition-colors"
@@ -372,24 +287,6 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
             </div>
           )}
 
-          {/* Confirm Password Field (Sign Up only) */}
-          {mode === "signup" && (
-            <div className="space-y-1">
-              <label className="text-[11px] font-bold text-[#aeaeae]">Confirm Password</label>
-              <div className="relative flex items-center">
-                <Lock className="absolute left-3 size-4 text-[#aeaeae]" />
-                <input
-                  type={showPassword ? "text" : "password"}
-                  required
-                  placeholder="Re-enter your password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-black/50 border border-white/10 text-white text-xs placeholder:text-[#666] outline-none focus:border-[#f53b70] transition-colors"
-                />
-              </div>
-            </div>
-          )}
-
           {/* Submit Button */}
           <button
             type="submit"
@@ -400,17 +297,15 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
               <Loader2 className="size-4 animate-spin" />
             ) : mode === "forgot" ? (
               <span>Send Reset Link 🔑</span>
-            ) : mode === "signup" ? (
-              <span>Create Account 🚀</span>
             ) : (
               <span>Sign In</span>
             )}
           </button>
         </form>
 
-        {/* Bottom Switcher */}
-        <div className="mt-4 pt-3 border-t border-white/5 text-center text-xs text-[#aeaeae]">
-          {mode === "forgot" ? (
+        {/* Bottom Switcher (Only for Forgot Password) */}
+        {mode === "forgot" && (
+          <div className="mt-4 pt-3 border-t border-white/5 text-center text-xs text-[#aeaeae]">
             <button
               type="button"
               onClick={() => switchMode("login")}
@@ -419,33 +314,11 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
               <ArrowLeft className="size-3.5" />
               <span>Back to Sign In</span>
             </button>
-          ) : mode === "signup" ? (
-            <p>
-              Already have an account?{" "}
-              <button
-                type="button"
-                onClick={() => switchMode("login")}
-                className="font-bold text-[#f53b70] hover:underline"
-              >
-                Sign In
-              </button>
-            </p>
-          ) : (
-            <p>
-              Don't have an account?{" "}
-              <button
-                type="button"
-                onClick={() => switchMode("signup")}
-                className="font-bold text-[#f53b70] hover:underline"
-              >
-                Create Account
-              </button>
-            </p>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Security Badge */}
-        <div className="flex items-center justify-center space-x-1.5 text-[10px] text-[#777] mt-3">
+        <div className="flex items-center justify-center space-x-1.5 text-[10px] text-[#777] mt-4">
           <ShieldCheck className="size-3.5 text-emerald-400" />
           <span>Real Firebase Auth • Encrypted & Secure</span>
         </div>

@@ -1,104 +1,86 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getActiveUserTier, findStoredUser, upsertStoredUser } from "@/lib/userStore";
-import fs from "fs";
-import path from "path";
+import { getActiveUserTier, findStoredUser } from "@/lib/userStore";
+import { verifyUserRequest } from "@/lib/serverUserAuth";
+import { verifyAdminRequest } from "@/lib/adminAuth";
 
-function getPaymentsFilePath(): string {
-  if (process.env.VERCEL) {
-    return path.join("/tmp", "zovik_payments.json");
-  }
-  return path.join(process.cwd(), ".data", "payment_requests.json");
-}
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
+/**
+ * GET /api/user/status
+ * Secure, strictly read-only endpoint.
+ * Requires verified user token or admin session.
+ * Regular users can ONLY inspect their own account status.
+ */
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const email = (searchParams.get("email") || "").trim().toLowerCase();
-  const uid = (searchParams.get("uid") || "").trim();
+  const targetEmail = (searchParams.get("email") || "").trim().toLowerCase();
+  const targetUid = (searchParams.get("uid") || "").trim();
 
-  if (!email && !uid) {
-    return NextResponse.json({ error: "Missing email or uid parameter" }, { status: 400 });
+  // 1. Check if caller is Admin
+  const isAdmin = verifyAdminRequest(req);
+
+  // 2. Check caller's verified user identity
+  const verifiedUser = await verifyUserRequest(req);
+
+  // Unauthenticated requests are rejected
+  if (!isAdmin && !verifiedUser.authenticated) {
+    return NextResponse.json(
+      { error: "Unauthorized: Valid authentication token required to inspect status." },
+      { status: 401 }
+    );
   }
 
-  // 1. Check user store by email first, then fallback to uid
-  const storedUser = (email ? findStoredUser(email) : null) || (uid ? findStoredUser(uid) : null);
+  // 3. Authorization check (IDOR Prevention)
+  // Non-admins can ONLY read their own status derived from their verified token
+  let effectiveEmail = verifiedUser.email?.toLowerCase() || "";
+  let effectiveUid = verifiedUser.uid || "";
 
-  let status: {
-    tier: "free" | "plus" | "vip";
-    isVip: boolean;
-    subscriptionEndsAt: string | null;
-    storageRetentionDays: number;
-  };
-
-  if (storedUser) {
-    status = getActiveUserTier(storedUser.id || storedUser.email);
+  if (isAdmin) {
+    // Admins can query any target user
+    if (targetEmail) effectiveEmail = targetEmail;
+    if (targetUid) effectiveUid = targetUid;
   } else {
-    status = { tier: "free", isVip: false, subscriptionEndsAt: null, storageRetentionDays: 7 };
-
-    // 2. Cross-check payments in case an admin approved a payment proof by email for a user not yet registered
-    if (email) {
-      try {
-        const paymentsPath = getPaymentsFilePath();
-        let raw: string | null = null;
-        if (fs.existsSync(paymentsPath)) {
-          raw = fs.readFileSync(paymentsPath, "utf-8");
-        } else {
-          const localFallback = path.join(process.cwd(), ".data", "payment_requests.json");
-          if (fs.existsSync(localFallback)) {
-            raw = fs.readFileSync(localFallback, "utf-8");
-          }
-        }
-
-        if (raw) {
-          const payments = JSON.parse(raw || "[]");
-          if (Array.isArray(payments)) {
-            const approved = payments.find(
-              (p) => p.status === "approved" && p.userEmail?.toLowerCase() === email
-            );
-            if (approved) {
-              const endsAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-              const updated = upsertStoredUser(uid || email, {
-                id: uid || email,
-                email: email,
-                tier: approved.plan === "vip" ? "vip" : "plus",
-                isVip: approved.plan === "vip",
-                subscriptionDays: 30,
-                subscriptionEndsAt: endsAt,
-                storageRetentionDays: approved.plan === "vip" ? 35 : 30,
-              });
-              status = {
-                tier: updated.tier,
-                isVip: updated.isVip,
-                subscriptionEndsAt: updated.subscriptionEndsAt || null,
-                storageRetentionDays: updated.storageRetentionDays,
-              };
-            }
-          }
-        }
-      } catch (e) {
-        console.warn("[UserStatusAPI] Error checking payment requests:", e);
-      }
+    // If ordinary user tried to pass a different email or uid, reject with 403 Forbidden
+    if (
+      (targetEmail && targetEmail !== effectiveEmail) ||
+      (targetUid && targetUid !== effectiveUid)
+    ) {
+      return NextResponse.json(
+        { error: "Forbidden: You are not authorized to access another user's status." },
+        { status: 403 }
+      );
     }
   }
 
-  // 3. Link uid and email if tier is active and both are known
-  if (status.tier !== "free" && uid && email) {
-    try {
-      upsertStoredUser(uid, {
-        id: uid,
-        email: email,
-        tier: status.tier,
-        isVip: status.isVip,
-        subscriptionEndsAt: status.subscriptionEndsAt,
-        storageRetentionDays: status.storageRetentionDays,
-      });
-    } catch {}
+  if (!effectiveEmail && !effectiveUid) {
+    return NextResponse.json(
+      { error: "No user identity found in verified token." },
+      { status: 400 }
+    );
   }
 
+  // 4. Purely Read-only lookup (NO mutations, NO upserts in GET)
+  const storedUser = (effectiveEmail ? findStoredUser(effectiveEmail) : null) ||
+                     (effectiveUid ? findStoredUser(effectiveUid) : null);
+
+  if (storedUser) {
+    const status = getActiveUserTier(storedUser.id || storedUser.email);
+    return NextResponse.json({
+      success: true,
+      tier: status.tier,
+      isVip: status.isVip,
+      subscriptionEndsAt: status.subscriptionEndsAt,
+      storageRetentionDays: status.storageRetentionDays,
+    });
+  }
+
+  // Default free tier if user record does not exist yet (strictly read-only)
   return NextResponse.json({
     success: true,
-    tier: status.tier,
-    isVip: status.isVip,
-    subscriptionEndsAt: status.subscriptionEndsAt,
-    storageRetentionDays: status.storageRetentionDays,
+    tier: "free",
+    isVip: false,
+    subscriptionEndsAt: null,
+    storageRetentionDays: 7,
   });
 }

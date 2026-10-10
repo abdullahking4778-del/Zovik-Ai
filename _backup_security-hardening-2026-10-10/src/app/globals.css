@@ -1,0 +1,68 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --bg-main: #0d0a0f;
+    --bg-card: #120d16;
+    --bg-card-hover: #1b1422;
+    --accent-pink: #f53b70;
+    --accent-purple: #8b5cf6;
+    --text-primary: #ffffff;
+    --text-secondary: #cbb6bf;
+    --text-muted: #aeaeae;
+    --border-subtle: rgba(255, 255, 255, 0.08);
+  }
+
+  body {
+    background-color: var(--bg-main);
+    color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    overflow-x: hidden;
+  }
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0d0a0f;
+}
+::-webkit-scrollbar-thumb {
+  background: #261933;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #f53b70;
+}
+
+/* Glassmorphism and Neon Glow Utilities */
+.glass-panel {
+  background: rgba(18, 13, 22, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.neon-glow-pink {
+  box-shadow: 0 0 25px -5px rgba(245, 59, 112, 0.5);
+}
+
+.neon-glow-purple {
+  box-shadow: 0 0 25px -5px rgba(139, 92, 246, 0.5);
+}
+
+.card-gradient-overlay {
+  background: linear-gradient(to top, rgba(13, 10, 15, 0.95) 0%, rgba(18, 13, 22, 0.6) 45%, transparent 100%);
+}
+
+/* Audio wave animation */
+@keyframes soundwave {
+  0%, 100% { height: 4px; }
+  50% { height: 20px; }
+}
+
+.audio-bar {
+  animation: soundwave 1.2s ease-in-out infinite;
+}

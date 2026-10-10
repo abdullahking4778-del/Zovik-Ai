@@ -7,41 +7,135 @@ import { UserAccount } from "@/types";
 
 interface AdminUsersTabProps {
   users: UserAccount[];
-  userSearchQuery: string;
-  setUserSearchQuery: (q: string) => void;
-  handleToggleVip: (userId: string, isVip: boolean) => void;
-  handleDeleteUser: (userId: string) => void;
-  handleOpenEditUser: (user: UserAccount) => void;
-  editingUser: UserAccount | null;
-  setEditingUser: (u: UserAccount | null) => void;
-  editUserTier: "free" | "plus" | "vip";
-  setEditUserTier: (t: "free" | "plus" | "vip") => void;
-  editUserDays: number;
-  setEditUserDays: (d: number) => void;
-  editUserStorageDays: number;
-  setEditUserStorageDays: (d: number) => void;
-  handleSaveUserSubscription: (e: React.FormEvent) => void;
-  isSavingUser: boolean;
+  setUsers?: React.Dispatch<React.SetStateAction<UserAccount[]>>;
+  getAuthHeaders?: () => HeadersInit;
+  onRefreshUsers?: () => void;
 }
 
 export const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
   users,
-  userSearchQuery,
-  setUserSearchQuery,
-  handleToggleVip,
-  handleDeleteUser,
-  handleOpenEditUser,
-  editingUser,
-  setEditingUser,
-  editUserTier,
-  setEditUserTier,
-  editUserDays,
-  setEditUserDays,
-  editUserStorageDays,
-  setEditUserStorageDays,
-  handleSaveUserSubscription,
-  isSavingUser,
+  setUsers,
+  getAuthHeaders,
+  onRefreshUsers,
 }) => {
+  const [userSearchQuery, setUserSearchQuery] = React.useState("");
+  const [editingUser, setEditingUser] = React.useState<UserAccount | null>(null);
+  const [editUserTier, setEditUserTier] = React.useState<"free" | "plus" | "vip">("free");
+  const [editUserDays, setEditUserDays] = React.useState<number>(30);
+  const [editUserStorageDays, setEditUserStorageDays] = React.useState<number>(35);
+  const [isSavingUser, setIsSavingUser] = React.useState<boolean>(false);
+
+  const handleOpenEditUser = (user: UserAccount) => {
+    setEditingUser(user);
+    const tier = (user.tier === "vip" || user.isVip) ? "vip" : user.tier === "plus" ? "plus" : "free";
+    setEditUserTier(tier);
+    setEditUserDays(user.subscriptionDays || (tier === "vip" ? 30 : 0));
+    setEditUserStorageDays(user.storageRetentionDays || (tier === "vip" ? 35 : tier === "plus" ? 30 : 7));
+  };
+
+  const handleToggleVip = async (userId: string, isVip: boolean) => {
+    const nextTier = isVip ? "free" : "vip";
+    const nextDays = isVip ? 0 : 30;
+    const nextRetention = isVip ? 7 : 35;
+
+    if (setUsers) {
+      setUsers((prev) =>
+        prev.map((u) =>
+          u.id === userId
+            ? { ...u, isVip: !isVip, tier: nextTier, subscriptionDays: nextDays, storageRetentionDays: nextRetention }
+            : u
+        )
+      );
+    }
+
+    try {
+      const headers = getAuthHeaders ? getAuthHeaders() : { "Content-Type": "application/json" };
+      await fetch("/api/admin/users", {
+        method: "PUT",
+        headers,
+        body: JSON.stringify({
+          userId,
+          isVip: !isVip,
+          tier: nextTier,
+          subscriptionDays: nextDays,
+          storageRetentionDays: nextRetention,
+        }),
+      });
+      onRefreshUsers?.();
+    } catch (err) {
+      console.error("Failed to toggle VIP:", err);
+      onRefreshUsers?.();
+    }
+  };
+
+  const handleDeleteUser = async (userId: string) => {
+    if (!confirm("Are you sure you want to permanently delete this user?")) return;
+
+    if (setUsers) {
+      setUsers((prev) => prev.filter((u) => u.id !== userId));
+    }
+
+    try {
+      const headers = getAuthHeaders ? getAuthHeaders() : {};
+      await fetch(`/api/admin/users?userId=${encodeURIComponent(userId)}`, {
+        method: "DELETE",
+        headers,
+      });
+      onRefreshUsers?.();
+    } catch (err) {
+      console.error("Failed to delete user:", err);
+      onRefreshUsers?.();
+    }
+  };
+
+  const handleSaveUserSubscription = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingUser) return;
+
+    setIsSavingUser(true);
+    try {
+      const headers = getAuthHeaders ? getAuthHeaders() : { "Content-Type": "application/json" };
+      const res = await fetch("/api/admin/users", {
+        method: "PUT",
+        headers,
+        body: JSON.stringify({
+          userId: editingUser.id,
+          email: editingUser.email,
+          tier: editUserTier,
+          isVip: editUserTier === "vip",
+          subscriptionDays: editUserDays,
+          storageRetentionDays: editUserStorageDays,
+        }),
+      });
+
+      if (res.ok) {
+        if (setUsers) {
+          setUsers((prev) =>
+            prev.map((u) =>
+              u.id === editingUser.id
+                ? {
+                    ...u,
+                    tier: editUserTier,
+                    isVip: editUserTier === "vip",
+                    subscriptionDays: editUserDays,
+                    storageRetentionDays: editUserStorageDays,
+                  }
+                : u
+            )
+          );
+        }
+        setEditingUser(null);
+        onRefreshUsers?.();
+      } else {
+        alert("Failed to update user subscription.");
+      }
+    } catch (err) {
+      console.error("Save user error:", err);
+      alert("Network error updating user.");
+    } finally {
+      setIsSavingUser(false);
+    }
+  };
   return (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">

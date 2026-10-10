@@ -458,18 +458,7 @@ export const AdminSettingsTab: React.FC<AdminSettingsTabProps> = ({
             </div>
           </div>
           <div className="flex items-center space-x-1.5 bg-black/60 px-2.5 py-1 rounded-lg border border-white/10">
-            <span className="text-[10px] text-[#aeaeae]">Active:</span>
-            <span className="font-mono text-amber-400 text-[11px]">
-              {showPasswordDetails ? activeMasterPassword : "••••••••••••"}
-            </span>
-            <button
-              type="button"
-              onClick={() => setShowPasswordDetails(!showPasswordDetails)}
-              className="text-[#aeaeae] hover:text-white ml-1 cursor-pointer"
-              title={showPasswordDetails ? "Hide password" : "Show active password"}
-            >
-              {showPasswordDetails ? <EyeOff className="size-3" /> : <Eye className="size-3" />}
-            </button>
+            <span className="text-[10px] text-emerald-400 font-bold">🔒 Protected & Encrypted</span>
           </div>
         </div>
 
@@ -498,7 +487,7 @@ export const AdminSettingsTab: React.FC<AdminSettingsTabProps> = ({
               required
               value={currentMasterPassword}
               onChange={(e) => setCurrentMasterPassword(e.target.value)}
-              placeholder="Enter current password (e.g. #Abdullah786099#)"
+              placeholder="Enter current master password"
               className="w-full px-3.5 py-2.5 rounded-xl bg-black/60 border border-white/10 text-white font-mono outline-none focus:border-[#f53b70]"
             />
           </div>

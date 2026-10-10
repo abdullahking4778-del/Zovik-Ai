@@ -28,7 +28,11 @@ function getStoragePath(fileName: string): string {
   if (process.env.VERCEL) {
     return path.join("/tmp", fileName);
   }
-  return path.join(process.cwd(), ".data", fileName);
+  const dotDataPath = path.join(process.cwd(), ".data", fileName);
+  if (fs.existsSync(dotDataPath)) return dotDataPath;
+  const srcDataPath = path.join(process.cwd(), "src", "data", fileName);
+  if (fs.existsSync(srcDataPath)) return srcDataPath;
+  return dotDataPath;
 }
 
 // Helper: Safe cryptographic ID generator
@@ -442,7 +446,9 @@ export async function getPersistentCharacters(): Promise<Character[]> {
     getPersistentDeletedCharacterIds(),
   ]);
 
-  const rootPath = path.join(process.cwd(), ".data", "characters.json");
+  const dotPath = path.join(process.cwd(), ".data", "characters.json");
+  const srcPath = path.join(process.cwd(), "src", "data", "characters.json");
+  const rootPath = fs.existsSync(dotPath) ? dotPath : srcPath;
   const defaultChars = safeReadJsonFile<Character[]>(rootPath, []);
 
   // Build a lookup map of all local metadata
