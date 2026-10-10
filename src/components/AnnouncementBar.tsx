@@ -24,12 +24,10 @@ export function AnnouncementBar() {
 
   useEffect(() => {
     // Clean up any old persistent dismissal blockers from previous sessions
-    if (typeof window !== "undefined") {
-      try {
-        sessionStorage.removeItem("zovik_announcement_dismissed");
-        localStorage.removeItem("zovik_announcement_dismissed");
-      } catch {}
-    }
+    try {
+      sessionStorage.removeItem("zovik_announcement_dismissed");
+      localStorage.removeItem("zovik_announcement_dismissed");
+    } catch {}
 
     // Fetch initial live announcement
     fetchAnnouncement();

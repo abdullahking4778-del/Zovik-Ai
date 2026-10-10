@@ -70,11 +70,9 @@ export default function AdminPage() {
 
   // Check existing session on mount
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      try {
-        localStorage.removeItem("zovik_admin_session");
-      } catch {}
-    }
+    try {
+      localStorage.removeItem("zovik_admin_session");
+    } catch {}
 
     fetch("/api/admin/auth", {
       headers: { "x-zovik-admin-request": "1" },
@@ -144,11 +142,9 @@ export default function AdminPage() {
       });
     } catch {}
     setIsAuthenticated(false);
-    if (typeof window !== "undefined") {
-      try {
-        localStorage.removeItem("zovik_admin_session");
-      } catch {}
-    }
+    try {
+      localStorage.removeItem("zovik_admin_session");
+    } catch {}
   };
 
   const fetchAdminData = async () => {

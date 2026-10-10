@@ -42,9 +42,7 @@ export default function Sidebar({
 
   const handleLangChange = (lang: string) => {
     setCurrentLang(lang);
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(new CustomEvent("zovik_lang_changed", { detail: { lang } }));
-    }
+    window.dispatchEvent(new CustomEvent("zovik_lang_changed", { detail: { lang } }));
   };
 
   const navItems = [

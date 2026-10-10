@@ -248,7 +248,7 @@ export default function ShortsModal({
   const handleShare = () => {
     const current = reels[currentIndex];
     if (!current) return;
-    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    const origin = window.location.origin;
     const shareUrl = `${origin}/?reel=${encodeURIComponent(current.id)}`;
 
     if (navigator.clipboard) {

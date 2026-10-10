@@ -17,18 +17,16 @@ export default function PwaInstallModal({ isOpen, onClose }: PwaInstallModalProp
 
   useEffect(() => {
     // Detect iOS
-    if (typeof window !== "undefined") {
-      const userAgent = window.navigator.userAgent.toLowerCase();
-      setIsIOS(/iphone|ipad|ipod/.test(userAgent));
+    const userAgent = window.navigator.userAgent.toLowerCase();
+    setIsIOS(/iphone|ipad|ipod/.test(userAgent));
 
-      // Grab globally captured prompt if already fired
-      if (window.__pwaInstallPrompt) {
-        setDeferredPrompt(window.__pwaInstallPrompt);
-      }
+    // Grab globally captured prompt if already fired
+    if (window.__pwaInstallPrompt) {
+      setDeferredPrompt(window.__pwaInstallPrompt);
+    }
 
-      if (window.matchMedia("(display-mode: standalone)").matches) {
-        setIsInstalled(true);
-      }
+    if (window.matchMedia("(display-mode: standalone)").matches) {
+      setIsInstalled(true);
     }
 
     const handlePromptReady = () => {
@@ -53,7 +51,7 @@ export default function PwaInstallModal({ isOpen, onClose }: PwaInstallModalProp
   if (!isOpen) return null;
 
   const handleInstallClick = async () => {
-    const promptToUse = deferredPrompt || (typeof window !== "undefined" ? window.__pwaInstallPrompt : null);
+    const promptToUse = deferredPrompt || window.__pwaInstallPrompt || null;
 
     if (promptToUse) {
       try {

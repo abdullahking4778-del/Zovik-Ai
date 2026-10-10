@@ -192,7 +192,7 @@ export default function LandingPage() {
           <Link
             href="/"
             onClick={(e) => {
-              if (typeof window !== "undefined" && window.location.pathname === "/") {
+              if (window.location.pathname === "/") {
                 e.preventDefault();
                 window.scrollTo({ top: 0, behavior: "smooth" });
               }
@@ -880,7 +880,7 @@ export default function LandingPage() {
           <Link
             href="/"
             onClick={(e) => {
-              if (typeof window !== "undefined" && window.location.pathname === "/") {
+              if (window.location.pathname === "/") {
                 e.preventDefault();
                 window.scrollTo({ top: 0, behavior: "smooth" });
               }

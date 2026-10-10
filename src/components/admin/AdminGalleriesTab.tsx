@@ -15,6 +15,7 @@ import {
   Star,
   SlidersHorizontal,
   FolderArchive,
+  GripVertical,
 } from "lucide-react";
 import { Character } from "@/types";
 import { getSafeImageUrl } from "@/lib/imageHelper";
@@ -50,6 +51,11 @@ export function AdminGalleriesTab({
   const [isUploadingGallery, setIsUploadingGallery] = useState(false);
   const [galleryUploadStatus, setGalleryUploadStatus] = useState<string | null>(null);
 
+  // Re-ordering & Insertion States (Drag & Drop + Custom Position Number)
+  const [insertPosition, setInsertPosition] = useState<number | "end">("end");
+  const [draggedIdx, setDraggedIdx] = useState<number | null>(null);
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+
   const currentCompanion =
     characters.find((c) => c.id === selectedGalleryCharId) || characters[0];
 
@@ -64,7 +70,7 @@ export function AdminGalleriesTab({
   };
 
   // ========================================================
-  // RE-ORDERING FUNCTIONS (Jules Issue #1 Solution)
+  // RE-ORDERING FUNCTIONS (Drag & Drop + Dropdown Index)
   // ========================================================
 
   /**
@@ -106,6 +112,42 @@ export function AdminGalleriesTab({
   const handleSetPosition = (fromIdx: number, targetPosition1Based: number) => {
     const targetIdx = targetPosition1Based - 1;
     handleMovePhoto(fromIdx, targetIdx);
+  };
+
+  // Drag and Drop Event Handlers
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    setDraggedIdx(index);
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", index.toString());
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (dragOverIdx !== index) {
+      setDragOverIdx(index);
+    }
+  };
+
+  const handleDragLeave = () => {
+    setDragOverIdx(null);
+  };
+
+  const handleDrop = (e: React.DragEvent, targetIndex: number) => {
+    e.preventDefault();
+    if (draggedIdx === null || draggedIdx === targetIndex) {
+      setDraggedIdx(null);
+      setDragOverIdx(null);
+      return;
+    }
+    handleMovePhoto(draggedIdx, targetIndex);
+    setDraggedIdx(null);
+    setDragOverIdx(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedIdx(null);
+    setDragOverIdx(null);
   };
 
   const handleRemovePhoto = (idx: number) => {
@@ -157,9 +199,20 @@ export function AdminGalleriesTab({
       alert("This photo is already in the gallery!");
       return;
     }
-    setWorkingGallery([...workingGallery, finalPhotoUrl]);
+
+    // Insert at chosen position (beginning #1, specific index, or end)
+    const updated = [...workingGallery];
+    if (insertPosition === "end" || insertPosition > updated.length) {
+      updated.push(finalPhotoUrl);
+    } else {
+      const targetPos = Math.max(0, insertPosition - 1);
+      updated.splice(targetPos, 0, finalPhotoUrl);
+    }
+
+    setWorkingGallery(updated);
     setNewGalleryPhotoUrl("");
     setGalleryAddFile(null);
+    setInsertPosition("end");
   };
 
   const handleUploadGalleryPhotos = async (files: FileList | null) => {
@@ -329,19 +382,27 @@ export function AdminGalleriesTab({
           {workingGallery.map((photoUrl, idx) => (
             <div
               key={`${photoUrl}-${idx}`}
-              className={`group relative rounded-2xl bg-[#140b1c] border overflow-hidden flex flex-col shadow-md transition-all ${
-                idx === 0
+              draggable
+              onDragStart={(e) => handleDragStart(e, idx)}
+              onDragOver={(e) => handleDragOver(e, idx)}
+              onDragLeave={handleDragLeave}
+              onDrop={(e) => handleDrop(e, idx)}
+              onDragEnd={handleDragEnd}
+              className={`group relative rounded-2xl bg-[#140b1c] border overflow-hidden flex flex-col shadow-md transition-all cursor-grab active:cursor-grabbing ${
+                dragOverIdx === idx
+                  ? "ring-2 ring-[#f53b70] border-[#f53b70] scale-[1.03] shadow-xl z-20"
+                  : idx === 0
                   ? "border-amber-400/80 shadow-amber-500/20 shadow-lg"
                   : "border-white/10 hover:border-pink-500/50"
               }`}
             >
               {/* Photo Preview Container */}
-              <div className="relative aspect-[3/4] w-full bg-black">
+              <div className="relative aspect-[3/4] w-full bg-black select-none">
                 <Image
                   src={getSafeImageUrl(photoUrl)}
                   alt={`Photo #${idx + 1}`}
                   fill
-                  className="object-cover"
+                  className="object-cover pointer-events-none"
                   unoptimized
                   referrerPolicy="no-referrer"
                 />
@@ -356,6 +417,14 @@ export function AdminGalleriesTab({
                 >
                   {idx === 0 && <Star className="size-3 fill-black text-black" />}
                   <span>#{idx + 1} {idx === 0 ? "Main Avatar" : `Delivery #${idx + 1}`}</span>
+                </div>
+
+                {/* Drag Handle Indicator */}
+                <div
+                  title="Drag and drop to re-order"
+                  className="absolute top-2 right-10 z-10 size-7 rounded-full bg-black/60 backdrop-blur-md border border-white/10 text-white/70 hover:text-white flex items-center justify-center transition-all cursor-grab active:cursor-grabbing"
+                >
+                  <GripVertical className="size-3.5" />
                 </div>
 
                 {/* Remove Photo Button */}
@@ -387,15 +456,18 @@ export function AdminGalleriesTab({
               <div className="p-3 bg-[#1b1024] space-y-2 border-t border-white/5">
                 {/* Position Select Dropdown */}
                 <div className="flex items-center justify-between gap-1 text-[11px]">
-                  <span className="text-[#aeaeae] font-bold">Position:</span>
+                  <div className="flex items-center space-x-1 text-[#aeaeae] font-bold">
+                    <GripVertical className="size-3 text-pink-400" />
+                    <span>Order:</span>
+                  </div>
                   <select
                     value={idx + 1}
                     onChange={(e) => handleSetPosition(idx, parseInt(e.target.value, 10))}
-                    className="px-2 py-1 rounded-lg bg-black/60 border border-white/15 text-pink-400 font-black text-xs outline-none focus:border-[#f53b70]"
+                    className="px-2 py-1 rounded-lg bg-black/60 border border-pink-500/30 text-pink-300 hover:border-pink-500 font-black text-xs outline-none focus:ring-1 focus:ring-pink-500 cursor-pointer"
                   >
                     {workingGallery.map((_, pIdx) => (
                       <option key={pIdx} value={pIdx + 1}>
-                        #{pIdx + 1} {pIdx === 0 ? "(Default)" : ""}
+                        #{pIdx + 1} {pIdx === 0 ? "(Main Avatar ⭐)" : ""}
                       </option>
                     ))}
                   </select>
@@ -527,6 +599,28 @@ export function AdminGalleriesTab({
             <ImageIcon className="size-3 shrink-0" />
             <span>Preset List</span>
           </button>
+        </div>
+
+        {/* Target Position Selection for New Photo */}
+        <div className="flex flex-wrap items-center gap-3 text-xs bg-black/30 p-2.5 rounded-xl border border-white/5">
+          <span className="text-[#aeaeae] font-bold flex items-center space-x-1.5">
+            <SlidersHorizontal className="size-3.5 text-pink-400" />
+            <span>Insert Photo at Position:</span>
+          </span>
+          <select
+            value={insertPosition === "end" ? "end" : insertPosition}
+            onChange={(e) => setInsertPosition(e.target.value === "end" ? "end" : parseInt(e.target.value, 10))}
+            className="px-3 py-1.5 rounded-lg bg-black/80 border border-pink-500/30 text-pink-300 font-bold text-xs outline-none focus:border-[#f53b70] cursor-pointer"
+          >
+            <option value="end">At End of Sequence (Default)</option>
+            <option value="1">#1 (Make New Main Avatar ⭐)</option>
+            {workingGallery.map((_, i) => (
+              i > 0 && <option key={i} value={i + 1}>Position #{i + 1}</option>
+            ))}
+          </select>
+          <span className="text-[11px] text-[#8e8e8e]">
+            {insertPosition === 1 ? "⚠️ This will become the companion's new main profile image." : ""}
+          </span>
         </div>
 
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">

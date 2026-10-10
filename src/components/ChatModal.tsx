@@ -196,8 +196,8 @@ export default function ChatModal({
   const [copiedMsgIdx, setCopiedMsgIdx] = useState<number | null>(null);
 
   useEffect(() => {
-    const directTier = typeof window !== "undefined" ? localStorage.getItem("zovik_tier") : null;
-    const directVip = typeof window !== "undefined" ? localStorage.getItem("zovik_is_vip") : null;
+    const directTier = localStorage.getItem("zovik_tier");
+    const directVip = localStorage.getItem("zovik_is_vip");
     
     let tier: "free" | "plus" | "vip" = "free";
     if (authTier === "vip" || directTier === "vip" || directVip === "true") {
@@ -206,7 +206,7 @@ export default function ChatModal({
       tier = "plus";
     }
 
-    const savedUser = typeof window !== "undefined" ? localStorage.getItem("zovik_user") : null;
+    const savedUser = localStorage.getItem("zovik_user");
     if (savedUser) {
       try {
         const u = JSON.parse(savedUser);
@@ -330,9 +330,7 @@ export default function ChatModal({
     } catch {}
 
     initializeGreeting(character);
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(new CustomEvent("zovik_chat_updated", { detail: { characterId: character.id } }));
-    }
+    window.dispatchEvent(new CustomEvent("zovik_chat_updated", { detail: { characterId: character.id } }));
     setClearedNotice(true);
     setTimeout(() => setClearedNotice(false), 2500);
   };
@@ -425,9 +423,7 @@ export default function ChatModal({
         const filtered = deleted.filter((id: string) => id !== character.id);
         localStorage.setItem("zovik_deleted_chats", JSON.stringify(filtered));
       }
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(new CustomEvent("zovik_chat_updated", { detail: { characterId: character.id } }));
-      }
+      window.dispatchEvent(new CustomEvent("zovik_chat_updated", { detail: { characterId: character.id } }));
     } catch {}
 
     // Deduct message count from daily cycle
@@ -437,10 +433,10 @@ export default function ChatModal({
 
     try {
       // Call Full-Stack Groq API backend with context
-      const preferredLang = typeof window !== "undefined" ? localStorage.getItem("zovik_lang") || "ur" : "ur";
+      const preferredLang = localStorage.getItem("zovik_lang") || "ur";
       let token = null;
       let currentUserId: string | undefined;
-      if (typeof window !== "undefined" && auth.currentUser) {
+      if (auth.currentUser) {
         token = await auth.currentUser.getIdToken();
         currentUserId = auth.currentUser.uid;
       }
@@ -548,9 +544,7 @@ export default function ChatModal({
         setMessages(finalMessages);
         try {
           localStorage.setItem(`zovik_chat_${character.id}`, JSON.stringify(finalMessages));
-          if (typeof window !== "undefined") {
-            window.dispatchEvent(new CustomEvent("zovik_chat_updated", { detail: { characterId: character.id } }));
-          }
+          window.dispatchEvent(new CustomEvent("zovik_chat_updated", { detail: { characterId: character.id } }));
         } catch {}
       }
     } catch (err) {
@@ -566,9 +560,7 @@ export default function ChatModal({
       setMessages(finalFallback);
       try {
         localStorage.setItem(`zovik_chat_${character.id}`, JSON.stringify(finalFallback));
-        if (typeof window !== "undefined") {
-          window.dispatchEvent(new CustomEvent("zovik_chat_updated", { detail: { characterId: character.id } }));
-        }
+        window.dispatchEvent(new CustomEvent("zovik_chat_updated", { detail: { characterId: character.id } }));
       } catch {}
     } finally {
       setIsTyping(false);
@@ -599,7 +591,7 @@ export default function ChatModal({
     try {
       let token = null;
       let currentUserId: string | undefined;
-      if (typeof window !== "undefined" && auth.currentUser) {
+      if (auth.currentUser) {
         token = await auth.currentUser.getIdToken();
         currentUserId = auth.currentUser.uid;
       }

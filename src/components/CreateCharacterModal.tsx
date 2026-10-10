@@ -16,6 +16,7 @@ import {
   Crown,
 } from "lucide-react";
 import { Character } from "@/types";
+import { safeLocalStorage } from "@/lib/storage";
 
 interface CreateCharacterModalProps {
   isOpen: boolean;
@@ -60,16 +61,14 @@ export default function CreateCharacterModal({
   };
 
   const handleGenerate = () => {
-    if (typeof window !== "undefined") {
-      const isPaid =
-        localStorage.getItem("zovik_is_vip") === "true" ||
-        localStorage.getItem("zovik_tier") === "vip" ||
-        localStorage.getItem("zovik_tier") === "plus";
-      if (!isPaid) {
-        alert("🔒 Create Companion is an exclusive Plus & VIP feature. Please upgrade to unlock!");
-        onClose();
-        return;
-      }
+    const isPaid =
+      safeLocalStorage.getBoolean("zovik_is_vip") ||
+      safeLocalStorage.getRawItem("zovik_tier") === "vip" ||
+      safeLocalStorage.getRawItem("zovik_tier") === "plus";
+    if (!isPaid) {
+      alert("🔒 Create Companion is an exclusive Plus & VIP feature. Please upgrade to unlock!");
+      onClose();
+      return;
     }
 
     const charName = name.trim() || (gender === "female" ? "Aria Rose" : "Lucas Black");

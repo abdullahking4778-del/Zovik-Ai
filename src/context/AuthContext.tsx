@@ -70,26 +70,10 @@ const AuthContext = createContext<AuthContextType>({
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [tier, setTier] = useState<string>(() => {
-    if (typeof window !== "undefined") {
-      return safeLocalStorage.getRawItem("zovik_tier") || "free";
-    }
-    return "free";
-  });
-  const [userData, setUserData] = useState<UserFirestoreData | null>(() => {
-    if (typeof window !== "undefined") {
-      const cached = safeLocalStorage.getItem<UserFirestoreData>("zovik_user_cache");
-      if (cached && typeof cached === "object") return cached;
-    }
-    return null;
-  });
+  const [tier, setTier] = useState<string>("free");
+  const [userData, setUserData] = useState<UserFirestoreData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isLocallyLoggedIn, setIsLocallyLoggedIn] = useState<boolean>(() => {
-    if (typeof window !== "undefined") {
-      return safeLocalStorage.getBoolean("zovik_logged_in");
-    }
-    return false;
-  });
+  const [isLocallyLoggedIn, setIsLocallyLoggedIn] = useState<boolean>(false);
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [loginPromptMessage, setLoginPromptMessage] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
@@ -166,9 +150,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
               safeLocalStorage.setItem("zovik_tier", currentTier);
               safeLocalStorage.setItem("zovik_is_vip", (currentTier === "vip" || currentTier === "plus") ? "true" : "false");
               safeLocalStorage.setItem("zovik_user_cache", data);
-              if (typeof window !== "undefined") {
-                window.dispatchEvent(new CustomEvent("zovik_tier_changed", { detail: { tier: currentTier } }));
-              }
+              window.dispatchEvent(new CustomEvent("zovik_tier_changed", { detail: { tier: currentTier } }));
             } else {
               // Create document if doesn't exist
               const initialData: UserFirestoreData = {
@@ -208,14 +190,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                 }
                 await signOut(auth).catch(() => {});
                 safeLocalStorage.clear();
-                if (typeof window !== "undefined") {
-                  Object.keys(localStorage).forEach((k) => {
-                    if (k.startsWith("zovik_") || k.startsWith("firebase:")) {
-                      localStorage.removeItem(k);
-                    }
-                  });
-                  sessionStorage.clear();
-                }
+                Object.keys(localStorage).forEach((k) => {
+                  if (k.startsWith("zovik_") || k.startsWith("firebase:")) {
+                    localStorage.removeItem(k);
+                  }
+                });
+                sessionStorage.clear();
                 setUser(null);
                 setIsLocallyLoggedIn(false);
                 setTier("free");
@@ -234,9 +214,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
                 safeLocalStorage.setItem("zovik_tier", statusData.tier);
                 safeLocalStorage.setItem("zovik_is_vip", (statusData.tier === "vip" || statusData.tier === "plus") ? "true" : "false");
-                if (typeof window !== "undefined") {
-                  window.dispatchEvent(new CustomEvent("zovik_tier_changed", { detail: { tier: statusData.tier } }));
-                }
+                window.dispatchEvent(new CustomEvent("zovik_tier_changed", { detail: { tier: statusData.tier } }));
 
                 // Client-side self-sync to Firestore (authorized under user's own auth token)
                 try {
@@ -261,9 +239,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         safeLocalStorage.removeItem("zovik_user_cache");
         safeLocalStorage.removeItem("zovik_tier");
         safeLocalStorage.removeItem("zovik_is_vip");
-        if (typeof window !== "undefined") {
-          window.dispatchEvent(new CustomEvent("zovik_tier_changed", { detail: { tier: "free" } }));
-        }
+        window.dispatchEvent(new CustomEvent("zovik_tier_changed", { detail: { tier: "free" } }));
       }
       setLoading(false);
     });

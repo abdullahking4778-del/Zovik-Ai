@@ -155,13 +155,14 @@ export default function VoiceCallModal({
   const [quotaExceeded, setQuotaExceeded] = useState(false);
 
   // Defaults to "en-US" so subtitles are written in clean English/Roman letters
-  const [micLang, setMicLang] = useState<"en-US" | "ur-PK">(() => {
-    if (typeof window !== "undefined") {
-      const saved = safeLocalStorage.getRawItem("zovik_call_mic_lang");
-      if (saved === "ur-PK" || saved === "en-US") return saved;
+  const [micLang, setMicLang] = useState<"en-US" | "ur-PK">("en-US");
+
+  useEffect(() => {
+    const saved = safeLocalStorage.getRawItem("zovik_call_mic_lang");
+    if (saved === "ur-PK" || saved === "en-US") {
+      setMicLang(saved);
     }
-    return "en-US";
-  });
+  }, []);
 
   const [callTranscript, setCallTranscript] = useState<string>("");
   const [userTranscript, setUserTranscript] = useState<string>("");
@@ -458,7 +459,6 @@ export default function VoiceCallModal({
   // Start Mic Listening
   const startListening = useCallback(() => {
     if (
-      typeof window === "undefined" ||
       isAiBusyRef.current ||
       isSpeakingRef.current ||
       !isActiveRef.current

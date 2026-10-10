@@ -19,8 +19,6 @@ declare global {
 
 export default function PwaRegister() {
   useEffect(() => {
-    if (typeof window === "undefined") return;
-
     // Register service worker for PWA install eligibility
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker

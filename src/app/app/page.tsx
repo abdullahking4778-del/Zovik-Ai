@@ -138,7 +138,6 @@ export default function Home() {
 
   // Deep-link check for shared short reel URL (?reel=id)
   useEffect(() => {
-    if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
     const reelParam = params.get("reel");
     if (reelParam) {
@@ -183,42 +182,40 @@ export default function Home() {
       .catch((err) => console.warn("Failed to load characters:", err));
 
     // Deep linking from Landing Page URL parameters (?chat=..., ?login=true, ?call=..., ?create=true, ?shorts=true)
-    if (typeof window !== "undefined") {
-      try {
-        const params = new URLSearchParams(window.location.search);
-        const chatParam = params.get("chat");
-        const callParam = params.get("call");
-        const loginParam = params.get("login");
-        const createParam = params.get("create");
-        const shortsParam = params.get("shorts");
-        const premiumParam = params.get("openPremium") || params.get("premium");
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const chatParam = params.get("chat");
+      const callParam = params.get("call");
+      const loginParam = params.get("login");
+      const createParam = params.get("create");
+      const shortsParam = params.get("shorts");
+      const premiumParam = params.get("openPremium") || params.get("premium");
 
-        if (premiumParam === "true") setIsPremiumOpen(true);
-        if (loginParam === "true") {
-          if (!currentUser && !isLocallyLoggedIn) {
-            setIsLoginOpen(true);
-          } else {
-            window.history.replaceState(null, "", window.location.pathname);
-          }
+      if (premiumParam === "true") setIsPremiumOpen(true);
+      if (loginParam === "true") {
+        if (!currentUser && !isLocallyLoggedIn) {
+          setIsLoginOpen(true);
+        } else {
+          window.history.replaceState(null, "", window.location.pathname);
         }
-        if (createParam === "true") setIsCreateOpen(true);
-        if (shortsParam === "true") setIsShortsOpen(true);
+      }
+      if (createParam === "true") setIsCreateOpen(true);
+      if (shortsParam === "true") setIsShortsOpen(true);
 
-        if (chatParam) {
-          const match = (rawCharacters as Character[]).find(
-            (c) => c.id.toLowerCase() === chatParam.toLowerCase() || c.name.toLowerCase().includes(chatParam.toLowerCase())
-          );
-          if (match) setActiveChatCharacter(match);
-        }
+      if (chatParam) {
+        const match = (rawCharacters as Character[]).find(
+          (c) => c.id.toLowerCase() === chatParam.toLowerCase() || c.name.toLowerCase().includes(chatParam.toLowerCase())
+        );
+        if (match) setActiveChatCharacter(match);
+      }
 
-        if (callParam) {
-          const match = (rawCharacters as Character[]).find(
-            (c) => c.id.toLowerCase() === callParam.toLowerCase() || c.name.toLowerCase().includes(callParam.toLowerCase())
-          );
-          if (match) setActiveCallCharacter(match);
-        }
-      } catch {}
-    }
+      if (callParam) {
+        const match = (rawCharacters as Character[]).find(
+          (c) => c.id.toLowerCase() === callParam.toLowerCase() || c.name.toLowerCase().includes(callParam.toLowerCase())
+        );
+        if (match) setActiveCallCharacter(match);
+      }
+    } catch {}
 
     const handleOpenPremiumEvent = () => setIsPremiumOpen(true);
     window.addEventListener("open-premium-modal", handleOpenPremiumEvent);
@@ -229,21 +226,18 @@ export default function Home() {
 
   // Sync Generated Photos for Private VIP Gallery
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const stored = localStorage.getItem("zovik_generated_photos");
-        if (stored) {
-          setGeneratedPhotos(JSON.parse(stored));
-        } else {
-          setGeneratedPhotos([]);
-        }
-      } catch {}
-    }
+    try {
+      const stored = localStorage.getItem("zovik_generated_photos");
+      if (stored) {
+        setGeneratedPhotos(JSON.parse(stored));
+      } else {
+        setGeneratedPhotos([]);
+      }
+    } catch {}
   }, [activeTab, activeChatCharacter, chatRefreshTick]);
 
   // Real-time Chat Sync across Modals, Tabs, and Storage
   useEffect(() => {
-    if (typeof window === "undefined") return;
     const handleChatUpdate = () => {
       setChatRefreshTick((prev) => prev + 1);
     };
@@ -414,8 +408,6 @@ export default function Home() {
   }[]>([]);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-
     let currentDeleted: string[] = [];
     try {
       const stored = localStorage.getItem("zovik_deleted_chats");
@@ -536,9 +528,7 @@ export default function Home() {
       setDeletedChatIds(updated);
       setChatRefreshTick((t) => t + 1);
 
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(new CustomEvent("zovik_chat_updated", { detail: { characterId: charId } }));
-      }
+      window.dispatchEvent(new CustomEvent("zovik_chat_updated", { detail: { characterId: charId } }));
 
       showNotice(`✓ ${charName} deleted permanently`);
 
@@ -564,9 +554,7 @@ export default function Home() {
     setDeletedChatIds(updated);
     setChatRefreshTick((t) => t + 1);
 
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(new CustomEvent("zovik_chat_updated", { detail: { characterId: charId } }));
-    }
+    window.dispatchEvent(new CustomEvent("zovik_chat_updated", { detail: { characterId: charId } }));
 
     showNotice(`✓ Chat history with ${charName} deleted`);
   };
