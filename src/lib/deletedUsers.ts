@@ -1,7 +1,10 @@
 import fs from "fs";
 import path from "path";
 import { adminDb } from "./firebaseAdmin";
+<<<<<<< HEAD
 import type { QueryDocumentSnapshot, DocumentData } from "firebase-admin/firestore";
+=======
+>>>>>>> 9f63ed227f5cb4e74f365561e32ef2a005d0fe76
 import { supabaseAdmin, isSupabaseConfigured } from "./supabase";
 
 export interface DeletedUserRecord {
@@ -69,6 +72,7 @@ async function syncFromCloudStore(): Promise<void> {
       const snapshot = await adminDb.collection("deleted_users").get();
       if (!snapshot.empty) {
         const cloudRecords: DeletedUserRecord[] = [];
+<<<<<<< HEAD
         snapshot.forEach((doc: QueryDocumentSnapshot<DocumentData>) => {
           const data = doc.data() as Partial<DeletedUserRecord>;
           cloudRecords.push({
@@ -76,6 +80,15 @@ async function syncFromCloudStore(): Promise<void> {
             email: data.email as string | undefined,
             deletedAt: (data.deletedAt as string) || new Date().toISOString(),
             reason: (data.reason as string) || "admin_deletion",
+=======
+        snapshot.forEach((doc) => {
+          const data = doc.data() as DeletedUserRecord;
+          cloudRecords.push({
+            id: data.id || doc.id,
+            email: data.email,
+            deletedAt: data.deletedAt || new Date().toISOString(),
+            reason: data.reason || "admin_deletion",
+>>>>>>> 9f63ed227f5cb4e74f365561e32ef2a005d0fe76
           });
         });
 
@@ -103,7 +116,11 @@ async function syncFromCloudStore(): Promise<void> {
         .from("deleted_users")
         .select("id, email, deleted_at, reason");
       if (!error && Array.isArray(data)) {
+<<<<<<< HEAD
         data.forEach((row: { id?: string; email?: string; deleted_at?: string; reason?: string }) => {
+=======
+        data.forEach((row) => {
+>>>>>>> 9f63ed227f5cb4e74f365561e32ef2a005d0fe76
           inMemoryTombstones.push({
             id: row.id,
             email: row.email,

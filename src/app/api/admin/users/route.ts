@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdminRequest } from "@/lib/adminAuth";
 import { adminDb, adminAuth } from "@/lib/firebaseAdmin";
+<<<<<<< HEAD
 import type { QueryDocumentSnapshot, DocumentData } from "firebase-admin/firestore";
+=======
+>>>>>>> 9f63ed227f5cb4e74f365561e32ef2a005d0fe76
 import { getAllStoredUsers, upsertStoredUser, upsertStoredUserAsync, saveAllStoredUsers } from "@/lib/userStore";
 import { UserAccount } from "@/types";
 import { supabaseAdmin, isSupabaseConfigured } from "@/lib/supabase";
@@ -33,7 +36,11 @@ export async function GET(req: NextRequest) {
   try {
     if (adminDb && typeof adminDb.collection === "function") {
       const snapshot = await adminDb.collection("users").get();
+<<<<<<< HEAD
       snapshot.forEach((d: QueryDocumentSnapshot<DocumentData>) => {
+=======
+      snapshot.forEach((d) => {
+>>>>>>> 9f63ed227f5cb4e74f365561e32ef2a005d0fe76
         const data = d.data();
         const existing = usersMap.get(d.id);
         const tier = existing?.tier || data.zovik_tier || "free";
