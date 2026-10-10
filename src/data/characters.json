@@ -26,10 +26,7 @@
     "messages": [],
     "videoUrl": "/videos/companions/aria-solis.mp4",
     "gallery": [
-      "/characters/zovik_01.jpg",
-      "/characters/char_1790757646615_Woman_sitting_in_rooftop_lounge_20260930134012.webp",
-      "/characters/char_1790757646803_Woman_wearing_green_top_20260930133131.webp",
-      "/characters/char_1790757646982_Woman_standing_in_tropical_garden_2K_20260930132905.webp"
+      "/characters/zovik_01.jpg"
     ],
     "accessTier": "vip",
     "isVipOnly": true
@@ -70,9 +67,7 @@
     ],
     "videoUrl": "/videos/companions/raven-steele.mp4",
     "gallery": [
-      "/characters/zovik_02.jpg",
-      "/characters/zovik_16.jpg",
-      "/characters/zovik_24.jpg"
+      "/characters/zovik_02.jpg"
     ],
     "accessTier": "vip",
     "isVipOnly": true
@@ -113,9 +108,7 @@
     ],
     "videoUrl": "/videos/companions/genevieve-claire.mp4",
     "gallery": [
-      "/characters/zovik_03.jpg",
-      "/characters/zovik_15.jpg",
-      "/characters/zovik_33.jpg"
+      "/characters/zovik_03.jpg"
     ],
     "accessTier": "free",
     "isVipOnly": false
@@ -1016,9 +1009,7 @@
     ],
     "videoUrl": "/videos/companions/julian-blackwood.mp4",
     "gallery": [
-      "/characters/zovik_26.jpg",
-      "/characters/zovik_10.jpg",
-      "/characters/zovik_22.jpg"
+      "/characters/zovik_26.jpg"
     ],
     "accessTier": "free",
     "isVipOnly": false

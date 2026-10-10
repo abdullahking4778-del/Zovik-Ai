@@ -29,8 +29,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark">
-      <body className="min-h-screen bg-[#0d0a0f] text-white antialiased selection:bg-[#f53b70] selection:text-white">
+    <html lang="en" className="dark" suppressHydrationWarning>
+      <body
+        className="min-h-screen bg-[#0d0a0f] text-white antialiased selection:bg-[#f53b70] selection:text-white"
+        suppressHydrationWarning
+      >
         <PwaRegister />
         <AuthProvider>
           <AnnouncementBar />

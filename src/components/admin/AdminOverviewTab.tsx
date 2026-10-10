@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { CreditCard, Cpu, Activity, Users, MessageSquare, PhoneCall, Eye } from "lucide-react";
+import { CreditCard, Cpu, Activity, Users, MessageSquare, PhoneCall, Eye, Sparkles } from "lucide-react";
 import { UserAccount, PaymentRequest } from "@/types";
 
 interface AdminOverviewTabProps {
@@ -8,6 +8,7 @@ interface AdminOverviewTabProps {
   totalRevenuePKR: number;
   handleApprovePayment?: (paymentId: string) => void;
   onApprovePayment?: (paymentId: string) => void;
+  getAuthHeaders?: () => Record<string, string>;
 }
 
 export function AdminOverviewTab({
@@ -19,6 +20,34 @@ export function AdminOverviewTab({
 }: AdminOverviewTabProps) {
   const approveAction = handleApprovePayment || onApprovePayment || (() => {});
   const pendingPayments = payments.filter((p) => p.status === "pending");
+
+  const [isCleaningCache, setIsCleaningCache] = useState(false);
+  const [cleanMessage, setCleanMessage] = useState<string | null>(null);
+
+  const handleCleanCache = async () => {
+    setIsCleaningCache(true);
+    setCleanMessage(null);
+    try {
+      const token = localStorage.getItem("zovik_admin_session") || "";
+      const res = await fetch("/api/admin/clean-cache", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setCleanMessage(data.message || "✓ All app cache, temporary files, and junk permanently cleaned!");
+      } else {
+        alert(data.error || "Failed to clean app cache");
+      }
+    } catch {
+      alert("Error executing cache cleaning routine");
+    } finally {
+      setIsCleaningCache(false);
+    }
+  };
 
   // Mock data for Live Chat Monitor
   const [liveChats, setLiveChats] = useState([
@@ -45,6 +74,40 @@ export function AdminOverviewTab({
 
   return (
     <div className="space-y-6">
+      {/* Maintenance & System Health Bar */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 rounded-3xl bg-gradient-to-r from-[#170c22] via-[#1a0f26] to-[#12081a] border border-white/10 shadow-lg gap-3">
+        <div className="flex items-center space-x-3">
+          <div className="size-10 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
+            <Sparkles className="size-5" />
+          </div>
+          <div>
+            <h4 className="text-sm font-bold text-white flex items-center gap-2">
+              <span>System Health & Storage Optimizer</span>
+              <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full font-bold">100% HEALTHY</span>
+            </h4>
+            <p className="text-[11px] text-[#aeaeae]">
+              Auto-purges orphaned .tmp files, expired cache, rate-limits, and junk records.
+            </p>
+          </div>
+        </div>
+
+        <button
+          onClick={handleCleanCache}
+          disabled={isCleaningCache}
+          className="px-4 py-2 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:brightness-110 text-white font-bold text-xs flex items-center space-x-2 transition-all active:scale-95 disabled:opacity-50 shrink-0 shadow-lg shadow-emerald-900/30"
+        >
+          <Sparkles className={`size-3.5 ${isCleaningCache ? "animate-spin" : ""}`} />
+          <span>{isCleaningCache ? "Cleaning Cache..." : "🧹 Clean App Cache & Junk Now"}</span>
+        </button>
+      </div>
+
+      {cleanMessage && (
+        <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-bold flex items-center justify-between animate-fadeIn">
+          <span>{cleanMessage}</span>
+          <button onClick={() => setCleanMessage(null)} className="text-emerald-400 hover:text-white ml-2">✕</button>
+        </div>
+      )}
+
       {/* Stat Cards Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <div className="p-5 rounded-3xl bg-[#140b1c] border border-white/5 relative overflow-hidden group hover:border-[#f53b70]/50 transition-colors">

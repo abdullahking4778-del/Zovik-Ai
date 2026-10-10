@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getActiveUserTier, findStoredUser } from "@/lib/userStore";
 import { verifyUserRequest } from "@/lib/serverUserAuth";
 import { verifyAdminRequest } from "@/lib/adminAuth";
+import { isUserDeleted } from "@/lib/deletedUsers";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -57,6 +58,14 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(
       { error: "No user identity found in verified token." },
       { status: 400 }
+    );
+  }
+
+  // Check if user has been permanently deleted by administrator
+  if (isUserDeleted(effectiveUid, effectiveEmail)) {
+    return NextResponse.json(
+      { success: false, deleted: true, error: "Account permanently deleted by administrator." },
+      { status: 410 }
     );
   }
 

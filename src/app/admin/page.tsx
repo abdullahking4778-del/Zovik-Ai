@@ -150,8 +150,21 @@ export default function AdminPage() {
       // 2. Fetch Characters & Available Images
       const cRes = await fetch("/api/admin/characters", { headers, cache: "no-store" });
       const cData = await cRes.json();
-      setCharacters(cData.characters || []);
+      const loadedChars: Character[] = cData.characters || [];
+      setCharacters(loadedChars);
       setAvailableImages(cData.availableImages || []);
+
+      // Keep workingGallery strictly synchronized with selected character
+      if (loadedChars.length > 0) {
+        setSelectedGalleryCharId((prevId) => {
+          const targetId = prevId && loadedChars.some((c) => c.id === prevId) ? prevId : loadedChars[0].id;
+          const targetChar = loadedChars.find((c) => c.id === targetId) || loadedChars[0];
+          setWorkingGallery(
+            targetChar.gallery && targetChar.gallery.length > 0 ? targetChar.gallery : [targetChar.image]
+          );
+          return targetId;
+        });
+      }
 
       // 3. Fetch Subscriptions / Payments
       const pRes = await fetch("/api/subscriptions", { headers, cache: "no-store" });

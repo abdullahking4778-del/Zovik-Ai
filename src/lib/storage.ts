@@ -116,6 +116,16 @@ export const safeLocalStorage = {
     }
   },
 
+  clear(): boolean {
+    if (typeof window === "undefined") return false;
+    try {
+      window.localStorage.clear();
+      return true;
+    } catch {
+      return false;
+    }
+  },
+
   getAllKeys(): string[] {
     if (typeof window === "undefined") return [];
     try {

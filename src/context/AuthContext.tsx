@@ -189,18 +189,40 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             }
           });
 
-          // Check authoritative server status for instant VIP / Plus grants with verified user token
+          // Check authoritative server status for instant VIP / Plus grants or permanent deletion eviction
           currentUser
             .getIdToken()
-            .then((token) =>
-              fetch(`/api/user/status`, {
+            .then(async (token) => {
+              const res = await fetch(`/api/user/status`, {
                 headers: {
                   Authorization: `Bearer ${token}`,
                 },
-              })
-            )
-            .then((res) => res.json())
-            .then(async (statusData) => {
+              });
+              const statusData = await res.json().catch(() => ({}));
+
+              // If admin deleted this user, enforce immediate wipeout and logout
+              if (res.status === 410 || statusData.deleted === true) {
+                if (firestoreUnsubscribe) {
+                  firestoreUnsubscribe();
+                  firestoreUnsubscribe = null;
+                }
+                await signOut(auth).catch(() => {});
+                safeLocalStorage.clear();
+                if (typeof window !== "undefined") {
+                  Object.keys(localStorage).forEach((k) => {
+                    if (k.startsWith("zovik_") || k.startsWith("firebase:")) {
+                      localStorage.removeItem(k);
+                    }
+                  });
+                  sessionStorage.clear();
+                }
+                setUser(null);
+                setIsLocallyLoggedIn(false);
+                setTier("free");
+                setUserData(null);
+                return;
+              }
+
               if (statusData && statusData.tier && statusData.tier !== "free") {
                 setTier(statusData.tier);
                 setUserData((prev) => ({
@@ -284,6 +306,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
 
       if (result?.user) {
+        try {
+          const freshToken = await result.user.getIdToken();
+          await fetch("/api/user/unmark-deleted", {
+            method: "POST",
+            headers: { Authorization: `Bearer ${freshToken}` },
+          });
+        } catch {}
+
         setIsLocallyLoggedIn(true);
         safeLocalStorage.setItem("zovik_logged_in", "true");
         const userDocRef = doc(db, "users", result.user.uid);
@@ -321,6 +351,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     try {
       const result = await signInWithEmailAndPassword(auth, email.trim(), password);
       if (result.user) {
+        try {
+          const freshToken = await result.user.getIdToken();
+          await fetch("/api/user/unmark-deleted", {
+            method: "POST",
+            headers: { Authorization: `Bearer ${freshToken}` },
+          });
+        } catch {}
+
         setIsLocallyLoggedIn(true);
         safeLocalStorage.setItem("zovik_logged_in", "true");
         const userDocRef = doc(db, "users", result.user.uid);

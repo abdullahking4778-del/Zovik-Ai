@@ -378,15 +378,22 @@ export async function savePersistentCustomCharacter(character: Character): Promi
     safeWriteJsonFile(filePath, updated);
   } catch {}
 
-  // 4. Also sync root characters.json for local dev if exists
+  // 4. Also sync root and src characters.json for local persistence
   try {
-    const rootPath = path.join(process.cwd(), ".data", "characters.json");
-    const list = safeReadJsonFile<Character[]>(rootPath, []);
-    if (Array.isArray(list)) {
-      const matchIndex = list.findIndex((c) => c.id === charId || c.slug === charWithId.slug);
-      if (matchIndex >= 0) {
-        list[matchIndex] = { ...list[matchIndex], ...charWithId };
-        safeWriteJsonFile(rootPath, list);
+    const rootPaths = [
+      path.join(process.cwd(), ".data", "characters.json"),
+      path.join(process.cwd(), "src", "data", "characters.json"),
+    ];
+    for (const rootPath of rootPaths) {
+      if (fs.existsSync(rootPath)) {
+        const list = safeReadJsonFile<Character[]>(rootPath, []);
+        if (Array.isArray(list)) {
+          const matchIndex = list.findIndex((c) => c.id === charId || c.slug === charWithId.slug);
+          if (matchIndex >= 0) {
+            list[matchIndex] = { ...list[matchIndex], ...charWithId };
+            safeWriteJsonFile(rootPath, list);
+          }
+        }
       }
     }
   } catch {}
@@ -423,13 +430,20 @@ export async function deletePersistentCharacter(characterId: string): Promise<bo
     }
   } catch {}
 
-  // 5. Remove from root characters.json (local seed)
+  // 5. Remove from root and src characters.json (local seed)
   try {
-    const rootPath = path.join(process.cwd(), ".data", "characters.json");
-    const list = safeReadJsonFile<Character[]>(rootPath, []);
-    if (Array.isArray(list) && list.length > 0) {
-      const filtered = list.filter((c) => c.id !== cleanId && c.slug !== cleanId);
-      safeWriteJsonFile(rootPath, filtered);
+    const rootPaths = [
+      path.join(process.cwd(), ".data", "characters.json"),
+      path.join(process.cwd(), "src", "data", "characters.json"),
+    ];
+    for (const rootPath of rootPaths) {
+      if (fs.existsSync(rootPath)) {
+        const list = safeReadJsonFile<Character[]>(rootPath, []);
+        if (Array.isArray(list) && list.length > 0) {
+          const filtered = list.filter((c) => c.id !== cleanId && c.slug !== cleanId);
+          safeWriteJsonFile(rootPath, filtered);
+        }
+      }
     }
   } catch {}
 

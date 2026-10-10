@@ -1,9 +1,10 @@
 "use client";
 
 import React, { useState } from "react";
-import { Plus, Globe, UploadCloud, Film } from "lucide-react";
+import { Plus, Globe, UploadCloud, Film, Image as ImageIcon, Sparkles, CheckCircle2 } from "lucide-react";
 import { ShortReel } from "@/types";
 import { getSafeStreamUrl } from "@/lib/videoHelper";
+import { captureVideoFrame, dataUrlToFile } from "@/lib/videoThumbnail";
 
 interface AdminShortsTabProps {
   shorts: ShortReel[];
@@ -21,25 +22,47 @@ export function AdminShortsTab({
   const [isAddReelOpen, setIsAddReelOpen] = useState(false);
   const [reelVideoMode, setReelVideoMode] = useState<"url" | "upload" | "preset">("url");
   const [reelUploadFile, setReelUploadFile] = useState<File | null>(null);
+  const [capturedThumbnail, setCapturedThumbnail] = useState<string | null>(null);
+  const [isCapturingThumbnail, setIsCapturingThumbnail] = useState(false);
   const [isUploadingReel, setIsUploadingReel] = useState(false);
   const [reelData, setReelData] = useState({
     characterName: "",
     videoUrl: "",
     caption: "",
-    avatar: "/characters/zovik_01.jpg",
+    avatar: "/logos/zovik-squircle.svg",
   });
+
+  const handleVideoFileChange = async (file: File | null) => {
+    setReelUploadFile(file);
+    setCapturedThumbnail(null);
+
+    if (file) {
+      setIsCapturingThumbnail(true);
+      try {
+        const frameDataUrl = await captureVideoFrame(file, 0.6);
+        if (frameDataUrl) {
+          setCapturedThumbnail(frameDataUrl);
+        }
+      } catch (e) {
+        console.warn("Video thumbnail extraction warning:", e);
+      } finally {
+        setIsCapturingThumbnail(false);
+      }
+    }
+  };
 
   const handleDeleteReel = async (id: string) => {
     if (!confirm("Are you sure you want to delete this short reel?")) return;
     try {
-      const res = await fetch(`/api/admin/shorts?id=${id}`, {
+      const res = await fetch(`/api/shorts?id=${encodeURIComponent(id)}`, {
         method: "DELETE",
         headers: getAuthHeaders(),
       });
       if (res.ok) {
         setShorts(shorts.filter((s) => s.id !== id));
       } else {
-        alert("Failed to delete reel");
+        const err = await res.json().catch(() => ({}));
+        alert(err.error || "Failed to delete reel");
       }
     } catch {
       alert("Error deleting reel");
@@ -52,9 +75,11 @@ export function AdminShortsTab({
 
     try {
       let finalVideoUrl = reelData.videoUrl.trim();
+      let finalThumbnailUrl = reelData.avatar || "/logos/zovik-squircle.svg";
+      const token = localStorage.getItem("zovik_admin_session") || "";
 
+      // 1. If upload mode, upload video file
       if (reelVideoMode === "upload" && reelUploadFile) {
-        const token = localStorage.getItem("zovik_admin_session") || "";
         const uploadForm = new FormData();
         uploadForm.append("file", reelUploadFile);
         uploadForm.append("type", "video");
@@ -69,7 +94,8 @@ export function AdminShortsTab({
           const upData = await upRes.json();
           finalVideoUrl = upData.url;
         } else {
-          alert("Failed to upload video reel");
+          const errData = await upRes.json().catch(() => ({}));
+          alert(errData.error || "Failed to upload video reel");
           setIsUploadingReel(false);
           return;
         }
@@ -81,11 +107,43 @@ export function AdminShortsTab({
         return;
       }
 
-      const res = await fetch("/api/admin/shorts", {
+      // 2. Upload captured real video thumbnail if available
+      if (capturedThumbnail) {
+        try {
+          const thumbFile = dataUrlToFile(
+            capturedThumbnail,
+            `thumb_${Date.now()}.jpg`
+          );
+          if (thumbFile) {
+            const thumbForm = new FormData();
+            thumbForm.append("file", thumbFile);
+            thumbForm.append("type", "image");
+
+            const thumbRes = await fetch("/api/admin/upload", {
+              method: "POST",
+              headers: { Authorization: `Bearer ${token}` },
+              body: thumbForm,
+            });
+
+            if (thumbRes.ok) {
+              const thumbData = await thumbRes.json();
+              if (thumbData.url) {
+                finalThumbnailUrl = thumbData.url;
+              }
+            }
+          }
+        } catch (thumbErr) {
+          console.warn("Thumbnail upload warning:", thumbErr);
+        }
+      }
+
+      // 3. Save Short Reel to backend
+      const res = await fetch("/api/shorts", {
         method: "POST",
         headers: getAuthHeaders(),
         body: JSON.stringify({
           ...reelData,
+          avatar: finalThumbnailUrl,
           videoUrl: finalVideoUrl,
         }),
       });
@@ -96,15 +154,17 @@ export function AdminShortsTab({
           characterName: "",
           videoUrl: "",
           caption: "",
-          avatar: "/characters/zovik_01.jpg",
+          avatar: "/logos/zovik-squircle.svg",
         });
         setReelUploadFile(null);
+        setCapturedThumbnail(null);
         onRefreshData();
       } else {
-        alert("Failed to save reel");
+        const resData = await res.json().catch(() => ({}));
+        alert(resData.error || "Failed to save reel");
       }
     } catch {
-      alert("Error saving reel");
+      alert("Error saving reel. Please check your connection.");
     } finally {
       setIsUploadingReel(false);
     }
@@ -115,28 +175,41 @@ export function AdminShortsTab({
       <div className="flex items-center justify-between pb-3 border-b border-white/5">
         <div>
           <h2 className="text-xl font-black text-white">Zovik Shorts CMS</h2>
-          <p className="text-xs text-[#aeaeae]">Manage vertical character reels with video files.</p>
+          <p className="text-xs text-[#aeaeae]">
+            Manage vertical character reels with original video thumbnails and smooth playback.
+          </p>
         </div>
 
         <button
-          onClick={() => setIsAddReelOpen(true)}
-          className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#f53b70] to-[#ff5b8c] text-white text-xs font-bold flex items-center space-x-2 hover:brightness-110 shadow-lg shadow-pink-600/30 transition-all"
+          onClick={() => {
+            setReelData({
+              characterName: "",
+              videoUrl: "",
+              caption: "",
+              avatar: "/logos/zovik-squircle.svg",
+            });
+            setReelUploadFile(null);
+            setCapturedThumbnail(null);
+            setIsAddReelOpen(true);
+          }}
+          className="px-4 py-2 rounded-2xl bg-gradient-to-r from-[#f53b70] to-[#ff457c] text-white font-bold text-xs shadow-lg hover:brightness-110 flex items-center space-x-1.5 transition-all"
         >
           <Plus className="size-4" />
-          <span>Add Video Reel</span>
+          <span>Add Short Reel</span>
         </button>
       </div>
 
+      {/* Reel Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {shorts.map((reel) => (
           <div
             key={reel.id}
             className="p-4 rounded-3xl bg-[#140b1c] border border-white/5 space-y-3"
           >
-            <div className="relative aspect-[9/14] w-full rounded-2xl overflow-hidden bg-black">
+            <div className="relative aspect-[9/14] w-full rounded-2xl overflow-hidden bg-black group">
               <video
                 src={getSafeStreamUrl(reel.videoUrl)}
-                poster={reel.avatar}
+                poster={reel.avatar || "/logos/zovik-squircle.svg"}
                 autoPlay
                 muted
                 loop
@@ -145,6 +218,12 @@ export function AdminShortsTab({
                 disablePictureInPicture
                 className="size-full object-cover"
               />
+              {reel.avatar && (
+                <div className="absolute top-2 left-2 px-2 py-1 rounded-lg bg-black/60 backdrop-blur-md border border-white/10 text-[9px] font-bold text-white flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <ImageIcon className="size-2.5 text-[#f53b70]" />
+                  <span>Thumbnail Ready</span>
+                </div>
+              )}
             </div>
 
             <div>
@@ -170,8 +249,16 @@ export function AdminShortsTab({
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md">
           <div className="w-full max-w-md p-6 rounded-3xl bg-[#170e20] border border-white/10 shadow-2xl text-white space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-white/10">
-              <h3 className="text-lg font-black">Add Short Reel</h3>
-              <button onClick={() => setIsAddReelOpen(false)} className="text-[#888] hover:text-white">✕</button>
+              <h3 className="text-lg font-black flex items-center gap-2">
+                <Sparkles className="size-4 text-[#f53b70]" />
+                <span>Add Short Reel</span>
+              </h3>
+              <button
+                onClick={() => setIsAddReelOpen(false)}
+                className="text-[#888] hover:text-white"
+              >
+                ✕
+              </button>
             </div>
 
             <form onSubmit={handleSaveReel} className="space-y-3 text-xs">
@@ -182,7 +269,7 @@ export function AdminShortsTab({
                   required
                   value={reelData.characterName}
                   onChange={(e) => setReelData({ ...reelData, characterName: e.target.value })}
-                  placeholder="e.g. Elena"
+                  placeholder="e.g. Elena Night Mood"
                   className="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-white outline-none focus:border-[#f53b70]"
                 />
               </div>
@@ -194,20 +281,23 @@ export function AdminShortsTab({
                   required
                   value={reelData.caption}
                   onChange={(e) => setReelData({ ...reelData, caption: e.target.value })}
-                  placeholder="e.g. Late night mood... Chat with me 💕"
+                  placeholder="e.g. Chilli, Hot and Sexy 😈 🫦"
                   className="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-white outline-none focus:border-[#f53b70]"
                 />
               </div>
 
               {/* Mode Selector */}
               <div>
-                <label className="text-[#aeaeae] block mb-1.5 font-bold text-xs">Video Source Mode</label>
+                <label className="text-[#aeaeae] block mb-1.5 font-bold text-xs">
+                  Video Source Mode
+                </label>
                 <div className="grid grid-cols-3 gap-1.5 p-1 rounded-xl bg-black/60 border border-white/10">
                   <button
                     type="button"
                     onClick={() => {
                       setReelVideoMode("url");
                       setReelUploadFile(null);
+                      setCapturedThumbnail(null);
                     }}
                     className={`py-1.5 px-2 rounded-lg font-bold text-[11px] flex items-center justify-center space-x-1 transition-all ${
                       reelVideoMode === "url"
@@ -235,6 +325,7 @@ export function AdminShortsTab({
                     onClick={() => {
                       setReelVideoMode("preset");
                       setReelUploadFile(null);
+                      setCapturedThumbnail(null);
                       if (!reelData.videoUrl || reelData.videoUrl.startsWith("http")) {
                         setReelData({ ...reelData, videoUrl: "/videos/companions/aria-solis.mp4" });
                       }
@@ -264,13 +355,40 @@ export function AdminShortsTab({
               )}
 
               {reelVideoMode === "upload" && (
-                <div>
+                <div className="space-y-2">
                   <input
                     type="file"
                     accept="video/mp4,video/webm"
-                    onChange={(e) => setReelUploadFile(e.target.files?.[0] || null)}
+                    onChange={(e) => handleVideoFileChange(e.target.files?.[0] || null)}
                     className="w-full text-xs text-[#aeaeae] file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-[#f53b70] file:text-white hover:file:brightness-110"
                   />
+
+                  {/* Thumbnail Extraction State / Preview */}
+                  {isCapturingThumbnail && (
+                    <div className="p-2 rounded-xl bg-white/5 border border-white/10 text-center text-xs text-[#aeaeae] animate-pulse">
+                      Generating original video thumbnail...
+                    </div>
+                  )}
+
+                  {capturedThumbnail && (
+                    <div className="flex items-center space-x-3 p-2.5 rounded-xl bg-black/50 border border-emerald-500/30">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={capturedThumbnail}
+                        alt="Original video thumbnail preview"
+                        className="w-14 h-20 object-cover rounded-lg border border-white/20 shadow-md shrink-0"
+                      />
+                      <div className="space-y-1">
+                        <span className="text-[11px] font-bold text-emerald-400 flex items-center gap-1">
+                          <CheckCircle2 className="size-3.5 shrink-0" />
+                          <span>Original Thumbnail Captured</span>
+                        </span>
+                        <p className="text-[10px] text-[#aeaeae] leading-relaxed">
+                          This exact first scene will be saved as the official thumbnail for this reel!
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -290,10 +408,16 @@ export function AdminShortsTab({
 
               <button
                 type="submit"
-                disabled={isUploadingReel}
-                className="w-full py-2.5 rounded-xl bg-gradient-to-r from-[#f53b70] to-[#ff457c] text-white font-bold text-xs shadow-md hover:brightness-110 transition-all disabled:opacity-50"
+                disabled={isUploadingReel || isCapturingThumbnail}
+                className="w-full py-2.5 rounded-xl bg-gradient-to-r from-[#f53b70] to-[#ff457c] text-white font-bold text-xs shadow-md hover:brightness-110 transition-all disabled:opacity-50 flex items-center justify-center space-x-1.5"
               >
-                {isUploadingReel ? "Uploading..." : "Save Reel"}
+                <span>
+                  {isUploadingReel
+                    ? "Uploading & Saving Reel..."
+                    : isCapturingThumbnail
+                    ? "Extracting Thumbnail..."
+                    : "Save Reel"}
+                </span>
               </button>
             </form>
           </div>

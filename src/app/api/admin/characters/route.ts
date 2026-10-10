@@ -191,6 +191,12 @@ export async function PATCH(req: NextRequest) {
 
     if (gallery && Array.isArray(gallery)) {
       existing.gallery = gallery;
+      if (gallery.length > 0) {
+        existing.image = gallery[0];
+      }
+    }
+    if (body.image) {
+      existing.image = body.image;
     }
 
     // Merge any other updated fields

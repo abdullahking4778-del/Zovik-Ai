@@ -2,16 +2,26 @@
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import Image from "next/image";
-import { X, Heart, Volume2, VolumeX, ChevronDown, ChevronUp, Share2, Sparkles, Check } from "lucide-react";
+import {
+  X,
+  Volume2,
+  VolumeX,
+  Heart,
+  Share2,
+  ChevronUp,
+  ChevronDown,
+  Sparkles,
+  Check,
+} from "lucide-react";
 import { Character } from "@/types";
-import { getSafeStreamUrl, fetchVideoBlobUrl } from "@/lib/videoHelper";
+import { getSafeStreamUrl } from "@/lib/videoHelper";
 
-export interface ReelItem {
+interface ReelItem {
   id: string;
   characterId: string;
   characterName: string;
-  characterAge?: number;
-  avatar?: string;
+  characterAge: number;
+  avatar: string;
   videoUrl: string;
   caption: string;
   tags?: string[];
@@ -21,8 +31,87 @@ interface ShortsModalProps {
   isOpen: boolean;
   onClose: () => void;
   characters: Character[];
-  onStartChat?: (char: Character) => void;
   initialReelId?: string | null;
+}
+
+interface ReelSlideVideoProps {
+  reel: ReelItem;
+  isActive: boolean;
+  isMuted: boolean;
+  isPlaying: boolean;
+  onTogglePlay: () => void;
+}
+
+function ReelSlideVideo({
+  reel,
+  isActive,
+  isMuted,
+  isPlaying,
+  onTogglePlay,
+}: ReelSlideVideoProps) {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    if (isActive) {
+      video.muted = isMuted;
+      video.currentTime = 0;
+      const playPromise = video.play();
+      if (playPromise !== undefined) {
+        playPromise.catch(() => {
+          // Strict browser unmuted autoplay fallback: mute first to guarantee playback
+          if (video) {
+            video.muted = true;
+            video.play().catch(() => {});
+          }
+        });
+      }
+    } else {
+      video.pause();
+    }
+  }, [isActive, isMuted]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !isActive) return;
+
+    if (isPlaying) {
+      video.play().catch(() => {});
+    } else {
+      video.pause();
+    }
+  }, [isPlaying, isActive]);
+
+  return (
+    <div
+      className="relative inset-0 size-full cursor-pointer bg-black"
+      onClick={onTogglePlay}
+    >
+      <video
+        ref={videoRef}
+        src={getSafeStreamUrl(reel.videoUrl)}
+        poster={reel.avatar || "/logos/zovik-squircle.svg"}
+        muted={isMuted}
+        loop
+        playsInline
+        controls={false}
+        controlsList="nodownload nofullscreen noremoteplayback"
+        disablePictureInPicture
+        className="size-full object-cover"
+      />
+
+      {/* Pause Indicator overlay */}
+      {!isPlaying && isActive && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/30 pointer-events-none">
+          <div className="size-16 rounded-full bg-black/60 backdrop-blur-md flex items-center justify-center text-white border border-white/20 scale-110 animate-pulse">
+            <span className="text-xl">▶</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function ShortsModal({
@@ -34,17 +123,14 @@ export default function ShortsModal({
   const [reels, setReels] = useState<ReelItem[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [liked, setLiked] = useState<{ [key: string]: boolean }>({});
-  // Audio auto-ON by default
   const [isMuted, setIsMuted] = useState(false);
   const [isPlaying, setIsPlaying] = useState(true);
-  const [activeVideoSrc, setActiveVideoSrc] = useState<string>("");
   const [shareCopied, setShareCopied] = useState(false);
-  
-  const videoRef = useRef<HTMLVideoElement | null>(null);
+
   const scrollLockRef = useRef<boolean>(false);
   const touchStartYRef = useRef<number | null>(null);
 
-  // Fetch real local reels from /api/shorts
+  // Fetch real persistent reels from /api/shorts
   useEffect(() => {
     if (!isOpen) return;
 
@@ -55,7 +141,7 @@ export default function ShortsModal({
         if (data.shorts && Array.isArray(data.shorts) && data.shorts.length > 0) {
           loadedReels = data.shorts;
         } else {
-          // Dynamic fallback from companions with videos
+          // Fallback from companions with videos
           loadedReels = characters
             .filter((c) => c.videoUrl)
             .map((c, idx) => ({
@@ -63,7 +149,7 @@ export default function ShortsModal({
               characterId: c.id,
               characterName: c.name,
               characterAge: c.age || 22,
-              avatar: "/logos/zovik-squircle.svg",
+              avatar: c.image || "/logos/zovik-squircle.svg",
               videoUrl: c.videoUrl!,
               caption: c.tagline ? `${c.tagline} 💕` : "Welcome to Zovik AI Shorts 💕",
               tags: c.tags || ["Trending", "VIP"],
@@ -92,7 +178,7 @@ export default function ShortsModal({
             characterId: c.id,
             characterName: c.name,
             characterAge: c.age || 22,
-            avatar: "/logos/zovik-squircle.svg",
+            avatar: c.image || "/logos/zovik-squircle.svg",
             videoUrl: c.videoUrl!,
             caption: c.tagline ? `${c.tagline} 💕` : "Welcome to Zovik AI Shorts 💕",
             tags: c.tags || ["Trending", "VIP"],
@@ -101,57 +187,19 @@ export default function ShortsModal({
       });
   }, [isOpen, characters, initialReelId]);
 
-  // Video autoplay management with Sound ON by default
-  useEffect(() => {
-    if (!videoRef.current) return;
-    videoRef.current.currentTime = 0;
-    
-    // Attempt play with audio
-    videoRef.current
-      .play()
-      .then(() => {
-        setIsPlaying(true);
-      })
-      .catch(() => {
-        // Strict browser unmuted autoplay fallback: mute first to guarantee playback, then unmute on user tap
-        if (videoRef.current) {
-          videoRef.current.muted = true;
-          setIsMuted(true);
-          videoRef.current.play().catch(() => {});
-        }
-      });
-  }, [currentIndex, reels]);
-
-  const currentReel = reels[currentIndex];
-
-  // Dynamic Blob & Stream URL generation to prevent IDM download popups
-  useEffect(() => {
-    if (!currentReel?.videoUrl) return;
-    let isMounted = true;
-    setActiveVideoSrc(getSafeStreamUrl(currentReel.videoUrl));
-
-    fetchVideoBlobUrl(currentReel.videoUrl).then((blobUrl) => {
-      if (isMounted && blobUrl) {
-        setActiveVideoSrc(blobUrl);
-      }
-    });
-
-    return () => {
-      isMounted = false;
-    };
-  }, [currentReel?.videoUrl]);
-
   const handleNext = useCallback(() => {
-    if (reels.length === 0) return;
+    if (reels.length <= 1) return;
+    setIsPlaying(true);
     setCurrentIndex((prev) => (prev + 1) % reels.length);
   }, [reels.length]);
 
   const handlePrev = useCallback(() => {
-    if (reels.length === 0) return;
+    if (reels.length <= 1) return;
+    setIsPlaying(true);
     setCurrentIndex((prev) => (prev === 0 ? reels.length - 1 : prev - 1));
   }, [reels.length]);
 
-  // Mouse Wheel Scrolling for PC with debounce lock
+  // Smooth mouse wheel scrolling with debounce lock to prevent jitter
   const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
     if (scrollLockRef.current) return;
     if (Math.abs(e.deltaY) < 30) return;
@@ -164,10 +212,10 @@ export default function ShortsModal({
     }
     setTimeout(() => {
       scrollLockRef.current = false;
-    }, 400);
+    }, 420);
   };
 
-  // Mobile Touch Swipe Handling
+  // Mobile Touch Swipe Handling with zero-jerk threshold
   const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
     touchStartYRef.current = e.touches[0].clientY;
   };
@@ -178,36 +226,31 @@ export default function ShortsModal({
     const diff = touchStartYRef.current - endY;
     touchStartYRef.current = null;
 
-    if (Math.abs(diff) > 45) {
+    if (Math.abs(diff) > 40) {
       if (diff > 0) {
-        handleNext(); // Swiped Up -> Next
+        handleNext(); // Swiped Up -> Next Reel
       } else {
-        handlePrev(); // Swiped Down -> Previous
+        handlePrev(); // Swiped Down -> Previous Reel
       }
     }
   };
 
   const toggleLike = () => {
-    if (!currentReel) return;
-    setLiked((prev) => ({ ...prev, [currentReel.id]: !prev[currentReel.id] }));
+    const current = reels[currentIndex];
+    if (!current) return;
+    setLiked((prev) => ({ ...prev, [current.id]: !prev[current.id] }));
   };
 
   const togglePlay = () => {
-    if (!videoRef.current) return;
-    if (videoRef.current.paused) {
-      videoRef.current.play();
-      setIsPlaying(true);
-    } else {
-      videoRef.current.pause();
-      setIsPlaying(false);
-    }
+    setIsPlaying((prev) => !prev);
   };
 
   const handleShare = () => {
-    if (!currentReel) return;
+    const current = reels[currentIndex];
+    if (!current) return;
     const origin = typeof window !== "undefined" ? window.location.origin : "";
-    const shareUrl = `${origin}/?reel=${encodeURIComponent(currentReel.id)}`;
-    
+    const shareUrl = `${origin}/?reel=${encodeURIComponent(current.id)}`;
+
     if (navigator.clipboard) {
       navigator.clipboard.writeText(shareUrl);
       setShareCopied(true);
@@ -215,7 +258,9 @@ export default function ShortsModal({
     }
   };
 
-  if (!isOpen || reels.length === 0 || !currentReel) return null;
+  if (!isOpen || reels.length === 0) return null;
+
+  const currentReel = reels[currentIndex] || reels[0];
 
   return (
     <div
@@ -235,34 +280,38 @@ export default function ShortsModal({
 
       {/* Main Vertical Reel Phone Player Container */}
       <div className="relative flex flex-col w-full h-full md:max-w-md md:h-[92vh] bg-black md:rounded-3xl border border-white/10 shadow-2xl overflow-hidden">
-        {/* Video Player */}
-        <div className="relative inset-0 size-full cursor-pointer" onClick={togglePlay}>
-          <video
-            ref={videoRef}
-            src={activeVideoSrc || (currentReel ? getSafeStreamUrl(currentReel.videoUrl) : "")}
-            poster={currentReel.avatar || "/logos/zovik-squircle.svg"}
-            autoPlay
-            muted={isMuted}
-            loop
-            playsInline
-            controls={false}
-            controlsList="nodownload nofullscreen noremoteplayback"
-            disablePictureInPicture
-            className="size-full object-cover"
-          />
+        {/* Buttery-Smooth Vertical Slide Track (TikTok / Instagram Reels style) */}
+        <div className="relative size-full overflow-hidden">
+          {reels.map((reel, idx) => {
+            const isNearby = Math.abs(idx - currentIndex) <= 1;
+            const isCurrent = idx === currentIndex;
+            const translateY = (idx - currentIndex) * 100;
 
-          {/* Pause Indicator overlay */}
-          {!isPlaying && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black/30 pointer-events-none">
-              <div className="size-16 rounded-full bg-black/60 backdrop-blur-md flex items-center justify-center text-white border border-white/20 scale-110 animate-pulse">
-                <span className="text-xl">▶</span>
+            return (
+              <div
+                key={reel.id}
+                className="absolute inset-0 size-full transition-transform duration-350 ease-[cubic-bezier(0.22,1,0.36,1)] will-change-transform"
+                style={{
+                  transform: `translate3d(0, ${translateY}%, 0)`,
+                  visibility: isNearby ? "visible" : "hidden",
+                }}
+              >
+                {isNearby && (
+                  <ReelSlideVideo
+                    reel={reel}
+                    isActive={isCurrent}
+                    isMuted={isMuted}
+                    isPlaying={isCurrent ? isPlaying : false}
+                    onTogglePlay={togglePlay}
+                  />
+                )}
               </div>
-            </div>
-          )}
+            );
+          })}
         </div>
 
-        {/* Top Header Overlay: Brand Badge & Audio Auto-ON Toggle */}
-        <div className="absolute top-0 inset-x-0 z-20 flex items-center justify-between p-4 bg-gradient-to-b from-black/80 via-black/30 to-transparent">
+        {/* Top Header Overlay: Brand Badge & Audio Toggle */}
+        <div className="absolute top-0 inset-x-0 z-20 flex items-center justify-between p-4 bg-gradient-to-b from-black/80 via-black/30 to-transparent pointer-events-auto">
           <div className="flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-black/60 backdrop-blur-md border border-white/15 text-white text-xs font-black shadow-lg">
             <Sparkles className="size-3.5 text-[#f53b70]" />
             <span className="tracking-wide">ZOVIK REELS</span>
@@ -272,11 +321,7 @@ export default function ShortsModal({
           <button
             onClick={(e) => {
               e.stopPropagation();
-              const nextMuted = !isMuted;
-              setIsMuted(nextMuted);
-              if (videoRef.current) {
-                videoRef.current.muted = nextMuted;
-              }
+              setIsMuted((prev) => !prev);
             }}
             className={`size-10 rounded-full backdrop-blur-md border flex items-center justify-center text-white transition-all active:scale-95 shadow-lg ${
               isMuted
@@ -315,7 +360,7 @@ export default function ShortsModal({
             </button>
           </div>
 
-          {/* Interactive Heart Button (Cleaned: No Fake Numbers) */}
+          {/* Interactive Heart Button */}
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -331,7 +376,11 @@ export default function ShortsModal({
                   : "bg-black/60 border-white/15 text-white group-hover:scale-105"
               }`}
             >
-              <Heart className={`size-5 transition-transform ${liked[currentReel.id] ? "fill-white scale-110" : ""}`} />
+              <Heart
+                className={`size-5 transition-transform ${
+                  liked[currentReel.id] ? "fill-white scale-110" : ""
+                }`}
+              />
             </div>
             <span className="text-[10px] font-bold text-white shadow-black drop-shadow tracking-wider">
               {liked[currentReel.id] ? "Liked" : "Like"}
@@ -348,7 +397,11 @@ export default function ShortsModal({
             title="Share Reel Link"
           >
             <div className="size-12 rounded-full bg-black/60 hover:bg-white/20 border border-white/15 backdrop-blur-md flex items-center justify-center text-white transition-all group-hover:scale-105 active:scale-90">
-              {shareCopied ? <Check className="size-5 text-emerald-400" /> : <Share2 className="size-5" />}
+              {shareCopied ? (
+                <Check className="size-5 text-emerald-400" />
+              ) : (
+                <Share2 className="size-5" />
+              )}
             </div>
             <span className="text-[10px] font-bold text-white shadow-black drop-shadow tracking-wider">
               {shareCopied ? "Copied!" : "Share"}
@@ -356,10 +409,9 @@ export default function ShortsModal({
           </button>
         </div>
 
-        {/* Bottom Official Brand Identity & Caption (No Chat Button / Distraction Free) */}
-        <div className="absolute inset-x-0 bottom-0 z-30 p-5 bg-gradient-to-t from-black via-black/70 to-transparent flex flex-col space-y-2">
-          {/* Profile Identity with Official Zovik Squircle Emblem */}
-          <div className="flex items-center space-x-3">
+        {/* Bottom Official Brand Identity & Caption */}
+        <div className="absolute inset-x-0 bottom-0 z-30 p-5 bg-gradient-to-t from-black via-black/70 to-transparent flex flex-col space-y-2 pointer-events-none">
+          <div className="flex items-center space-x-3 pointer-events-auto">
             <div className="relative size-12 rounded-2xl overflow-hidden border-2 border-[#f53b70] shadow-lg shadow-pink-600/40 shrink-0 bg-[#12081a]">
               <Image
                 src="/logos/zovik-squircle.svg"

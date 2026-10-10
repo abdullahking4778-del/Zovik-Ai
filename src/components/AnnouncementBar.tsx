@@ -11,16 +11,7 @@ export function AnnouncementBar() {
   const router = useRouter();
   const pathname = usePathname();
 
-  useEffect(() => {
-    // Check session dismissal
-    if (typeof window !== "undefined") {
-      const isDismissed = sessionStorage.getItem("zovik_announcement_dismissed");
-      if (isDismissed === "true") {
-        setDismissed(true);
-      }
-    }
-
-    // Fetch announcement
+  const fetchAnnouncement = () => {
     fetch("/api/announcement", { cache: "no-store" })
       .then((res) => res.json())
       .then((data) => {
@@ -29,6 +20,42 @@ export function AnnouncementBar() {
         }
       })
       .catch(() => {});
+  };
+
+  useEffect(() => {
+    // Clean up any old persistent dismissal blockers from previous sessions
+    if (typeof window !== "undefined") {
+      try {
+        sessionStorage.removeItem("zovik_announcement_dismissed");
+        localStorage.removeItem("zovik_announcement_dismissed");
+      } catch {}
+    }
+
+    // Fetch initial live announcement
+    fetchAnnouncement();
+
+    // Listen for live updates from admin panel or other tabs
+    const handleAnnouncementUpdated = () => {
+      setDismissed(false); // Reset dismissal on any new admin update
+      fetchAnnouncement();
+    };
+
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === "zovik_announcement_updated_at") {
+        setDismissed(false);
+        fetchAnnouncement();
+      }
+    };
+
+    window.addEventListener("zovik_announcement_updated", handleAnnouncementUpdated);
+    window.addEventListener("storage", handleStorageChange);
+    window.addEventListener("focus", fetchAnnouncement);
+
+    return () => {
+      window.removeEventListener("zovik_announcement_updated", handleAnnouncementUpdated);
+      window.removeEventListener("storage", handleStorageChange);
+      window.removeEventListener("focus", fetchAnnouncement);
+    };
   }, []);
 
   if (dismissed || !config || !config.enabled || !config.text || pathname?.startsWith("/admin")) {
@@ -37,10 +64,9 @@ export function AnnouncementBar() {
 
   const handleDismiss = (e: React.MouseEvent) => {
     e.stopPropagation();
+    // Dismiss in-memory for the current view session so navigation between pages stays clean,
+    // but on page refresh (F5), app reopen, or new announcement from admin, it shows again!
     setDismissed(true);
-    if (typeof window !== "undefined") {
-      sessionStorage.setItem("zovik_announcement_dismissed", "true");
-    }
   };
 
   const handleClick = () => {

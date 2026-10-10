@@ -203,3 +203,20 @@ export function consumeQuotaOnSuccess(
     limit,
   };
 }
+
+/**
+ * 3. RESET QUOTA: Wipes quota records for a user when deleted or reset
+ */
+export function resetQuota(identifier: string): void {
+  for (const type of ["chat", "photo"] as QuotaType[]) {
+    if (!storeLoaded[type]) {
+      loadStore(type);
+      storeLoaded[type] = true;
+    }
+    if (memoryStores[type].has(identifier)) {
+      memoryStores[type].delete(identifier);
+      persistStore(type);
+    }
+  }
+}
+

@@ -123,6 +123,10 @@ export const AdminSettingsTab: React.FC<AdminSettingsTabProps> = ({
       const data = await res.json();
       if (data.success) {
         setAnnouncementMsg({ type: "success", text: "Top Announcement Patti updated successfully!" });
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("zovik_announcement_updated", { detail: data.announcement }));
+          localStorage.setItem("zovik_announcement_updated_at", Date.now().toString());
+        }
       } else {
         setAnnouncementMsg({ type: "error", text: data.error || "Failed to update announcement" });
       }

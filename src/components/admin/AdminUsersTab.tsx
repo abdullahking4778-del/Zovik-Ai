@@ -68,19 +68,33 @@ export const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
     }
   };
 
-  const handleDeleteUser = async (userId: string) => {
-    if (!confirm("Are you sure you want to permanently delete this user?")) return;
+  const handleDeleteUser = async (userId: string, email?: string) => {
+    const displayName = email || userId;
+    if (
+      !confirm(
+        `Are you sure you want to permanently delete user ${displayName}?\nAll user data, subscriptions, and chat sessions will be completely wiped from the app.`
+      )
+    )
+      return;
 
     if (setUsers) {
-      setUsers((prev) => prev.filter((u) => u.id !== userId));
+      setUsers((prev) => prev.filter((u) => u.id !== userId && (!email || u.email !== email)));
     }
 
     try {
       const headers = getAuthHeaders ? getAuthHeaders() : {};
-      await fetch(`/api/admin/users?userId=${encodeURIComponent(userId)}`, {
+      const params = new URLSearchParams({ userId });
+      if (email) params.append("email", email);
+
+      const res = await fetch(`/api/admin/users?${params.toString()}`, {
         method: "DELETE",
         headers,
       });
+
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        alert(d.error || "Failed to delete user");
+      }
       onRefreshUsers?.();
     } catch (err) {
       console.error("Failed to delete user:", err);
@@ -291,7 +305,7 @@ export const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
 
                       {/* Delete User */}
                       <button
-                        onClick={() => handleDeleteUser(u.id)}
+                        onClick={() => handleDeleteUser(u.id, u.email)}
                         className="size-7 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 inline-flex items-center justify-center transition-colors"
                         title="Delete user"
                       >
