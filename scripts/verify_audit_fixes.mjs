@@ -5,16 +5,23 @@ const BASE = "http://localhost:3000";
 async function testAll() {
   console.log("=== VERIFYING AUDIT FIXES & NEW CMS FEATURES ===");
 
-  // 1. Test Admin Login for Token
+  const adminPassword = process.env.ADMIN_PASSWORD || process.env.TEST_ADMIN_PASSWORD || "";
+  if (!adminPassword) {
+    console.log("[SKIP] ADMIN_PASSWORD environment variable not set. Skipping live admin tests.");
+    return;
+  }
+
+  // 1. Test Admin Login for Session Cookie
   const loginRes = await fetch(`${BASE}/api/admin/auth`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ password: "#Abdullah786099#" }),
+    headers: { "Content-Type": "application/json", "x-zovik-admin-request": "1" },
+    body: JSON.stringify({ password: adminPassword }),
   });
   const loginData = await loginRes.json();
   assert.strictEqual(loginData.success, true, "Admin login must succeed");
-  const token = loginData.token;
-  console.log("✔ Admin authentication & token generation verified");
+  const cookieHeader = loginRes.headers.get("set-cookie") || "";
+  const adminCookie = cookieHeader.split(";")[0];
+  console.log("✔ Admin authentication & session cookie verified");
 
   // 2. Test Top Running Announcement Bar ("Patti") Public GET
   const annRes = await fetch(`${BASE}/api/announcement`);
@@ -28,7 +35,8 @@ async function testAll() {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
+      Cookie: adminCookie,
+      "x-zovik-admin-request": "1",
     },
     body: JSON.stringify({
       enabled: true,
@@ -51,7 +59,8 @@ async function testAll() {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
+      Cookie: adminCookie,
+      "x-zovik-admin-request": "1",
     },
     body: JSON.stringify({
       easypaisa: {

@@ -15,10 +15,11 @@ export const supabase: SupabaseClient = createClient(
 /**
  * Privileged Admin Supabase client for Serverless API routes.
  * Bypasses Row Level Security (RLS) to safely read and write database records & storage files.
+ * Strictly requires SUPABASE_SERVICE_ROLE_KEY. Never substitutes anon key.
  */
 export const supabaseAdmin: SupabaseClient = createClient(
   supabaseUrl || "https://placeholder.supabase.co",
-  supabaseServiceRoleKey || supabaseAnonKey || "placeholder",
+  supabaseServiceRoleKey || "placeholder",
   {
     auth: {
       persistSession: false,
@@ -27,12 +28,17 @@ export const supabaseAdmin: SupabaseClient = createClient(
   }
 );
 
-export function isSupabaseConfigured(): boolean {
+export function isSupabaseAdminConfigured(): boolean {
   return Boolean(
     supabaseUrl &&
     supabaseUrl !== "https://placeholder.supabase.co" &&
-    (supabaseServiceRoleKey || supabaseAnonKey)
+    supabaseServiceRoleKey &&
+    supabaseServiceRoleKey !== "placeholder"
   );
+}
+
+export function isSupabaseConfigured(): boolean {
+  return isSupabaseAdminConfigured();
 }
 
 /**

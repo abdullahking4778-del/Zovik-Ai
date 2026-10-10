@@ -125,14 +125,13 @@ export function AdminCompanionsTab({
 
       if (companionVideoMode === "upload" && companionVideoFile) {
         setIsUploadingCompanionVideo(true);
-        const token = localStorage.getItem("zovik_admin_session") || "";
         const uploadForm = new FormData();
         uploadForm.append("file", companionVideoFile);
         uploadForm.append("type", "video");
 
         const upRes = await fetch("/api/admin/upload", {
           method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
+          headers: { "x-zovik-admin-request": "1" },
           body: uploadForm,
         });
 
@@ -144,14 +143,13 @@ export function AdminCompanionsTab({
 
       if (companionAvatarMode === "upload" && companionAvatarFile) {
         setIsUploadingCompanionAvatar(true);
-        const token = localStorage.getItem("zovik_admin_session") || "";
         const uploadForm = new FormData();
         uploadForm.append("file", companionAvatarFile);
         uploadForm.append("type", "image");
 
         const upRes = await fetch("/api/admin/upload", {
           method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
+          headers: { "x-zovik-admin-request": "1" },
           body: uploadForm,
         });
 
@@ -221,14 +219,13 @@ export function AdminCompanionsTab({
 
       if (editVideoMode === "upload" && editVideoFile) {
         setIsUploadingEditVideo(true);
-        const token = localStorage.getItem("zovik_admin_session") || "";
         const uploadForm = new FormData();
         uploadForm.append("file", editVideoFile);
         uploadForm.append("type", "video");
 
         const upRes = await fetch("/api/admin/upload", {
           method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
+          headers: { "x-zovik-admin-request": "1" },
           body: uploadForm,
         });
 
@@ -239,14 +236,13 @@ export function AdminCompanionsTab({
 
       if (editAvatarMode === "upload" && editAvatarFile) {
         setIsUploadingEditAvatar(true);
-        const token = localStorage.getItem("zovik_admin_session") || "";
         const uploadForm = new FormData();
         uploadForm.append("file", editAvatarFile);
         uploadForm.append("type", "image");
 
         const upRes = await fetch("/api/admin/upload", {
           method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
+          headers: { "x-zovik-admin-request": "1" },
           body: uploadForm,
         });
 

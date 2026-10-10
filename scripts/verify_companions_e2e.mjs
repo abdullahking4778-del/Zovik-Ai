@@ -1,14 +1,21 @@
 async function runE2E() {
   console.log('=== STARTING ZOVIK AI E2E COMPANION & VIP VERIFICATION ===');
   
+  const adminPassword = process.env.ADMIN_PASSWORD || process.env.TEST_ADMIN_PASSWORD || '';
+  if (!adminPassword) {
+    console.log('[SKIP] ADMIN_PASSWORD environment variable not set. Skipping live authenticated tests.');
+    return;
+  }
+
   // 1. Authenticate Admin
   const loginRes = await fetch('http://localhost:3000/api/admin/auth', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ password: '#Abdullah786099#' })
+    headers: { 'Content-Type': 'application/json', 'x-zovik-admin-request': '1' },
+    body: JSON.stringify({ password: adminPassword })
   });
-  const { token } = await loginRes.json();
-  console.log('[PASS] Admin Authenticated with token');
+  const cookieHeader = loginRes.headers.get('set-cookie') || '';
+  const adminCookie = cookieHeader.split(';')[0];
+  console.log('[PASS] Admin Authenticated successfully');
 
   // 2. Verify Liam Hudson is completely gone
   const publicRes = await fetch('http://localhost:3000/api/characters');
@@ -18,7 +25,7 @@ async function runE2E() {
   console.log('[PASS] Liam Hudson permanently absent from public app');
 
   const adminCharsRes = await fetch('http://localhost:3000/api/admin/characters', {
-    headers: { 'Authorization': 'Bearer ' + token }
+    headers: { 'Cookie': adminCookie, 'x-zovik-admin-request': '1' }
   });
   const adminCharsData = await adminCharsRes.json();
   const adminLiam = adminCharsData.characters.find(c => c.id === 'liam-hudson' || (c.name && c.name.toLowerCase().includes('liam')));
@@ -45,7 +52,8 @@ async function runE2E() {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': 'Bearer ' + token
+      'Cookie': adminCookie,
+      'x-zovik-admin-request': '1',
     },
     body: JSON.stringify(testCompanion)
   });
@@ -70,7 +78,8 @@ async function runE2E() {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': 'Bearer ' + token
+      'Cookie': adminCookie,
+      'x-zovik-admin-request': '1',
     },
     body: JSON.stringify({
       id: createdId,
@@ -98,7 +107,7 @@ async function runE2E() {
   // 6. Test Permanent Deletion
   const deleteRes = await fetch('http://localhost:3000/api/admin/characters?id=' + encodeURIComponent(createdId), {
     method: 'DELETE',
-    headers: { 'Authorization': 'Bearer ' + token }
+    headers: { 'Cookie': adminCookie, 'x-zovik-admin-request': '1' }
   });
   const deleteData = await deleteRes.json();
   console.log('[PASS] Companion deleted:', deleteData.success);
@@ -109,7 +118,7 @@ async function runE2E() {
     throw new Error('Deleted companion still in public!');
   }
   const postDeleteAdmin = await (await fetch('http://localhost:3000/api/admin/characters', {
-    headers: { 'Authorization': 'Bearer ' + token }
+    headers: { 'Cookie': adminCookie, 'x-zovik-admin-request': '1' }
   })).json();
   if (postDeleteAdmin.characters.find(c => c.id === createdId)) {
     throw new Error('Deleted companion still in admin!');

@@ -122,14 +122,13 @@ export function AdminGalleriesTab({
     if (galleryAddMode === "upload" && galleryAddFile) {
       setIsUploadingGalleryAdd(true);
       try {
-        const token = localStorage.getItem("zovik_admin_session") || "";
         const uploadForm = new FormData();
         uploadForm.append("file", galleryAddFile);
         uploadForm.append("type", "image");
 
         const upRes = await fetch("/api/admin/upload", {
           method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
+          headers: { "x-zovik-admin-request": "1" },
           body: uploadForm,
         });
 
@@ -169,7 +168,6 @@ export function AdminGalleriesTab({
     setGalleryUploadStatus("Compressing and uploading images...");
 
     try {
-      const token = localStorage.getItem("zovik_admin_session") || "";
       const newUrls: string[] = [];
 
       for (let i = 0; i < files.length; i++) {
@@ -180,7 +178,7 @@ export function AdminGalleriesTab({
 
         const res = await fetch("/api/admin/upload", {
           method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
+          headers: { "x-zovik-admin-request": "1" },
           body: fd,
         });
 

@@ -76,7 +76,6 @@ export function AdminShortsTab({
     try {
       let finalVideoUrl = reelData.videoUrl.trim();
       let finalThumbnailUrl = reelData.avatar || "/logos/zovik-squircle.svg";
-      const token = localStorage.getItem("zovik_admin_session") || "";
 
       // 1. If upload mode, upload video file
       if (reelVideoMode === "upload" && reelUploadFile) {
@@ -86,7 +85,7 @@ export function AdminShortsTab({
 
         const upRes = await fetch("/api/admin/upload", {
           method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
+          headers: { "x-zovik-admin-request": "1" },
           body: uploadForm,
         });
 
@@ -121,7 +120,7 @@ export function AdminShortsTab({
 
             const thumbRes = await fetch("/api/admin/upload", {
               method: "POST",
-              headers: { Authorization: `Bearer ${token}` },
+              headers: { "x-zovik-admin-request": "1" },
               body: thumbForm,
             });
 

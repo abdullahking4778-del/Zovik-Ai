@@ -34,20 +34,8 @@ export async function resolveServerUser(req: NextRequest, clientToken?: string):
       resolvedEmail = decoded.email;
       isAuthenticated = true;
     } catch {
-      // In local dev without cloud ADC, gracefully inspect token structure
-      if (process.env.NODE_ENV !== "production") {
-        try {
-          const parts = token.split(".");
-          if (parts.length === 3) {
-            const payload = JSON.parse(Buffer.from(parts[1], "base64").toString("utf-8"));
-            if (payload && (payload.user_id || payload.sub)) {
-              resolvedUid = payload.user_id || payload.sub;
-              resolvedEmail = payload.email;
-              isAuthenticated = true;
-            }
-          }
-        } catch {}
-      }
+      // Fail closed: Do NOT accept unverified token payloads without cryptographic validation
+      isAuthenticated = false;
     }
   }
 

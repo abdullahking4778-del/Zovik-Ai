@@ -7,7 +7,6 @@ import { AnnouncementConfig, PaymentAccountConfig } from "@/types";
 interface AdminSettingsTabProps {
   showPasswordDetails: boolean;
   setShowPasswordDetails: (show: boolean) => void;
-  activeMasterPassword: string;
   passwordStatusMsg: { type: "success" | "error"; text: string } | null;
   currentMasterPassword: string;
   setCurrentMasterPassword: (val: string) => void;
@@ -22,7 +21,6 @@ interface AdminSettingsTabProps {
 export const AdminSettingsTab: React.FC<AdminSettingsTabProps> = ({
   showPasswordDetails,
   setShowPasswordDetails,
-  activeMasterPassword,
   passwordStatusMsg,
   currentMasterPassword,
   setCurrentMasterPassword,
@@ -111,12 +109,11 @@ export const AdminSettingsTab: React.FC<AdminSettingsTabProps> = ({
     setIsSavingAnnouncement(true);
     setAnnouncementMsg(null);
     try {
-      const token = localStorage.getItem("zovik_admin_session") || "";
       const res = await fetch("/api/admin/announcement", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+          "x-zovik-admin-request": "1",
         },
         body: JSON.stringify(announcement),
       });
@@ -143,12 +140,11 @@ export const AdminSettingsTab: React.FC<AdminSettingsTabProps> = ({
     setIsSavingAccounts(true);
     setAccountsMsg(null);
     try {
-      const token = localStorage.getItem("zovik_admin_session") || "";
       const res = await fetch("/api/admin/payment-accounts", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+          "x-zovik-admin-request": "1",
         },
         body: JSON.stringify(paymentAccounts),
       });

@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
   const forwarded = req.headers.get("x-forwarded-for");
   const ip = (forwarded ? forwarded.split(",")[0] : req.headers.get("x-real-ip") || "127.0.0.1").trim();
 
-  // 1. Check Rate Limit
+  // 1. Check Persistent Rate Limit
   const rateLimitStatus = checkAdminRateLimit(ip);
   if (!rateLimitStatus.allowed) {
     return NextResponse.json(
@@ -55,6 +55,7 @@ export async function POST(req: NextRequest) {
         sameSite: "lax",
         path: "/",
         maxAge: 0,
+        expires: new Date(0),
       });
       return response;
     }
@@ -65,27 +66,28 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Password is required" }, { status: 400 });
     }
 
-    const correctPassword = await getDynamicAdminPassword();
+    const storedPassword = await getDynamicAdminPassword();
 
     // Secure failure if admin authentication not configured
-    if (!correctPassword) {
+    if (!storedPassword) {
       return NextResponse.json(
         { error: "Server Configuration Error: Admin password not initialized in environment." },
         { status: 500 }
       );
     }
 
-    // 2. Constant-time secure password comparison
-    if (safeVerifyPassword(password, correctPassword)) {
+    // 2. Constant-time secure password comparison (supporting salted scrypt hash)
+    if (safeVerifyPassword(password, storedPassword)) {
       resetAdminRateLimit(ip);
       const token = createAdminToken();
 
+      // Return success WITHOUT exposing the raw token in the response body
       const response = NextResponse.json({
         success: true,
-        token,
+        message: "Authenticated successfully.",
       });
 
-      // Set HttpOnly, Secure, SameSite=Lax cookie for enhanced browser security
+      // Set server-managed HttpOnly, Secure, SameSite=Lax cookie
       response.cookies.set("zovik_admin_session", token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",

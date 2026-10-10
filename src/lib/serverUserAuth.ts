@@ -34,37 +34,11 @@ export async function verifyUserToken(idToken: string | null | undefined): Promi
       isAdmin,
     };
   } catch (err: unknown) {
-    const errorMsg = err instanceof Error ? err.message : String(err);
-
-    // If Firebase Admin has no credentials in local environment, decode JWT safely without blind trust
-    if (errorMsg.includes("credential") || errorMsg.includes("app/no-credential")) {
-      try {
-        const parts = cleanToken.split(".");
-        if (parts.length === 3) {
-          const payload = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf-8"));
-          const nowSec = Math.floor(Date.now() / 1000);
-
-          if (payload.exp && payload.exp < nowSec) {
-            return { authenticated: false, error: "Authentication token expired." };
-          }
-
-          if (payload.user_id || payload.sub) {
-            const uid = payload.user_id || payload.sub;
-            const email = payload.email || "";
-            const isAdmin = isAllowlistedAdminEmail(email);
-
-            return {
-              authenticated: true,
-              uid,
-              email,
-              isAdmin,
-            };
-          }
-        }
-      } catch {}
-    }
-
-    return { authenticated: false, error: "Invalid or expired authentication token." };
+    // Fail-closed: Never accept unverified tokens without proper cryptographic verification
+    return {
+      authenticated: false,
+      error: "Invalid, expired, or unverified authentication token.",
+    };
   }
 }
 

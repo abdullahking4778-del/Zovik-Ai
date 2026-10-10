@@ -28,12 +28,11 @@ export function AdminOverviewTab({
     setIsCleaningCache(true);
     setCleanMessage(null);
     try {
-      const token = localStorage.getItem("zovik_admin_session") || "";
       const res = await fetch("/api/admin/clean-cache", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+          "x-zovik-admin-request": "1",
         },
       });
       const data = await res.json();

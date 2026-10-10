@@ -102,6 +102,18 @@ export async function PUT(req: NextRequest) {
     });
     const updatedLocal = syncResult.user;
 
+    // Reject and report error if required persistent database write failed
+    if (!syncResult.dbSynced && syncResult.error) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Persistent database write failed: ${syncResult.error}`,
+          dbSynced: false,
+        },
+        { status: 502 }
+      );
+    }
+
     if (email && userId && email !== userId) {
       try {
         upsertStoredUser(email, {
@@ -135,8 +147,10 @@ export async function PUT(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
+      dbSynced: syncResult.dbSynced,
       user: {
-        id: userId,
+        id: updatedLocal.id || userId,
+        email: updatedLocal.email || email,
         tier: assignedTier,
         isVip: assignedTier === "vip",
         subscriptionDays: days,

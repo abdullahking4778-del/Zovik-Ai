@@ -142,17 +142,46 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(new URL(FALLBACK_AVATAR, request.url));
     }
 
-    // Check Content-Length header
+    // Check Content-Length header first
     const contentLength = imgRes.headers.get("content-length");
     if (contentLength && parseInt(contentLength, 10) > MAX_IMAGE_BYTES) {
       return new NextResponse("Image exceeds maximum allowed size (10MB)", { status: 413 });
     }
 
     const contentType = imgRes.headers.get("content-type") || "image/jpeg";
-    const buffer = await imgRes.arrayBuffer();
 
-    if (buffer.byteLength > MAX_IMAGE_BYTES) {
-      return new NextResponse("Image exceeds maximum allowed size (10MB)", { status: 413 });
+    // Read response with early size enforcement on the incoming stream (prevents memory DoS)
+    let buffer: Buffer;
+    if (imgRes.body) {
+      const reader = imgRes.body.getReader();
+      const chunks: Uint8Array[] = [];
+      let totalBytes = 0;
+      let exceeded = false;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value) {
+          totalBytes += value.length;
+          if (totalBytes > MAX_IMAGE_BYTES) {
+            exceeded = true;
+            await reader.cancel("Size limit exceeded");
+            break;
+          }
+          chunks.push(value);
+        }
+      }
+
+      if (exceeded) {
+        return new NextResponse("Image exceeds maximum allowed size (10MB)", { status: 413 });
+      }
+      buffer = Buffer.concat(chunks);
+    } else {
+      const arrayBuf = await imgRes.arrayBuffer();
+      if (arrayBuf.byteLength > MAX_IMAGE_BYTES) {
+        return new NextResponse("Image exceeds maximum allowed size (10MB)", { status: 413 });
+      }
+      buffer = Buffer.from(arrayBuf);
     }
 
     return new NextResponse(buffer, {

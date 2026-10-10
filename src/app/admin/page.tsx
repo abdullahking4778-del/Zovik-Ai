@@ -55,35 +55,36 @@ export default function AdminPage() {
 
   // Settings / Master Password State
   const [showPasswordDetails, setShowPasswordDetails] = useState(false);
-  const [activeMasterPassword, setActiveMasterPassword] = useState("");
   const [currentMasterPassword, setCurrentMasterPassword] = useState("");
   const [newMasterPassword, setNewMasterPassword] = useState("");
   const [confirmMasterPassword, setConfirmMasterPassword] = useState("");
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
   const [passwordStatusMsg, setPasswordStatusMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
-  const getAuthHeaders = (tokenOverride?: string): Record<string, string> => {
-    const token = tokenOverride || (typeof window !== "undefined" ? localStorage.getItem("zovik_admin_session") : null) || "";
+  const getAuthHeaders = (): Record<string, string> => {
     return {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
+      "x-zovik-admin-request": "1",
     };
   };
 
   // Check existing session on mount
   useEffect(() => {
-    const sessionToken = localStorage.getItem("zovik_admin_session");
-    if (!sessionToken) return;
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.removeItem("zovik_admin_session");
+      } catch {}
+    }
 
     fetch("/api/admin/auth", {
-      headers: { Authorization: `Bearer ${sessionToken}` },
+      headers: { "x-zovik-admin-request": "1" },
+      cache: "no-store",
     })
       .then((res) => {
         if (res.ok) {
           setIsAuthenticated(true);
-          fetchAdminData(sessionToken);
+          fetchAdminData();
         } else {
-          localStorage.removeItem("zovik_admin_session");
           setIsAuthenticated(false);
         }
       })
@@ -109,15 +110,18 @@ export default function AdminPage() {
     try {
       const res = await fetch("/api/admin/auth", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-zovik-admin-request": "1",
+        },
         body: JSON.stringify({ password: passwordInput }),
       });
 
       const data = await res.json();
-      if (res.ok && data.success && data.token) {
+      if (res.ok && data.success) {
         setIsAuthenticated(true);
-        localStorage.setItem("zovik_admin_session", data.token);
-        fetchAdminData(data.token);
+        setPasswordInput("");
+        fetchAdminData();
       } else {
         setAuthError(data.error || "Incorrect Password! Access Denied.");
       }
@@ -128,14 +132,28 @@ export default function AdminPage() {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await fetch("/api/admin/auth", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-zovik-admin-request": "1",
+        },
+        body: JSON.stringify({ action: "logout" }),
+      });
+    } catch {}
     setIsAuthenticated(false);
-    localStorage.removeItem("zovik_admin_session");
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.removeItem("zovik_admin_session");
+      } catch {}
+    }
   };
 
-  const fetchAdminData = async (tokenOverride?: string) => {
+  const fetchAdminData = async () => {
     setLoadingData(true);
-    const headers = getAuthHeaders(tokenOverride);
+    const headers = getAuthHeaders();
 
     try {
       // 1. Fetch Users
@@ -297,12 +315,11 @@ export default function AdminPage() {
 
     setIsUpdatingPassword(true);
     try {
-      const token = localStorage.getItem("zovik_admin_session") || "";
       const res = await fetch("/api/admin/change-password", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+          "x-zovik-admin-request": "1",
         },
         body: JSON.stringify({
           currentPassword: currentMasterPassword,
@@ -319,7 +336,6 @@ export default function AdminPage() {
         type: "success",
         text: "Master Password successfully updated! New password is now active.",
       });
-      setActiveMasterPassword(newMasterPassword);
       setCurrentMasterPassword("");
       setNewMasterPassword("");
       setConfirmMasterPassword("");
@@ -552,7 +568,6 @@ export default function AdminPage() {
           <AdminSettingsTab
             showPasswordDetails={showPasswordDetails}
             setShowPasswordDetails={setShowPasswordDetails}
-            activeMasterPassword={activeMasterPassword}
             passwordStatusMsg={passwordStatusMsg}
             currentMasterPassword={currentMasterPassword}
             setCurrentMasterPassword={setCurrentMasterPassword}
