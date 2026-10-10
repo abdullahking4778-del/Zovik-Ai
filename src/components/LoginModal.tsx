@@ -150,7 +150,7 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-fadeIn">
       <div 
-        className="relative flex flex-col w-full max-w-md bg-[#130b1b] rounded-3xl border border-white/10 shadow-2xl p-5 sm:p-7 overflow-hidden max-h-[94vh] overflow-y-auto no-scrollbar"
+        className="relative flex flex-col w-full max-w-md bg-[#130b1b] rounded-3xl border border-white/10 shadow-2xl p-5 sm:p-7 overflow-hidden max-h-[min(92dvh,680px)] overflow-y-auto scrollbar-thin overscroll-contain"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Close Button */}

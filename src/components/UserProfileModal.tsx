@@ -92,7 +92,7 @@ export default function UserProfileModal({
       onClick={onClose}
     >
       <div
-        className="relative max-w-sm sm:max-w-md w-full bg-[#140b1c] border border-white/10 rounded-3xl p-5 sm:p-6 shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto no-scrollbar"
+        className="relative max-w-sm sm:max-w-md w-full bg-[#140b1c] border border-white/10 rounded-3xl p-5 sm:p-6 shadow-2xl space-y-4 max-h-[min(90dvh,680px)] overflow-y-auto scrollbar-thin overscroll-contain"
         onClick={(e) => e.stopPropagation()}
       >
         <button

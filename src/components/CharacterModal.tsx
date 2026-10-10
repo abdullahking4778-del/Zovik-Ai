@@ -61,7 +61,7 @@ export default function CharacterModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6 bg-black/85 backdrop-blur-md animate-fadeIn">
-      <div className="relative flex flex-col md:flex-row w-full max-w-4xl max-h-[92vh] overflow-y-auto md:overflow-hidden rounded-3xl bg-[#120d16] border border-white/10 shadow-2xl shadow-pink-950/30">
+      <div className="relative flex flex-col md:flex-row w-full max-w-4xl max-h-[min(92dvh,800px)] overflow-y-auto md:overflow-hidden rounded-3xl bg-[#120d16] border border-white/10 shadow-2xl shadow-pink-950/30 scrollbar-thin overscroll-contain">
         {/* Top Right Action Buttons: Heart/Save and Close */}
         <div className="absolute top-4 right-4 z-30 flex items-center space-x-2">
           {onToggleLike && (

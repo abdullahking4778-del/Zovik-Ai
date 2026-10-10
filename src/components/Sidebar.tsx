@@ -57,7 +57,7 @@ export default function Sidebar({
   ];
 
   return (
-    <aside className="hidden lg:flex flex-col justify-between w-60 h-screen sticky top-0 bg-[#0d0a0f] border-r border-white/5 p-4 z-40 select-none">
+    <aside className="hidden lg:flex flex-col justify-between w-60 h-[100dvh] sticky top-0 bg-[#0d0a0f] border-r border-white/5 p-4 z-40 select-none">
       <div className="flex flex-col space-y-6">
         {/* Brand Logo — links back to Landing Page */}
         <Link
