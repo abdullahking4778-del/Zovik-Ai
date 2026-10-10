@@ -157,7 +157,7 @@ export default function PremiumModal({ isOpen, onClose }: PremiumModalProps) {
 
     // Fetch dynamic pricing plans from API
     let isMounted = true;
-    fetch("/api/plans")
+    fetch("/api/plans", { cache: "no-store" })
       .then((res) => res.json())
       .then((data) => {
         if (isMounted && data.success && Array.isArray(data.plans) && data.plans.length > 0) {
@@ -174,7 +174,7 @@ export default function PremiumModal({ isOpen, onClose }: PremiumModalProps) {
       });
 
     // Fetch dynamic payment accounts from API
-    fetch("/api/payment-accounts")
+    fetch("/api/payment-accounts", { cache: "no-store" })
       .then((res) => res.json())
       .then((data) => {
         if (isMounted && data.success && data.accounts) {

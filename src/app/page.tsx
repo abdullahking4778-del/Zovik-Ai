@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -30,8 +30,20 @@ export default function LandingPage() {
   const [isPwaModalOpen, setIsPwaModalOpen] = useState(false);
   const [unblurredPhoto, setUnblurredPhoto] = useState(false);
 
+  const [characters, setCharacters] = useState<Character[]>(rawCharacters as Character[]);
+
+  useEffect(() => {
+    fetch("/api/characters", { cache: "no-store" })
+      .then(res => res.json())
+      .then(data => {
+        if (data?.success && Array.isArray(data.characters)) {
+          setCharacters(data.characters);
+        }
+      })
+      .catch(err => console.error("Error fetching live characters:", err));
+  }, []);
+
   // Top featured companions for spotlight
-  const characters = rawCharacters as Character[];
   const featuredCompanions = [
     characters.find((c) => c.id === "chloe-vance") || characters[0],
     characters.find((c) => c.id === "alexander-sterling") || characters[1],

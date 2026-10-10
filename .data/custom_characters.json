@@ -1,0 +1,71 @@
+[
+  {
+    "id": "char_9aece69e-dd8d-43f7-9715-42d01fa8c020",
+    "slug": "api-test-companion",
+    "name": "API Test Companion",
+    "age": 24,
+    "gender": "female",
+    "style": "realistic",
+    "tagline": "I am a test companion created via API",
+    "desc": "Testing end to end flow for companion creation.",
+    "image": "https://zipdptvuybmsvvcwdwkd.supabase.co/storage/v1/object/public/zovik-media/characters/char_1791598055859_zovik_01.webp.webp",
+    "badge": "NEW",
+    "category": "Trending",
+    "series": false,
+    "verified": true,
+    "online": true,
+    "tags": [
+      "Test",
+      "QA"
+    ],
+    "voice": "Warm Whisper",
+    "greeting": "Hello from the API Test!",
+    "videoUrl": "https://zipdptvuybmsvvcwdwkd.supabase.co/storage/v1/object/public/zovik-media/videos/shorts/reel_1791598058454_alexander-sterling.mp4",
+    "gallery": [
+      "https://zipdptvuybmsvvcwdwkd.supabase.co/storage/v1/object/public/zovik-media/characters/char_1791598055859_zovik_01.webp.webp"
+    ],
+    "messages": [
+      {
+        "sender": "ai",
+        "text": "Hello from the API Test!",
+        "time": "Just now"
+      }
+    ],
+    "accessTier": "free",
+    "isVipOnly": false
+  },
+  {
+    "id": "char_2d4c51d8-2e94-4d9c-a43f-45bcc84e9dc1",
+    "slug": "test-character",
+    "name": "Test Character",
+    "age": 21,
+    "gender": "female",
+    "style": "realistic",
+    "tagline": "Testing",
+    "desc": "An enchanting AI companion ready to chat.",
+    "image": "/characters/zovik_01.jpg",
+    "badge": "NEW",
+    "category": "Trending",
+    "series": false,
+    "verified": true,
+    "online": true,
+    "tags": [
+      "Flirty",
+      "Sweet"
+    ],
+    "voice": "Warm Whisper",
+    "greeting": "Hey there... so glad you stopped by! What's on your mind? 💕",
+    "gallery": [
+      "/characters/zovik_01.jpg"
+    ],
+    "messages": [
+      {
+        "sender": "ai",
+        "text": "Hey there... so glad you stopped by! What's on your mind? 💕",
+        "time": "Just now"
+      }
+    ],
+    "accessTier": "free",
+    "isVipOnly": false
+  }
+]

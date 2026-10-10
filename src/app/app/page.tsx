@@ -47,6 +47,18 @@ import {
 
 export default function Home() {
   const [characters, setCharacters] = useState<Character[]>(rawCharacters as Character[]);
+
+  useEffect(() => {
+    fetch("/api/characters", { cache: "no-store" })
+      .then(res => res.json())
+      .then(data => {
+        if (data?.success && Array.isArray(data.characters)) {
+          setCharacters(data.characters);
+        }
+      })
+      .catch(err => console.error("Error fetching live characters:", err));
+  }, []);
+
   const [activeTab, setActiveTab] = useState("home");
   const [genderFilter, setGenderFilter] = useState<"female" | "male" | "anime">("female");
   const [selectedCategory, setSelectedCategory] = useState("All");

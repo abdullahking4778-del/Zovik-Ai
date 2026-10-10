@@ -34,7 +34,7 @@ export function getDynamicQuotaLimit(type: QuotaType, tier: "free" | "plus" | "v
   const now = Date.now();
   if (now - lastLimitsFetchTime > 10000) {
     try {
-      const plansFilePath = path.join(process.cwd(), "src", "data", "plans.json");
+      const plansFilePath = path.join(process.cwd(), ".data", "plans.json");
       if (fs.existsSync(plansFilePath)) {
         const raw = fs.readFileSync(plansFilePath, "utf-8");
         const plans = JSON.parse(raw);
@@ -71,7 +71,7 @@ function getQuotaFilePath(type: QuotaType): string {
   if (process.env.VERCEL) {
     return path.join("/tmp", `zovik_${fileName}`);
   }
-  return path.join(process.cwd(), "src", "data", fileName);
+  return path.join(process.cwd(), ".data", fileName);
 }
 
 function loadStore(type: QuotaType): void {

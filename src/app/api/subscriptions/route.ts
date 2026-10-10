@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 import { verifyAdminRequest } from "@/lib/adminAuth";
 import { db } from "@/lib/firebase";
 import { collection, getDocs, updateDoc } from "firebase/firestore";

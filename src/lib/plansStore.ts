@@ -9,7 +9,7 @@ function getPlansStoragePath(): string {
   if (process.env.VERCEL) {
     return path.join("/tmp", "zovik_plans.json");
   }
-  return path.join(process.cwd(), "src", "data", "plans.json");
+  return path.join(process.cwd(), ".data", "plans.json");
 }
 
 function safeReadJsonFile<T>(filePath: string, fallback: T): T {
@@ -139,7 +139,7 @@ export async function savePersistentPlan(plan: PricingPlan): Promise<PricingPlan
 
   // 3. Keep root plans.json updated in local dev
   try {
-    const rootPath = path.join(process.cwd(), "src", "data", "plans.json");
+    const rootPath = path.join(process.cwd(), ".data", "plans.json");
     const existing = safeReadJsonFile<PricingPlan[]>(rootPath, []);
     const updated = [
       planWithTimestamps,
@@ -178,7 +178,7 @@ export async function deletePersistentPlan(planId: string): Promise<boolean> {
 
   // 3. Delete from root plans.json
   try {
-    const rootPath = path.join(process.cwd(), "src", "data", "plans.json");
+    const rootPath = path.join(process.cwd(), ".data", "plans.json");
     const list = safeReadJsonFile<PricingPlan[]>(rootPath, []);
     if (Array.isArray(list)) {
       const filtered = list.filter((p) => p.id !== cleanId);

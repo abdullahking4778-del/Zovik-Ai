@@ -5,6 +5,9 @@ import { collection, getDocs, doc, updateDoc, deleteDoc } from "firebase/firesto
 import { getAllStoredUsers, upsertStoredUser, saveAllStoredUsers } from "@/lib/userStore";
 import { UserAccount } from "@/types";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export async function GET(req: NextRequest) {
   if (!verifyAdminRequest(req)) {
     return NextResponse.json({ error: "Unauthorized: Admin session invalid or missing." }, { status: 401 });

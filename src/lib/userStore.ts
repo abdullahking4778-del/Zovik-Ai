@@ -24,7 +24,7 @@ function getUsersFilePath(): string {
   if (process.env.VERCEL) {
     return path.join("/tmp", "zovik_users.json");
   }
-  return path.join(process.cwd(), "src", "data", "users.json");
+  return path.join(process.cwd(), ".data", "users.json");
 }
 
 export function getAllStoredUsers(): StoredUser[] {

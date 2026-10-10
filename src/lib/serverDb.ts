@@ -28,7 +28,7 @@ function getStoragePath(fileName: string): string {
   if (process.env.VERCEL) {
     return path.join("/tmp", fileName);
   }
-  return path.join(process.cwd(), "src", "data", fileName);
+  return path.join(process.cwd(), ".data", fileName);
 }
 
 // Helper: Safe cryptographic ID generator
@@ -119,7 +119,7 @@ export async function getPersistentShorts(): Promise<ShortReel[]> {
   const localList = safeReadJsonFile<ShortReel[]>(storagePath, []);
   if (localList.length > 0) return localList;
 
-  const rootPath = path.join(process.cwd(), "src", "data", "shorts.json");
+  const rootPath = path.join(process.cwd(), ".data", "shorts.json");
   return safeReadJsonFile<ShortReel[]>(rootPath, []);
 }
 
@@ -190,7 +190,7 @@ export async function deletePersistentShort(shortId: string): Promise<boolean> {
 
   // 4. Delete from root seed data (for local dev)
   try {
-    const rootPath = path.join(process.cwd(), "src", "data", "shorts.json");
+    const rootPath = path.join(process.cwd(), ".data", "shorts.json");
     const list = safeReadJsonFile<ShortReel[]>(rootPath, []);
     if (Array.isArray(list) && list.length > 0) {
       const filtered = list.filter((s) => s.id !== shortId);
@@ -338,7 +338,7 @@ export async function savePersistentCustomCharacter(character: Character): Promi
   // 1. Primary: Save to Supabase PostgreSQL
   if (isSupabaseConfigured()) {
     try {
-      await supabaseAdmin.from("companions").upsert({
+      const { error } = await supabaseAdmin.from("companions").upsert({
         id: charId,
         name: charWithId.name,
         tagline: charWithId.tagline || charWithId.desc || "",
@@ -352,6 +352,9 @@ export async function savePersistentCustomCharacter(character: Character): Promi
         is_vip: Boolean(charWithId.isVipOnly || charWithId.accessTier === "vip"),
         is_custom: true,
       });
+      if (error) {
+        console.error("[ServerDb] Supabase save companion error details:", error);
+      }
     } catch (err: unknown) {
       console.warn("[ServerDb] Supabase save companion note:", err);
     }
@@ -373,7 +376,7 @@ export async function savePersistentCustomCharacter(character: Character): Promi
 
   // 4. Also sync root characters.json for local dev if exists
   try {
-    const rootPath = path.join(process.cwd(), "src", "data", "characters.json");
+    const rootPath = path.join(process.cwd(), ".data", "characters.json");
     const list = safeReadJsonFile<Character[]>(rootPath, []);
     if (Array.isArray(list)) {
       const matchIndex = list.findIndex((c) => c.id === charId || c.slug === charWithId.slug);
@@ -418,7 +421,7 @@ export async function deletePersistentCharacter(characterId: string): Promise<bo
 
   // 5. Remove from root characters.json (local seed)
   try {
-    const rootPath = path.join(process.cwd(), "src", "data", "characters.json");
+    const rootPath = path.join(process.cwd(), ".data", "characters.json");
     const list = safeReadJsonFile<Character[]>(rootPath, []);
     if (Array.isArray(list) && list.length > 0) {
       const filtered = list.filter((c) => c.id !== cleanId && c.slug !== cleanId);
@@ -439,7 +442,7 @@ export async function getPersistentCharacters(): Promise<Character[]> {
     getPersistentDeletedCharacterIds(),
   ]);
 
-  const rootPath = path.join(process.cwd(), "src", "data", "characters.json");
+  const rootPath = path.join(process.cwd(), ".data", "characters.json");
   const defaultChars = safeReadJsonFile<Character[]>(rootPath, []);
 
   // Build a lookup map of all local metadata
@@ -592,7 +595,7 @@ export async function getPersistentPayments(): Promise<PaymentRequest[]> {
   const localList = safeReadJsonFile<PaymentRequest[]>(storagePath, []);
   if (localList.length > 0) return localList;
 
-  const rootPath = path.join(process.cwd(), "src", "data", "payment_requests.json");
+  const rootPath = path.join(process.cwd(), ".data", "payment_requests.json");
   return safeReadJsonFile<PaymentRequest[]>(rootPath, []);
 }
 

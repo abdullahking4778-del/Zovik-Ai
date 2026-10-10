@@ -78,7 +78,7 @@ export async function POST(req: NextRequest) {
       matchedChar = customList.find((c) => c.id === targetCharId) || null;
 
       if (!matchedChar) {
-        const defCharsFile = path.join(process.cwd(), "src", "data", "characters.json");
+        const defCharsFile = path.join(process.cwd(), ".data", "characters.json");
         if (fs.existsSync(defCharsFile)) {
           const def: Character[] = JSON.parse(fs.readFileSync(defCharsFile, "utf-8") || "[]");
           matchedChar = def.find((c) => c.id === targetCharId) || null;

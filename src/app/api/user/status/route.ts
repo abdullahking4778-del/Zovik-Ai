@@ -7,7 +7,7 @@ function getPaymentsFilePath(): string {
   if (process.env.VERCEL) {
     return path.join("/tmp", "zovik_payments.json");
   }
-  return path.join(process.cwd(), "src", "data", "payment_requests.json");
+  return path.join(process.cwd(), ".data", "payment_requests.json");
 }
 
 export async function GET(req: NextRequest) {
@@ -42,7 +42,7 @@ export async function GET(req: NextRequest) {
         if (fs.existsSync(paymentsPath)) {
           raw = fs.readFileSync(paymentsPath, "utf-8");
         } else {
-          const localFallback = path.join(process.cwd(), "src", "data", "payment_requests.json");
+          const localFallback = path.join(process.cwd(), ".data", "payment_requests.json");
           if (fs.existsSync(localFallback)) {
             raw = fs.readFileSync(localFallback, "utf-8");
           }

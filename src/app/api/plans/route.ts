@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getPersistentPlans } from "@/lib/plansStore";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 // GET /api/plans -> Public endpoint to fetch all active plans
 export async function GET() {
   try {
