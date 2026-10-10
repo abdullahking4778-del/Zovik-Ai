@@ -1,38 +1,41 @@
 [
   {
-    "id": "char_9aece69e-dd8d-43f7-9715-42d01fa8c020",
-    "slug": "api-test-companion",
-    "name": "API Test Companion",
+    "id": "sylvie-delacroix",
+    "slug": "sylvie-delacroix",
+    "name": "Sylvie Delacroix",
     "age": 24,
     "gender": "female",
     "style": "realistic",
-    "tagline": "I am a test companion created via API",
-    "desc": "Testing end to end flow for companion creation.",
-    "image": "https://zipdptvuybmsvvcwdwkd.supabase.co/storage/v1/object/public/zovik-media/characters/char_1791598055859_zovik_01.webp.webp",
-    "badge": "NEW",
-    "category": "Trending",
+    "tagline": "Eiffel View • Haute Couture",
+    "desc": "A chic woman with a platinum blonde bob wears an elegant, black sheer-paneled gown inside a modern, sun-drenched apartment overlooking the Eiffel Tower.",
+    "image": "/characters/zovik_40.jpg",
+    "badge": "VIP",
+    "category": "Popular",
     "series": false,
     "verified": true,
     "online": true,
     "tags": [
-      "Test",
-      "QA"
+      "Eiffel View",
+      "Haute Couture",
+      "Platinum Bob",
+      "Iconic"
     ],
-    "voice": "Warm Whisper",
-    "greeting": "Hello from the API Test!",
-    "videoUrl": "https://zipdptvuybmsvvcwdwkd.supabase.co/storage/v1/object/public/zovik-media/videos/shorts/reel_1791598058454_alexander-sterling.mp4",
+    "voice": "Chic, breathy, elite Parisienne whisper",
+    "greeting": "Hey jaan! Main Sylvie Delacroix hoon... Finally tum aa gaye! Main kab se tumhara intezaar kar rahi thi. Batao aaj kya plans hain? 💕",
+    "videoUrl": "/videos/companions/sylvie-delacroix.mp4",
     "gallery": [
-      "https://zipdptvuybmsvvcwdwkd.supabase.co/storage/v1/object/public/zovik-media/characters/char_1791598055859_zovik_01.webp.webp"
+      "/characters/zovik_40.jpg"
     ],
     "messages": [
       {
         "sender": "ai",
-        "text": "Hello from the API Test!",
-        "time": "Just now"
+        "text": "Hey jaan! Main Sylvie Delacroix hoon... Finally tum aa gaye! Main kab se tumhara intezaar kar rahi thi. Batao aaj kya plans hain? 💕",
+        "time": "Just now",
+        "timestamp": 1727400000000
       }
     ],
-    "accessTier": "free",
-    "isVipOnly": false
+    "accessTier": "vip",
+    "isVipOnly": true
   },
   {
     "id": "char_2d4c51d8-2e94-4d9c-a43f-45bcc84e9dc1",

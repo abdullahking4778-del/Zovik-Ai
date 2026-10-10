@@ -1,5 +1,7 @@
 import { NextRequest } from "next/server";
 import crypto from "crypto";
+import fs from "fs";
+import path from "path";
 import { db } from "./firebase";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 
@@ -82,7 +84,20 @@ export async function getDynamicAdminPassword(): Promise<string | null> {
   }
 
   // 1. Check server environment variable first (Highest precedence)
-  const envPassword = process.env.ADMIN_PASSWORD?.trim();
+  let envPassword = process.env.ADMIN_PASSWORD?.trim();
+  if (!envPassword) {
+    try {
+      const envPath = path.join(process.cwd(), ".env.local");
+      if (fs.existsSync(envPath)) {
+        const raw = fs.readFileSync(envPath, "utf-8");
+        const match = raw.match(/^ADMIN_PASSWORD=["']?([^"'\r\n]+)["']?/m);
+        if (match && match[1]) {
+          envPassword = match[1].trim();
+        }
+      }
+    } catch {}
+  }
+
   if (envPassword) {
     cachedAdminPassword = envPassword;
     lastPasswordFetch = now;

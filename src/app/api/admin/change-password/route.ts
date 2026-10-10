@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
-import { verifyAdminRequest, getDynamicAdminPassword, setDynamicAdminPassword } from "@/lib/adminAuth";
+import { verifyAdminRequest, getDynamicAdminPassword, setDynamicAdminPassword, safeVerifyPassword } from "@/lib/adminAuth";
 
 export async function POST(req: NextRequest) {
   try {

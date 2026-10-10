@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifyAdminRequest } from "@/lib/adminAuth";
 import { db } from "@/lib/firebase";
 import { collection, getDocs, doc, updateDoc, deleteDoc } from "firebase/firestore";
-import { getAllStoredUsers, upsertStoredUser, saveAllStoredUsers } from "@/lib/userStore";
+import { getAllStoredUsers, upsertStoredUser, upsertStoredUserAsync, saveAllStoredUsers } from "@/lib/userStore";
 import { UserAccount } from "@/types";
 
 export const dynamic = "force-dynamic";
@@ -85,8 +85,8 @@ export async function PUT(req: NextRequest) {
 
     const primaryKey = userId || email;
 
-    // 1. Authoritative local store update (Guaranteed to succeed, zero permission issues)
-    const updatedLocal = upsertStoredUser(primaryKey, {
+    // 1. Authoritative store & cloud database update
+    const syncResult = await upsertStoredUserAsync(primaryKey, {
       id: userId || primaryKey,
       email: email || undefined,
       tier: assignedTier,
@@ -96,6 +96,7 @@ export async function PUT(req: NextRequest) {
       subscriptionEndsAt: endsAt,
       storageRetentionDays: retention,
     });
+    const updatedLocal = syncResult.user;
 
     if (email && userId && email !== userId) {
       try {

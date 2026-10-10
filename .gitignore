@@ -28,3 +28,11 @@ yarn-error.log*
 # IDE configurations
 .vscode/
 .idea/
+
+# runtime data & temporary buffers (DO NOT PUSH SENSITIVE RUNTIME DATA)
+.data/
+scratch/
+.tempmediaStorage/
+*.tmp
+_backup_*
+
