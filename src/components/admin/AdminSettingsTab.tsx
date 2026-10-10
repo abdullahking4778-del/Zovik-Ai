@@ -86,22 +86,32 @@ export const AdminSettingsTab: React.FC<AdminSettingsTabProps> = ({
   // Fetch initial data
   useEffect(() => {
     fetch("/api/announcement")
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) throw new Error("Failed to load");
+        return res.json();
+      })
       .then((data) => {
         if (data.success && data.announcement) {
           setAnnouncement(data.announcement);
         }
       })
-      .catch(() => {});
+      .catch((err) => {
+        console.warn("[AdminSettingsTab] Initial announcement load note:", err);
+      });
 
     fetch("/api/payment-accounts")
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) throw new Error("Failed to load");
+        return res.json();
+      })
       .then((data) => {
         if (data.success && data.accounts) {
           setPaymentAccounts((prev) => ({ ...prev, ...data.accounts }));
         }
       })
-      .catch(() => {});
+      .catch((err) => {
+        console.warn("[AdminSettingsTab] Initial accounts load note:", err);
+      });
   }, []);
 
   const handleSaveAnnouncement = async (e: React.FormEvent) => {
@@ -118,7 +128,7 @@ export const AdminSettingsTab: React.FC<AdminSettingsTabProps> = ({
         body: JSON.stringify(announcement),
       });
       const data = await res.json();
-      if (data.success) {
+      if (res.ok && data.success) {
         setAnnouncementMsg({ type: "success", text: "Top Announcement Patti updated successfully!" });
         window.dispatchEvent(new CustomEvent("zovik_announcement_updated", { detail: data.announcement }));
         try {

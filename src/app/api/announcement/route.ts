@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { getPersistentAnnouncement } from "@/lib/announcementStore";
+import { getPersistentAnnouncementAsync } from "@/lib/announcementStore";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export async function GET() {
   try {
-    const announcement = getPersistentAnnouncement();
+    const announcement = await getPersistentAnnouncementAsync();
     return NextResponse.json({ success: true, announcement }, {
       headers: {
         "Cache-Control": "no-store, no-cache, must-revalidate",

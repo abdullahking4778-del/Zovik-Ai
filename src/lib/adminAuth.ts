@@ -2,8 +2,9 @@ import { NextRequest } from "next/server";
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
-import { db } from "./firebase";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { adminDb } from "./firebaseAdmin";
+import { supabaseAdmin, isSupabaseConfigured } from "./supabase";
+import { FieldValue } from "firebase-admin/firestore";
 
 let cachedAdminPasswordHash: string | null = null;
 let lastPasswordFetch = 0;
@@ -17,6 +18,14 @@ interface LoginAttempt {
 const MAX_ATTEMPTS = 5;
 const LOCKOUT_MS = 15 * 60 * 1000; // 15 minutes lockout
 
+// In-memory rate limits cache for fastest atomic increments
+const inMemoryRateLimits: Record<string, LoginAttempt> = {};
+
+/**
+ * File path for local / container rate limits cache.
+ * Note on serverless: On platforms like Vercel, /tmp is container-local.
+ * It provides effective per-instance throttling without requiring paid external Redis services.
+ */
 function getRateLimitsFilePath(): string {
   if (process.env.VERCEL) {
     return path.join("/tmp", "zovik_admin_rate_limits.json");
@@ -27,21 +36,36 @@ function getRateLimitsFilePath(): string {
 function readPersistentRateLimits(): Record<string, LoginAttempt> {
   try {
     const filePath = getRateLimitsFilePath();
-    if (!fs.existsSync(filePath)) return {};
+    if (!fs.existsSync(filePath)) return inMemoryRateLimits;
     const raw = fs.readFileSync(filePath, "utf-8");
-    if (!raw.trim()) return {};
-    return JSON.parse(raw);
+    if (!raw.trim()) return inMemoryRateLimits;
+    const fromDisk = JSON.parse(raw);
+    return { ...inMemoryRateLimits, ...fromDisk };
   } catch {
-    return {};
+    return inMemoryRateLimits;
   }
 }
 
 function writePersistentRateLimits(data: Record<string, LoginAttempt>): void {
   try {
+    Object.assign(inMemoryRateLimits, data);
     const filePath = getRateLimitsFilePath();
     const dir = path.dirname(filePath);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(filePath, JSON.stringify(data, null, 2), "utf-8");
+  } catch {}
+}
+
+/**
+ * Clears rate limits — for isolated testing environments only.
+ */
+export function clearAdminRateLimitsForTesting(): void {
+  for (const k of Object.keys(inMemoryRateLimits)) {
+    delete inMemoryRateLimits[k];
+  }
+  try {
+    const filePath = getRateLimitsFilePath();
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
   } catch {}
 }
 
@@ -50,7 +74,34 @@ function hashClientIp(ip: string): string {
 }
 
 /**
- * Check if an IP is currently rate-limited (persistent across restarts/serverless)
+ * Extracts trusted client IP from request headers.
+ * Prioritizes trusted hosting platform headers (Vercel edge verified) over arbitrary client-supplied headers.
+ */
+export function extractClientIp(req: NextRequest): string {
+  // 1. Trusted Vercel Edge verified client IP
+  const vercelIp = req.headers.get("x-vercel-forwarded-for");
+  if (vercelIp && vercelIp.trim()) {
+    return vercelIp.split(",")[0].trim();
+  }
+
+  // 2. Real IP header provided by reverse proxy
+  const realIp = req.headers.get("x-real-ip");
+  if (realIp && realIp.trim()) {
+    return realIp.trim();
+  }
+
+  // 3. Rightmost IP or first proxy in standard forwarded header
+  const forwarded = req.headers.get("x-forwarded-for");
+  if (forwarded && forwarded.trim()) {
+    const ips = forwarded.split(",").map((p) => p.trim()).filter(Boolean);
+    return ips[0] || "127.0.0.1";
+  }
+
+  return "127.0.0.1";
+}
+
+/**
+ * Check if an IP is currently rate-limited.
  */
 export function checkAdminRateLimit(ip: string): { allowed: boolean; remainingAttempts: number; retryAfterSec?: number } {
   const now = Date.now();
@@ -71,6 +122,7 @@ export function checkAdminRateLimit(ip: string): { allowed: boolean; remainingAt
   // Reset if window has expired
   if (now - record.lastAttempt > LOCKOUT_MS) {
     delete limits[key];
+    delete inMemoryRateLimits[key];
     writePersistentRateLimits(limits);
     return { allowed: true, remainingAttempts: MAX_ATTEMPTS };
   }
@@ -80,7 +132,7 @@ export function checkAdminRateLimit(ip: string): { allowed: boolean; remainingAt
 }
 
 /**
- * Record a failed admin login attempt (persistently)
+ * Record a failed admin login attempt.
  */
 export function recordFailedAdminLogin(ip: string): { locked: boolean; retryAfterSec?: number } {
   const now = Date.now();
@@ -104,13 +156,14 @@ export function recordFailedAdminLogin(ip: string): { locked: boolean; retryAfte
 }
 
 /**
- * Reset failed attempts on successful login
+ * Reset failed attempts on successful login.
  */
 export function resetAdminRateLimit(ip: string): void {
   const key = hashClientIp(ip);
   const limits = readPersistentRateLimits();
   if (limits[key]) {
     delete limits[key];
+    delete inMemoryRateLimits[key];
     writePersistentRateLimits(limits);
   }
 }
@@ -153,6 +206,7 @@ export function safeVerifyPassword(candidate: string, stored: string): boolean {
  * Retrieves the stored password hash (or initial password to be verified).
  * Fails securely if no environment variable or database password is configured.
  * Never stores or returns plain-text passwords once updated.
+ * Migrates legacy plaintext password storage safely without leaking secrets.
  */
 export async function getDynamicAdminPassword(): Promise<string | null> {
   const now = Date.now();
@@ -180,25 +234,79 @@ export async function getDynamicAdminPassword(): Promise<string | null> {
     } catch {}
   }
 
-  // 2. Check Firestore config (field: passwordHash)
+  // 2. Check Firestore config via Firebase Admin SDK (authoritative)
   try {
-    const docRef = doc(db, "config", "admin_auth");
-    const snap = await getDoc(docRef);
-    if (snap.exists()) {
-      const data = snap.data();
-      if (data?.passwordHash) {
-        cachedAdminPasswordHash = data.passwordHash;
-        lastPasswordFetch = now;
-        return cachedAdminPasswordHash;
-      }
-      if (data?.password) {
-        cachedAdminPasswordHash = data.password;
-        lastPasswordFetch = now;
-        return cachedAdminPasswordHash;
+    if (adminDb && typeof adminDb.collection === "function") {
+      const docRef = adminDb.collection("config").doc("admin_auth");
+      const snap = await docRef.get();
+      if (snap.exists) {
+        const data = snap.data();
+        if (data?.passwordHash) {
+          // If a legacy plaintext password field still lingers alongside passwordHash, safely remove it
+          if (data?.password) {
+            try {
+              await docRef.update({
+                password: FieldValue.delete(),
+              });
+            } catch {}
+          }
+          cachedAdminPasswordHash = data.passwordHash;
+          lastPasswordFetch = now;
+          return cachedAdminPasswordHash;
+        }
+
+        // Legacy plaintext password found: migrate safely
+        if (data?.password && typeof data.password === "string") {
+          const plainLegacy = data.password;
+          const newHash = hashAdminPassword(plainLegacy);
+
+          // Verify hash before removing legacy field
+          if (safeVerifyPassword(plainLegacy, newHash)) {
+            try {
+              await docRef.set(
+                {
+                  passwordHash: newHash,
+                  updatedAt: new Date().toISOString(),
+                },
+                { merge: true }
+              );
+              // Only remove legacy plaintext after confirmed save
+              await docRef.update({
+                password: FieldValue.delete(),
+              }).catch(() => {});
+
+              cachedAdminPasswordHash = newHash;
+              lastPasswordFetch = now;
+              return newHash;
+            } catch (migErr) {
+              console.warn("[AdminAuth] Legacy migration save note:", migErr);
+            }
+          }
+
+          cachedAdminPasswordHash = plainLegacy;
+          lastPasswordFetch = now;
+          return plainLegacy;
+        }
       }
     }
   } catch (err) {
     console.warn("[AdminAuth] Firestore config read warning:", err);
+  }
+
+  // 3. Check Supabase (if configured)
+  if (isSupabaseConfigured()) {
+    try {
+      const { data } = await supabaseAdmin
+        .from("app_settings")
+        .select("value")
+        .eq("key", "admin_password_hash")
+        .maybeSingle();
+      if (data?.value) {
+        cachedAdminPasswordHash = data.value;
+        lastPasswordFetch = now;
+        return data.value;
+      }
+    } catch {}
   }
 
   if (envVal) {
@@ -212,7 +320,8 @@ export async function getDynamicAdminPassword(): Promise<string | null> {
 
 /**
  * Dynamically updates admin password using salted scrypt hash.
- * Returns true ONLY if persistent write succeeded.
+ * Returns true ONLY if durable persistence succeeded.
+ * On Vercel, does not treat local .data writes as permanent storage.
  */
 export async function setDynamicAdminPassword(newPassword: string): Promise<boolean> {
   if (!newPassword || newPassword.length < 8) {
@@ -227,21 +336,41 @@ export async function setDynamicAdminPassword(newPassword: string): Promise<bool
 
   let firestoreSaved = false;
   try {
-    const docRef = doc(db, "config", "admin_auth");
-    await setDoc(
-      docRef,
-      {
-        passwordHash,
-        updatedAt: new Date().toISOString(),
-      },
-      { merge: true }
-    );
-    firestoreSaved = true;
+    if (adminDb && typeof adminDb.collection === "function") {
+      const docRef = adminDb.collection("config").doc("admin_auth");
+      await docRef.set(
+        {
+          passwordHash,
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true }
+      );
+      // Remove any lingering legacy password field
+      try {
+        await docRef.update({
+          password: FieldValue.delete(),
+        });
+      } catch {}
+      firestoreSaved = true;
+    }
   } catch (err) {
     console.warn("[AdminAuth] Firestore config save warning:", err);
   }
 
-  // Persistent server storage
+  // Supabase cloud database sync
+  let supabaseSaved = false;
+  if (isSupabaseConfigured()) {
+    try {
+      const { error } = await supabaseAdmin.from("app_settings").upsert({
+        key: "admin_password_hash",
+        value: passwordHash,
+        updated_at: new Date().toISOString(),
+      });
+      if (!error) supabaseSaved = true;
+    } catch {}
+  }
+
+  // Persistent server storage for non-serverless container environments
   let localSaved = false;
   try {
     const dataDir = path.join(process.cwd(), ".data");
@@ -251,7 +380,7 @@ export async function setDynamicAdminPassword(newPassword: string): Promise<bool
     localSaved = true;
   } catch {}
 
-  // Local development .env.local sync (optional)
+  // Local development .env.local sync
   if (!process.env.VERCEL) {
     try {
       const envPath = path.join(process.cwd(), ".env.local");
@@ -262,14 +391,19 @@ export async function setDynamicAdminPassword(newPassword: string): Promise<bool
       } else {
         envContent = `${envContent}\nADMIN_PASSWORD_HASH="${passwordHash}"`;
       }
-      // Remove plain text ADMIN_PASSWORD if present
       envContent = envContent.replace(/^ADMIN_PASSWORD=.*$/m, "");
       fs.writeFileSync(envPath, envContent.trim() + "\n", "utf-8");
       localSaved = true;
     } catch {}
   }
 
-  return firestoreSaved || localSaved;
+  // On Vercel, local file writes are ephemeral.
+  // We must return true ONLY if durable cloud storage confirms the save!
+  if (process.env.VERCEL) {
+    return firestoreSaved || supabaseSaved;
+  }
+
+  return firestoreSaved || supabaseSaved || localSaved;
 }
 
 /**

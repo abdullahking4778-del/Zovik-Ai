@@ -282,14 +282,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
 
       if (result?.user) {
-        try {
-          const freshToken = await result.user.getIdToken();
-          await fetch("/api/user/unmark-deleted", {
-            method: "POST",
-            headers: { Authorization: `Bearer ${freshToken}` },
-          });
-        } catch {}
-
         setIsLocallyLoggedIn(true);
         safeLocalStorage.setItem("zovik_logged_in", "true");
         const userDocRef = doc(db, "users", result.user.uid);
@@ -327,14 +319,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     try {
       const result = await signInWithEmailAndPassword(auth, email.trim(), password);
       if (result.user) {
-        try {
-          const freshToken = await result.user.getIdToken();
-          await fetch("/api/user/unmark-deleted", {
-            method: "POST",
-            headers: { Authorization: `Bearer ${freshToken}` },
-          });
-        } catch {}
-
         setIsLocallyLoggedIn(true);
         safeLocalStorage.setItem("zovik_logged_in", "true");
         const userDocRef = doc(db, "users", result.user.uid);

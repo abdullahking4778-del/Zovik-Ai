@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "tsc --noEmit",
     "type-check": "tsc --noEmit",
-    "test": "node scripts/run_security_suite.mjs"
+    "test": "node scripts/run_security_suite.mjs",
+    "test:unit": "node scripts/run_unit_tests.mjs",
+    "test:integration": "node scripts/run_security_suite.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.2",
