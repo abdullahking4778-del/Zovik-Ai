@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdminRequest } from "@/lib/adminAuth";
-import { db } from "@/lib/firebase";
-import { collection, getDocs, doc, updateDoc, deleteDoc } from "firebase/firestore";
+import { adminDb, adminAuth } from "@/lib/firebaseAdmin";
 import { getAllStoredUsers, upsertStoredUser, upsertStoredUserAsync, saveAllStoredUsers } from "@/lib/userStore";
 import { UserAccount } from "@/types";
 import { supabaseAdmin, isSupabaseConfigured } from "@/lib/supabase";
@@ -29,30 +28,31 @@ export async function GET(req: NextRequest) {
     console.warn("Local users fetch failed:", err);
   }
 
-  // 2. Merge with Firestore users (if reachable)
+  // 2. Merge with Firestore users (using Firebase Admin SDK)
   try {
-    const usersCol = collection(db, "users");
-    const snapshot = await getDocs(usersCol);
-    snapshot.forEach((d) => {
-      const data = d.data();
-      const existing = usersMap.get(d.id);
-      const tier = existing?.tier || data.zovik_tier || "free";
-      
-      usersMap.set(d.id, {
-        id: d.id,
-        email: data.email || existing?.email || "No Email",
-        name: data.name || existing?.name || data.email?.split("@")[0] || "User",
-        photoURL: data.photoURL || existing?.photoURL || null,
-        tier: tier,
-        isVip: tier === "vip",
-        subscriptionDays: existing?.subscriptionDays || data.subscriptionDays || (tier === "vip" ? 30 : 0),
-        subscriptionStart: existing?.subscriptionStart || data.subscriptionStart || null,
-        subscriptionEndsAt: existing?.subscriptionEndsAt || data.subscriptionEndsAt || null,
-        storageRetentionDays: existing?.storageRetentionDays || data.storageRetentionDays || (tier === "vip" ? 35 : tier === "plus" ? 30 : 7),
-        createdAt: data.createdAt || existing?.createdAt || new Date().toISOString(),
-        lastLoginAt: data.lastLoginAt || existing?.lastLoginAt || null,
+    if (adminDb && typeof adminDb.collection === "function") {
+      const snapshot = await adminDb.collection("users").get();
+      snapshot.forEach((d) => {
+        const data = d.data();
+        const existing = usersMap.get(d.id);
+        const tier = existing?.tier || data.zovik_tier || "free";
+
+        usersMap.set(d.id, {
+          id: d.id,
+          email: data.email || existing?.email || "No Email",
+          name: data.name || existing?.name || data.email?.split("@")[0] || "User",
+          photoURL: data.photoURL || existing?.photoURL || null,
+          tier: tier,
+          isVip: tier === "vip",
+          subscriptionDays: existing?.subscriptionDays || data.subscriptionDays || (tier === "vip" ? 30 : 0),
+          subscriptionStart: existing?.subscriptionStart || data.subscriptionStart || null,
+          subscriptionEndsAt: existing?.subscriptionEndsAt || data.subscriptionEndsAt || null,
+          storageRetentionDays: existing?.storageRetentionDays || data.storageRetentionDays || (tier === "vip" ? 35 : tier === "plus" ? 30 : 7),
+          createdAt: data.createdAt || existing?.createdAt || new Date().toISOString(),
+          lastLoginAt: data.lastLoginAt || existing?.lastLoginAt || null,
+        });
       });
-    });
+    }
   } catch (err) {
     console.warn("Firestore fetch users failed:", err);
   }
@@ -83,8 +83,8 @@ export async function PUT(req: NextRequest) {
     const now = new Date();
     const endsAt = days > 0 ? new Date(now.getTime() + days * 24 * 60 * 60 * 1000).toISOString() : null;
 
-    const retention = typeof storageRetentionDays === "number" 
-      ? storageRetentionDays 
+    const retention = typeof storageRetentionDays === "number"
+      ? storageRetentionDays
       : assignedTier === "vip" ? 35 : assignedTier === "plus" ? 30 : 7;
 
     const primaryKey = userId || email;
@@ -129,20 +129,22 @@ export async function PUT(req: NextRequest) {
       } catch {}
     }
 
-    // 2. Also try Firestore update
+    // 2. Also try Firestore update via Admin SDK
     try {
-      if (userId) {
-        const userRef = doc(db, "users", userId);
-        await updateDoc(userRef, {
-          zovik_tier: assignedTier,
-          subscriptionDays: days,
-          subscriptionStart: days > 0 ? now.toISOString() : null,
-          subscriptionEndsAt: endsAt,
-          storageRetentionDays: retention,
-        });
+      if (adminDb && typeof adminDb.collection === "function" && userId) {
+        await adminDb.collection("users").doc(userId).set(
+          {
+            zovik_tier: assignedTier,
+            subscriptionDays: days,
+            subscriptionStart: days > 0 ? now.toISOString() : null,
+            subscriptionEndsAt: endsAt,
+            storageRetentionDays: retention,
+          },
+          { merge: true }
+        );
       }
     } catch (fsErr) {
-      console.warn("Firestore updateDoc note (Handled via authoritative store):", fsErr);
+      console.warn("Firestore updateDoc note:", fsErr);
     }
 
     return NextResponse.json({
@@ -180,6 +182,12 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: "Missing userId or email parameter" }, { status: 400 });
     }
 
+    let localDeleted = false;
+    let supabaseDeleted = false;
+    let firestoreDeleted = false;
+    let firebaseAuthDeleted = false;
+    let authNote: string | undefined;
+
     // 1. Delete from local authoritative store
     try {
       const localUsers = getAllStoredUsers().filter(
@@ -189,55 +197,83 @@ export async function DELETE(req: NextRequest) {
           (!email || u.id !== email)
       );
       saveAllStoredUsers(localUsers);
+      localDeleted = true;
     } catch (err) {
       console.warn("[Admin Users DELETE] Local user deletion note:", err);
     }
 
-    // 2. Wipe from Supabase Cloud Database (user_accounts & payment_requests)
+    // 2. Wipe from Supabase Cloud Database (user_accounts only; preserve payments)
     if (isSupabaseConfigured()) {
       try {
         if (userId) {
-          await supabaseAdmin.from("user_accounts").delete().eq("id", userId);
-          await supabaseAdmin.from("payment_requests").delete().eq("user_id", userId);
+          const { error } = await supabaseAdmin.from("user_accounts").delete().eq("id", userId);
+          if (!error) supabaseDeleted = true;
         }
         if (email) {
-          await supabaseAdmin.from("user_accounts").delete().eq("email", email);
-          await supabaseAdmin.from("payment_requests").delete().eq("user_email", email);
+          const { error } = await supabaseAdmin.from("user_accounts").delete().eq("email", email);
+          if (!error) supabaseDeleted = true;
         }
       } catch (sbErr) {
         console.warn("[Admin Users DELETE] Supabase deletion note:", sbErr);
       }
     }
 
-    // 3. Delete from Firestore
+    // 3. Delete from Firestore via Firebase Admin SDK
     try {
-      if (userId) {
-        const userRef = doc(db, "users", userId);
-        await deleteDoc(userRef);
-      }
-      if (email && email !== userId) {
-        const emailRef = doc(db, "users", email);
-        await deleteDoc(emailRef);
+      if (adminDb && typeof adminDb.collection === "function") {
+        if (userId) {
+          await adminDb.collection("users").doc(userId).delete();
+          firestoreDeleted = true;
+        }
+        if (email && email !== userId) {
+          await adminDb.collection("users").doc(email).delete();
+          firestoreDeleted = true;
+        }
       }
     } catch (fsErr) {
       console.warn("[Admin Users DELETE] Firestore deleteDoc note:", fsErr);
     }
 
-    // 4. Record in tombstone blacklist to enforce client eviction & logouts
-    await recordDeletedUser(userId, email);
+    // 4. Delete / Disable in Firebase Authentication (if configured)
+    if (userId && adminAuth && typeof adminAuth.deleteUser === "function") {
+      try {
+        await adminAuth.deleteUser(userId);
+        firebaseAuthDeleted = true;
+      } catch (authErr: unknown) {
+        const errCode = (authErr as { code?: string })?.code;
+        if (errCode === "auth/user-not-found") {
+          firebaseAuthDeleted = true; // Already deleted or not an auth user
+        } else {
+          authNote = authErr instanceof Error ? authErr.message : String(authErr);
+          console.warn("[Admin Users DELETE] Firebase Auth deletion note:", authNote);
+        }
+      }
+    }
 
-    // 5. Reset user quotas
+    // 5. Record durable tombstone in database & memory
+    const tombstoneRes = await recordDeletedUser(userId, email);
+
+    // 6. Reset user quotas
     if (userId) resetQuota(userId);
     if (email) resetQuota(email);
 
-    // 6. Clean orphaned atomic write temp files and caches
+    // 7. Clean orphaned atomic write temp files and caches
     try {
       cleanAppCacheAndJunk();
     } catch {}
 
+    const isFullyPurged = localDeleted && tombstoneRes.persistent;
+
     return NextResponse.json({
       success: true,
-      message: `User account (${email || userId}) and all associated data permanently wiped across all databases.`,
+      tombstoneRecorded: tombstoneRes.success,
+      persistentTombstone: tombstoneRes.persistent,
+      firebaseAuthDeleted,
+      databaseRecordsDeleted: localDeleted || supabaseDeleted || firestoreDeleted,
+      message: isFullyPurged
+        ? `User account (${email || userId}) deleted and permanently tombstoned.`
+        : `User account (${email || userId}) deactivated and tombstone registered.`,
+      authNote: authNote ? "Firebase Auth identity may require manual console cleanup if admin credentials lack IAM rights." : undefined,
     });
   } catch (e: unknown) {
     console.error("[Admin Users DELETE Error]:", e);

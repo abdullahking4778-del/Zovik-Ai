@@ -158,42 +158,65 @@ export default function AdminPage() {
         handleLogout();
         return;
       }
-      const uData = await uRes.json();
-      setUsers(uData.users || []);
+      if (uRes.ok) {
+        const uData = await uRes.json();
+        if (Array.isArray(uData.users)) {
+          setUsers(uData.users);
+        }
+      } else {
+        console.warn("Failed fetching users:", uRes.status);
+      }
 
       // 2. Fetch Characters & Available Images
       const cRes = await fetch("/api/admin/characters", { headers, cache: "no-store" });
-      const cData = await cRes.json();
-      const loadedChars: Character[] = cData.characters || [];
-      setCharacters(loadedChars);
-      setAvailableImages(cData.availableImages || []);
-
-      // Keep workingGallery strictly synchronized with selected character
-      if (loadedChars.length > 0) {
-        setSelectedGalleryCharId((prevId) => {
-          const targetId = prevId && loadedChars.some((c) => c.id === prevId) ? prevId : loadedChars[0].id;
-          const targetChar = loadedChars.find((c) => c.id === targetId) || loadedChars[0];
-          setWorkingGallery(
-            targetChar.gallery && targetChar.gallery.length > 0 ? targetChar.gallery : [targetChar.image]
-          );
-          return targetId;
-        });
+      if (cRes.ok) {
+        const cData = await cRes.json();
+        if (Array.isArray(cData.characters)) {
+          const loadedChars: Character[] = cData.characters;
+          setCharacters(loadedChars);
+          if (Array.isArray(cData.availableImages)) {
+            setAvailableImages(cData.availableImages);
+          }
+          // Keep workingGallery strictly synchronized with selected character
+          if (loadedChars.length > 0) {
+            setSelectedGalleryCharId((prevId) => {
+              const targetId = prevId && loadedChars.some((c) => c.id === prevId) ? prevId : loadedChars[0].id;
+              const targetChar = loadedChars.find((c) => c.id === targetId) || loadedChars[0];
+              setWorkingGallery(
+                targetChar.gallery && targetChar.gallery.length > 0 ? targetChar.gallery : [targetChar.image]
+              );
+              return targetId;
+            });
+          }
+        }
       }
 
       // 3. Fetch Subscriptions / Payments
       const pRes = await fetch("/api/subscriptions", { headers, cache: "no-store" });
-      const pData = await pRes.json();
-      setPayments(pData.payments || []);
+      if (pRes.ok) {
+        const pData = await pRes.json();
+        if (Array.isArray(pData.payments)) {
+          setPayments(pData.payments);
+        }
+      }
 
       // 4. Fetch Pricing Plans
       const plRes = await fetch("/api/admin/plans", { headers, cache: "no-store" });
-      const plData = await plRes.json();
-      setPlans(plData.plans || []);
+      if (plRes.ok) {
+        const plData = await plRes.json();
+        if (Array.isArray(plData.plans)) {
+          setPlans(plData.plans);
+        }
+      }
 
       // 5. Fetch Shorts
       const sRes = await fetch("/api/shorts", { cache: "no-store" });
-      const sData = await sRes.json();
-      setShorts(sData.shorts || []);
+      if (sRes.ok) {
+        const sData = await sRes.json();
+        if (Array.isArray(sData.shorts)) {
+          setShorts(sData.shorts);
+        }
+      }
     } catch (e) {
       console.error("Failed to load admin data:", e);
     } finally {
@@ -304,8 +327,8 @@ export default function AdminPage() {
       return;
     }
 
-    if (newMasterPassword.length < 6) {
-      setPasswordStatusMsg({ type: "error", text: "New password must be at least 6 characters." });
+    if (newMasterPassword.length < 8) {
+      setPasswordStatusMsg({ type: "error", text: "New password must be at least 8 characters." });
       return;
     }
 

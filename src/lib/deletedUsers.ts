@@ -1,13 +1,23 @@
 import fs from "fs";
 import path from "path";
+import { adminDb } from "./firebaseAdmin";
+import { supabaseAdmin, isSupabaseConfigured } from "./supabase";
 
 export interface DeletedUserRecord {
   id?: string;
   email?: string;
   deletedAt: string;
+  reason?: string;
 }
 
+// In-memory cache for fast lookups
+let inMemoryTombstones: DeletedUserRecord[] = [];
+let lastCloudFetchTime = 0;
+
 function getDeletedUsersPath(): string {
+  if (process.env.VERCEL) {
+    return path.join("/tmp", "zovik_deleted_users.json");
+  }
   const dir = path.join(process.cwd(), ".data");
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
@@ -15,7 +25,7 @@ function getDeletedUsersPath(): string {
   return path.join(dir, "deleted_users.json");
 }
 
-function readDeletedUsers(): DeletedUserRecord[] {
+function readLocalDeletedUsers(): DeletedUserRecord[] {
   try {
     const file = getDeletedUsersPath();
     if (!fs.existsSync(file)) return [];
@@ -27,38 +37,156 @@ function readDeletedUsers(): DeletedUserRecord[] {
   }
 }
 
-function writeDeletedUsers(records: DeletedUserRecord[]): void {
+function writeLocalDeletedUsers(records: DeletedUserRecord[]): void {
   try {
     const file = getDeletedUsersPath();
+    const dir = path.dirname(file);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(file, JSON.stringify(records, null, 2), "utf-8");
   } catch (err) {
-    console.error("Failed writing deleted users registry:", err);
+    console.warn("[DeletedUsers] Local cache write notice:", err);
+  }
+}
+
+// Initialize memory cache from local file
+try {
+  inMemoryTombstones = readLocalDeletedUsers();
+} catch {}
+
+/**
+ * Fetch tombstones from authoritative cloud stores (Firestore / Supabase)
+ */
+async function syncFromCloudStore(): Promise<void> {
+  const now = Date.now();
+  if (now - lastCloudFetchTime < 30000 && inMemoryTombstones.length > 0) {
+    return;
+  }
+
+  // 1. Fetch from Firestore (via Firebase Admin SDK)
+  try {
+    if (adminDb && typeof adminDb.collection === "function") {
+      const snapshot = await adminDb.collection("deleted_users").get();
+      if (!snapshot.empty) {
+        const cloudRecords: DeletedUserRecord[] = [];
+        snapshot.forEach((doc) => {
+          const data = doc.data() as DeletedUserRecord;
+          cloudRecords.push({
+            id: data.id || doc.id,
+            email: data.email,
+            deletedAt: data.deletedAt || new Date().toISOString(),
+            reason: data.reason || "admin_deletion",
+          });
+        });
+
+        // Merge with memory tombstones
+        const mergedMap = new Map<string, DeletedUserRecord>();
+        [...inMemoryTombstones, ...cloudRecords].forEach((rec) => {
+          const key = (rec.id || rec.email || "").toLowerCase();
+          if (key) mergedMap.set(key, rec);
+        });
+        inMemoryTombstones = Array.from(mergedMap.values());
+        writeLocalDeletedUsers(inMemoryTombstones);
+        lastCloudFetchTime = now;
+        return;
+      }
+    }
+  } catch (err) {
+    // Graceful fallback to local cache
+    console.warn("[DeletedUsers] Cloud Firestore tombstone read notice:", err);
+  }
+
+  // 2. Fetch from Supabase (if configured)
+  if (isSupabaseConfigured()) {
+    try {
+      const { data, error } = await supabaseAdmin
+        .from("deleted_users")
+        .select("id, email, deleted_at, reason");
+      if (!error && Array.isArray(data)) {
+        data.forEach((row) => {
+          inMemoryTombstones.push({
+            id: row.id,
+            email: row.email,
+            deletedAt: row.deleted_at || new Date().toISOString(),
+            reason: row.reason,
+          });
+        });
+        lastCloudFetchTime = now;
+      }
+    } catch {}
   }
 }
 
 /**
- * Permanently records a user UID / Email as deleted by administrator.
+ * Permanently records a user UID / Email as deleted by administrator in authoritative storage.
+ * Returns operation result.
  */
-export async function recordDeletedUser(id: string, email?: string): Promise<void> {
+export async function recordDeletedUser(
+  id: string,
+  email?: string,
+  reason: string = "admin_deletion"
+): Promise<{ success: boolean; persistent: boolean; error?: string }> {
   const cleanId = (id || "").trim();
   const cleanEmail = (email || "").trim().toLowerCase();
-  if (!cleanId && !cleanEmail) return;
+  if (!cleanId && !cleanEmail) {
+    return { success: false, persistent: false, error: "Missing identifier" };
+  }
 
-  const current = readDeletedUsers();
-  // Filter out duplicate if already exists
-  const filtered = current.filter(
+  const record: DeletedUserRecord = {
+    id: cleanId || undefined,
+    email: cleanEmail || undefined,
+    deletedAt: new Date().toISOString(),
+    reason,
+  };
+
+  // 1. Update memory & local file
+  inMemoryTombstones = inMemoryTombstones.filter(
     (u) =>
       (!cleanId || u.id !== cleanId) &&
       (!cleanEmail || u.email?.toLowerCase() !== cleanEmail)
   );
+  inMemoryTombstones.push(record);
+  writeLocalDeletedUsers(inMemoryTombstones);
 
-  filtered.push({
-    id: cleanId || undefined,
-    email: cleanEmail || undefined,
-    deletedAt: new Date().toISOString(),
-  });
+  let cloudSaved = false;
+  let cloudError: string | undefined;
 
-  writeDeletedUsers(filtered);
+  // 2. Authoritative save to Cloud Firestore via Firebase Admin SDK
+  try {
+    if (adminDb && typeof adminDb.collection === "function") {
+      const docKey = cleanId || cleanEmail.replace(/[^a-zA-Z0-9_-]/g, "_");
+      await adminDb.collection("deleted_users").doc(docKey).set({
+        id: cleanId || null,
+        email: cleanEmail || null,
+        deletedAt: record.deletedAt,
+        reason: record.reason,
+      });
+      cloudSaved = true;
+    }
+  } catch (err) {
+    cloudError = err instanceof Error ? err.message : String(err);
+    console.warn("[DeletedUsers] Firestore tombstone write warning:", err);
+  }
+
+  // 3. Save to Supabase (if configured)
+  if (isSupabaseConfigured()) {
+    try {
+      const { error } = await supabaseAdmin.from("deleted_users").upsert({
+        id: cleanId || cleanEmail,
+        email: cleanEmail || null,
+        deleted_at: record.deletedAt,
+        reason: record.reason,
+      });
+      if (!error) {
+        cloudSaved = true;
+      }
+    } catch {}
+  }
+
+  return {
+    success: true,
+    persistent: cloudSaved,
+    error: cloudError,
+  };
 }
 
 /**
@@ -69,27 +197,68 @@ export function isUserDeleted(id?: string, email?: string): boolean {
   const cleanEmail = (email || "").trim().toLowerCase();
   if (!cleanId && !cleanEmail) return false;
 
-  const current = readDeletedUsers();
-  return current.some(
+  // Fast synchronous check against cached state
+  const isBlocked = inMemoryTombstones.some(
     (u) =>
       (cleanId && u.id && u.id === cleanId) ||
       (cleanEmail && u.email && u.email.toLowerCase() === cleanEmail)
   );
+
+  if (isBlocked) return true;
+
+  // Trigger background cloud refresh if cache might be stale
+  if (Date.now() - lastCloudFetchTime > 30000) {
+    syncFromCloudStore().catch(() => {});
+  }
+
+  return false;
 }
 
 /**
- * Unmarks a tombstone when the user intentionally signs in afresh as a brand new account.
+ * Async authoritative check against both cache and cloud storage.
  */
-export function removeDeletedUserTombstone(id?: string, email?: string): void {
+export async function isUserDeletedAsync(id?: string, email?: string): Promise<boolean> {
+  if (isUserDeleted(id, email)) return true;
+  await syncFromCloudStore();
+  return isUserDeleted(id, email);
+}
+
+/**
+ * Unmarks a tombstone ONLY upon authorized administrator action.
+ */
+export async function removeDeletedUserTombstone(
+  id?: string,
+  email?: string
+): Promise<{ success: boolean }> {
   const cleanId = (id || "").trim();
   const cleanEmail = (email || "").trim().toLowerCase();
-  if (!cleanId && !cleanEmail) return;
+  if (!cleanId && !cleanEmail) return { success: false };
 
-  const current = readDeletedUsers();
-  const filtered = current.filter(
+  // 1. Remove from in-memory cache and local file
+  inMemoryTombstones = inMemoryTombstones.filter(
     (u) =>
       (!cleanId || u.id !== cleanId) &&
       (!cleanEmail || u.email?.toLowerCase() !== cleanEmail)
   );
-  writeDeletedUsers(filtered);
+  writeLocalDeletedUsers(inMemoryTombstones);
+
+  // 2. Remove from Firestore
+  try {
+    if (adminDb && typeof adminDb.collection === "function") {
+      const docKey = cleanId || cleanEmail.replace(/[^a-zA-Z0-9_-]/g, "_");
+      await adminDb.collection("deleted_users").doc(docKey).delete();
+    }
+  } catch (err) {
+    console.warn("[DeletedUsers] Firestore tombstone removal note:", err);
+  }
+
+  // 3. Remove from Supabase
+  if (isSupabaseConfigured()) {
+    try {
+      if (cleanId) await supabaseAdmin.from("deleted_users").delete().eq("id", cleanId);
+      if (cleanEmail) await supabaseAdmin.from("deleted_users").delete().eq("email", cleanEmail);
+    } catch {}
+  }
+
+  return { success: true };
 }

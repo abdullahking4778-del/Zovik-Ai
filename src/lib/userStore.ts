@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
+import { adminDb } from "./firebaseAdmin";
 import { db } from "./firebase";
 import { doc, setDoc } from "firebase/firestore";
 import { supabaseAdmin, isSupabaseConfigured } from "./supabase";
@@ -172,27 +173,45 @@ export async function upsertStoredUserAsync(
   let dbSynced = false;
   let syncError: string | undefined;
 
-  // 1. Direct await to Firestore
+  // 1. Direct await to Firestore (Admin SDK first, client SDK fallback)
   try {
     const docId = resultUser.id || resultUser.email;
     if (docId) {
-      const userRef = doc(db, "users", docId);
-      await setDoc(
-        userRef,
-        {
-          zovik_tier: resultUser.tier,
-          email: resultUser.email,
-          name: resultUser.name,
-          isVip: resultUser.isVip,
-          subscriptionDays: resultUser.subscriptionDays,
-          subscriptionStart: resultUser.subscriptionStart || null,
-          subscriptionEndsAt: resultUser.subscriptionEndsAt || null,
-          storageRetentionDays: resultUser.storageRetentionDays,
-          lastLoginAt: resultUser.lastLoginAt,
-        },
-        { merge: true }
-      );
-      dbSynced = true;
+      if (adminDb && typeof adminDb.collection === "function") {
+        await adminDb.collection("users").doc(docId).set(
+          {
+            zovik_tier: resultUser.tier,
+            email: resultUser.email,
+            name: resultUser.name,
+            isVip: resultUser.isVip,
+            subscriptionDays: resultUser.subscriptionDays,
+            subscriptionStart: resultUser.subscriptionStart || null,
+            subscriptionEndsAt: resultUser.subscriptionEndsAt || null,
+            storageRetentionDays: resultUser.storageRetentionDays,
+            lastLoginAt: resultUser.lastLoginAt,
+          },
+          { merge: true }
+        );
+        dbSynced = true;
+      } else {
+        const userRef = doc(db, "users", docId);
+        await setDoc(
+          userRef,
+          {
+            zovik_tier: resultUser.tier,
+            email: resultUser.email,
+            name: resultUser.name,
+            isVip: resultUser.isVip,
+            subscriptionDays: resultUser.subscriptionDays,
+            subscriptionStart: resultUser.subscriptionStart || null,
+            subscriptionEndsAt: resultUser.subscriptionEndsAt || null,
+            storageRetentionDays: resultUser.storageRetentionDays,
+            lastLoginAt: resultUser.lastLoginAt,
+          },
+          { merge: true }
+        );
+        dbSynced = true;
+      }
     }
   } catch (err) {
     syncError = err instanceof Error ? err.message : String(err);

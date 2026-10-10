@@ -1,19 +1,40 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifyUserRequest } from "@/lib/serverUserAuth";
+import { verifyAdminRequest } from "@/lib/adminAuth";
 import { removeDeletedUserTombstone } from "@/lib/deletedUsers";
 
+/**
+ * POST /api/user/unmark-deleted
+ * Restricted strictly to authorized administrators.
+ * Prevents deleted users from circumventing administrator blocks on normal logins.
+ */
 export async function POST(req: NextRequest) {
   try {
-    const verified = await verifyUserRequest(req);
-    if (!verified.authenticated) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    // 1. Enforce admin-only authorization
+    const isAdmin = verifyAdminRequest(req);
+    if (!isAdmin) {
+      return NextResponse.json(
+        { error: "Forbidden: Only administrators can unmark or restore a deleted account." },
+        { status: 403 }
+      );
     }
 
-    if (verified.uid || verified.email) {
-      removeDeletedUserTombstone(verified.uid, verified.email);
+    const body = await req.json().catch(() => ({}));
+    const targetId = (body.userId || body.id || "").trim();
+    const targetEmail = (body.email || "").trim().toLowerCase();
+
+    if (!targetId && !targetEmail) {
+      return NextResponse.json(
+        { error: "Missing target userId or email in request body." },
+        { status: 400 }
+      );
     }
 
-    return NextResponse.json({ success: true, message: "User account fresh status initialized." });
+    await removeDeletedUserTombstone(targetId, targetEmail);
+
+    return NextResponse.json({
+      success: true,
+      message: `User block successfully lifted for ${targetEmail || targetId}.`,
+    });
   } catch (err: unknown) {
     console.error("[UnmarkDeleted POST Error]:", err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

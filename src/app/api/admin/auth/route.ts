@@ -7,6 +7,7 @@ import {
   checkAdminRateLimit,
   recordFailedAdminLogin,
   resetAdminRateLimit,
+  extractClientIp,
 } from "@/lib/adminAuth";
 
 export async function GET(req: NextRequest) {
@@ -18,11 +19,31 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  // Extract client IP for rate limiting
-  const forwarded = req.headers.get("x-forwarded-for");
-  const ip = (forwarded ? forwarded.split(",")[0] : req.headers.get("x-real-ip") || "127.0.0.1").trim();
+  let body: { password?: string; action?: string } = {};
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON request" }, { status: 400 });
+  }
 
-  // 1. Check Persistent Rate Limit
+  // 1. Action: Logout (MUST NOT be blocked by login throttling)
+  if (body.action === "logout") {
+    const response = NextResponse.json({ success: true, message: "Logged out successfully" });
+    response.cookies.set("zovik_admin_session", "", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: 0,
+      expires: new Date(0),
+    });
+    return response;
+  }
+
+  // Extract trusted client IP for rate limiting
+  const ip = extractClientIp(req);
+
+  // 2. Check Rate Limit for login attempts
   const rateLimitStatus = checkAdminRateLimit(ip);
   if (!rateLimitStatus.allowed) {
     return NextResponse.json(
@@ -39,27 +60,6 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    let body: { password?: string; action?: string };
-    try {
-      body = await req.json();
-    } catch {
-      return NextResponse.json({ error: "Invalid JSON request" }, { status: 400 });
-    }
-
-    // Action: Logout
-    if (body.action === "logout") {
-      const response = NextResponse.json({ success: true, message: "Logged out successfully" });
-      response.cookies.set("zovik_admin_session", "", {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        path: "/",
-        maxAge: 0,
-        expires: new Date(0),
-      });
-      return response;
-    }
-
     const { password } = body;
     if (!password || typeof password !== "string") {
       recordFailedAdminLogin(ip);
@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 2. Constant-time secure password comparison (supporting salted scrypt hash)
+    // 3. Constant-time secure password comparison (supporting salted scrypt hash)
     if (safeVerifyPassword(password, storedPassword)) {
       resetAdminRateLimit(ip);
       const token = createAdminToken();
@@ -99,7 +99,7 @@ export async function POST(req: NextRequest) {
       return response;
     }
 
-    // 3. Failed Attempt
+    // 4. Failed Attempt
     const failRecord = recordFailedAdminLogin(ip);
     if (failRecord.locked) {
       return NextResponse.json(
