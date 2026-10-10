@@ -34,7 +34,8 @@ async function runTests() {
   console.log("🚀 STARTING ZOVIK AI COMPREHENSIVE TEST SUITE");
   console.log("=================================================\n");
 
-  let adminToken = "";
+  let adminCookie = "";
+  const adminPassword = process.env.ADMIN_PASSWORD || process.env.TEST_ADMIN_PASSWORD || "";
   const testUserEmail = `demo.tester.${Date.now()}@zovik.ai`;
   const testUserId = `user_test_${Date.now()}`;
   let paymentId = "";
@@ -48,19 +49,24 @@ async function runTests() {
   try {
     const wrongAuthRes = await fetch(`${BASE_URL}/api/admin/auth`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "x-zovik-admin-request": "1" },
       body: JSON.stringify({ password: "wrong_password_123" }),
     });
     recordTest("Admin Login: Wrong password rejects (401)", wrongAuthRes.status === 401);
 
-    const authRes = await fetch(`${BASE_URL}/api/admin/auth`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password: "#Abdullah786099#" }),
-    });
-    const authData = await authRes.json();
-    adminToken = authData.token;
-    recordTest("Admin Login: Correct Master Password succeeds (200)", authRes.ok && Boolean(adminToken));
+    if (adminPassword) {
+      const authRes = await fetch(`${BASE_URL}/api/admin/auth`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-zovik-admin-request": "1" },
+        body: JSON.stringify({ password: adminPassword }),
+      });
+      const authData = await authRes.json();
+      const cookieHeader = authRes.headers.get("set-cookie") || "";
+      adminCookie = cookieHeader.split(";")[0];
+      recordTest("Admin Login: Master Password succeeds with session cookie (200)", authRes.ok && authData.success && Boolean(adminCookie));
+    } else {
+      console.log("[SKIP] ADMIN_PASSWORD environment variable not set. Skipping authenticated admin test.");
+    }
   } catch (err) {
     recordTest("Admin Login exception", false, err.message);
   }
@@ -113,7 +119,7 @@ async function runTests() {
 
     // 2. Fetch pending payments via Admin
     const listPayRes = await fetch(`${BASE_URL}/api/subscriptions`, {
-      headers: { Authorization: `Bearer ${adminToken}` },
+      headers: { Cookie: adminCookie, "x-zovik-admin-request": "1" },
     });
     const listPayData = await listPayRes.json();
     const paymentsList = listPayData.payments || listPayData.data || [];
@@ -127,7 +133,8 @@ async function runTests() {
       method: "PATCH",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${adminToken}`,
+        Cookie: adminCookie,
+        "x-zovik-admin-request": "1",
       },
       body: JSON.stringify({
         paymentId,
@@ -163,7 +170,8 @@ async function runTests() {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${adminToken}`,
+        Cookie: adminCookie,
+        "x-zovik-admin-request": "1",
       },
       body: JSON.stringify({
         userId: testUserId,
@@ -194,12 +202,13 @@ async function runTests() {
   // ---------------------------------------------------------------------------
   console.log("\n--- [MODULE 5: Companion Lifecycle] ---");
   try {
-    // 1. Create custom companion with admin token
+    // 1. Create custom companion with admin cookie
     const createCharRes = await fetch(`${BASE_URL}/api/characters`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${adminToken}`,
+        Cookie: adminCookie,
+        "x-zovik-admin-request": "1",
       },
       body: JSON.stringify({
         name: "Test Companion Zara",
@@ -235,7 +244,8 @@ async function runTests() {
       method: "PATCH",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${adminToken}`,
+        Cookie: adminCookie,
+        "x-zovik-admin-request": "1",
       },
       body: JSON.stringify({
         id: customCharId,
@@ -248,11 +258,12 @@ async function runTests() {
       patchGalleryRes.ok && patchGalleryData.success
     );
 
-    // 4. Delete Companion with admin token
+    // 4. Delete Companion with admin cookie
     const deleteCharRes = await fetch(`${BASE_URL}/api/characters?id=${customCharId}`, {
       method: "DELETE",
       headers: {
-        Authorization: `Bearer ${adminToken}`,
+        Cookie: adminCookie,
+        "x-zovik-admin-request": "1",
       },
     });
     const deleteCharData = await deleteCharRes.json();
@@ -279,12 +290,13 @@ async function runTests() {
     const shortsArray = initialShortsData.shorts || initialShortsData;
     recordTest("Shorts: Fetch existing short reels", initialShortsRes.ok && Array.isArray(shortsArray));
 
-    // 2. Add a new reel via POST /api/shorts with admin token
+    // 2. Add a new reel via POST /api/shorts with admin cookie
     const addReelRes = await fetch(`${BASE_URL}/api/shorts`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${adminToken}`,
+        Cookie: adminCookie,
+        "x-zovik-admin-request": "1",
       },
       body: JSON.stringify({
         characterName: "Test Reel Companion",
@@ -306,11 +318,12 @@ async function runTests() {
     const foundReel = Array.isArray(feedArray) ? feedArray.find((r) => r.id === testReelId) : null;
     recordTest("Shorts: New reel appears live in shorts feed", Boolean(foundReel));
 
-    // 4. Delete the reel with admin token
+    // 4. Delete the reel with admin cookie
     const deleteReelRes = await fetch(`${BASE_URL}/api/shorts?id=${testReelId}`, {
       method: "DELETE",
       headers: {
-        Authorization: `Bearer ${adminToken}`,
+        Cookie: adminCookie,
+        "x-zovik-admin-request": "1",
       },
     });
     const deleteReelData = await deleteReelRes.json();

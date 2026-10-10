@@ -84,7 +84,8 @@ async function runDeepMultiAccountTest() {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${adminToken}`
+        'Cookie': adminCookie,
+        'x-zovik-admin-request': '1'
       },
       body: JSON.stringify({ paymentId: plusPayId, action: 'approve' })
     });
@@ -127,7 +128,8 @@ async function runDeepMultiAccountTest() {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${adminToken}`
+        'Cookie': adminCookie,
+        'x-zovik-admin-request': '1'
       },
       body: JSON.stringify({ paymentId: vipPayId, action: 'approve' })
     });
@@ -250,7 +252,8 @@ async function runDeepMultiAccountTest() {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${adminToken}`
+        'Cookie': adminCookie,
+        'x-zovik-admin-request': '1'
       },
       body: JSON.stringify(demoCompanionPayload)
     });
@@ -267,7 +270,8 @@ async function runDeepMultiAccountTest() {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${adminToken}`
+        'Cookie': adminCookie,
+        'x-zovik-admin-request': '1'
       },
       body: JSON.stringify({
         id: createdCompId,
@@ -286,7 +290,7 @@ async function runDeepMultiAccountTest() {
     // 5.3 Delete Companion & Verify Zero Resurrection
     const delCompRes = await fetch(`${BASE_URL}/api/admin/characters?id=${encodeURIComponent(createdCompId)}`, {
       method: 'DELETE',
-      headers: { 'Authorization': `Bearer ${adminToken}` }
+      headers: { 'Cookie': adminCookie, 'x-zovik-admin-request': '1' }
     });
     const delCompData = await delCompRes.json();
     if (!delCompData.success) {
@@ -318,7 +322,8 @@ async function runDeepMultiAccountTest() {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${adminToken}`
+        'Cookie': adminCookie,
+        'x-zovik-admin-request': '1'
       },
       body: JSON.stringify(demoShortPayload)
     });
@@ -333,7 +338,7 @@ async function runDeepMultiAccountTest() {
     // Delete Short Reel
     const delShortRes = await fetch(`${BASE_URL}/api/shorts?id=${encodeURIComponent(createdShortId)}`, {
       method: 'DELETE',
-      headers: { 'Authorization': `Bearer ${adminToken}` }
+      headers: { 'Cookie': adminCookie, 'x-zovik-admin-request': '1' }
     });
     const delShortData = await delShortRes.json();
     if (!delShortData.success) {
