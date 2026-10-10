@@ -2,9 +2,8 @@ import { NextRequest } from "next/server";
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
-import { adminDb } from "./firebaseAdmin";
+import { adminDb, adminFieldValue } from "./firebaseAdmin";
 import { supabaseAdmin, isSupabaseConfigured } from "./supabase";
-import { FieldValue } from "firebase-admin/firestore";
 
 let cachedAdminPasswordHash: string | null = null;
 let lastPasswordFetch = 0;
@@ -246,7 +245,7 @@ export async function getDynamicAdminPassword(): Promise<string | null> {
           if (data?.password) {
             try {
               await docRef.update({
-                password: FieldValue.delete(),
+                password: adminFieldValue.delete(),
               });
             } catch {}
           }
@@ -272,7 +271,7 @@ export async function getDynamicAdminPassword(): Promise<string | null> {
               );
               // Only remove legacy plaintext after confirmed save
               await docRef.update({
-                password: FieldValue.delete(),
+                password: adminFieldValue.delete(),
               }).catch(() => {});
 
               cachedAdminPasswordHash = newHash;
@@ -348,7 +347,7 @@ export async function setDynamicAdminPassword(newPassword: string): Promise<bool
       // Remove any lingering legacy password field
       try {
         await docRef.update({
-          password: FieldValue.delete(),
+          password: adminFieldValue.delete(),
         });
       } catch {}
       firestoreSaved = true;

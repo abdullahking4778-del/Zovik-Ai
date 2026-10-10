@@ -1,6 +1,6 @@
 import { getApps, initializeApp, cert, App } from "firebase-admin/app";
 import { getAuth, Auth } from "firebase-admin/auth";
-import { getFirestore, Firestore } from "firebase-admin/firestore";
+import { getFirestore, Firestore, FieldValue } from "firebase-admin/firestore";
 
 let adminApp: App | null = null;
 let adminAuthInstance: Auth | null = null;
@@ -12,7 +12,11 @@ function initializeFirebaseAdmin(): void {
   if (adminApp || getApps().length > 0) {
     adminApp = getApps()[0];
     adminAuthInstance = getAuth(adminApp);
-    adminDbInstance = getFirestore(adminApp);
+    try {
+      adminDbInstance = getFirestore(adminApp);
+    } catch (fsErr) {
+      console.warn("[FirebaseAdmin] Firestore instance creation notice:", fsErr);
+    }
     return;
   }
 
@@ -56,7 +60,11 @@ function initializeFirebaseAdmin(): void {
     }
 
     adminAuthInstance = getAuth(adminApp);
-    adminDbInstance = getFirestore(adminApp);
+    try {
+      adminDbInstance = getFirestore(adminApp);
+    } catch (fsErr) {
+      console.warn("[FirebaseAdmin] Firestore instance creation notice:", fsErr);
+    }
   } catch (err: unknown) {
     initError = err instanceof Error ? err.message : String(err);
     console.warn("[FirebaseAdmin] Initialization warning:", initError);
@@ -64,7 +72,9 @@ function initializeFirebaseAdmin(): void {
       if (!adminApp && getApps().length > 0) {
         adminApp = getApps()[0];
         adminAuthInstance = getAuth(adminApp);
-        adminDbInstance = getFirestore(adminApp);
+        try {
+          adminDbInstance = getFirestore(adminApp);
+        } catch {}
       }
     } catch {}
   }
@@ -72,8 +82,22 @@ function initializeFirebaseAdmin(): void {
 
 initializeFirebaseAdmin();
 
+function getSafeAdminDb(): Firestore {
+  if (adminDbInstance) return adminDbInstance;
+  try {
+    if (getApps().length > 0) {
+      adminDbInstance = getFirestore(getApps()[0]);
+      return adminDbInstance;
+    }
+  } catch (err) {
+    console.warn("[FirebaseAdmin] getSafeAdminDb fallback notice:", err);
+  }
+  return {} as Firestore;
+}
+
 export const adminAuth = (adminAuthInstance || (getApps().length > 0 ? getAuth(getApps()[0]) : ({} as Auth)));
-export const adminDb = (adminDbInstance || (getApps().length > 0 ? getFirestore(getApps()[0]) : ({} as Firestore)));
+export const adminDb = (adminDbInstance || getSafeAdminDb());
+export const adminFieldValue = FieldValue;
 
 export function getFirebaseAdminStatus(): {
   configured: boolean;
