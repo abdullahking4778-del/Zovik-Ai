@@ -402,8 +402,8 @@ export function AdminCompanionsTab({
 
       {/* ================= 1. PUBLISH NEW COMPANION MODAL ================= */}
       {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md">
-          <div className="w-full max-w-lg p-6 rounded-3xl bg-[#170e20] border border-white/10 shadow-2xl text-white space-y-4 max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/90 backdrop-blur-md animate-fadeIn">
+          <div className="w-full max-w-lg p-5 sm:p-6 rounded-3xl bg-[#170e20] border border-white/10 shadow-2xl text-white space-y-4 max-h-[min(90dvh,720px)] overflow-y-auto scrollbar-thin overscroll-contain">
             <div className="flex items-center justify-between pb-3 border-b border-white/10">
               <div>
                 <h3 className="text-lg font-black flex items-center space-x-2">
@@ -610,8 +610,8 @@ export function AdminCompanionsTab({
 
       {/* ================= 2. EDIT COMPANION MODAL ================= */}
       {isEditModalOpen && editingCompanion && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md">
-          <div className="w-full max-w-lg p-6 rounded-3xl bg-[#170e20] border border-blue-500/30 shadow-2xl text-white space-y-4 max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/90 backdrop-blur-md animate-fadeIn">
+          <div className="w-full max-w-lg p-5 sm:p-6 rounded-3xl bg-[#170e20] border border-blue-500/30 shadow-2xl text-white space-y-4 max-h-[min(90dvh,720px)] overflow-y-auto scrollbar-thin overscroll-contain">
             <div className="flex items-center justify-between pb-3 border-b border-white/10">
               <div className="flex items-center space-x-3">
                 <div className="relative size-10 rounded-xl overflow-hidden bg-black shrink-0 border border-blue-400/40">

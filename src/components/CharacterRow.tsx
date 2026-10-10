@@ -77,27 +77,47 @@ export default function CharacterRow({
         </div>
       </div>
 
-      {/* Horizontal Scroller Container */}
-      <div
-        ref={scrollerRef}
-        className="flex items-stretch space-x-4 overflow-x-auto no-scrollbar pb-2 scroll-smooth snap-x snap-mandatory"
-      >
-        {characters.map((char) => (
-          <div
-            key={char.id}
-            className="w-56 sm:w-64 md:w-72 shrink-0 snap-start"
-          >
-            <CharacterCard
-              character={char}
-              onSelect={onSelect}
-              onStartChat={onStartChat}
-              onStartCall={onStartCall}
-              isLiked={likedIds.includes(char.id)}
-              onToggleLike={onToggleLike}
-              isPaidUser={isPaidUser}
-            />
-          </div>
-        ))}
+      {/* Horizontal Scroller Container with Hover Navigation Arrows & Sleek Scrollbar */}
+      <div className="relative group/scroller">
+        {/* Floating Left Arrow (Desktop) */}
+        <button
+          onClick={scrollLeft}
+          className="hidden md:flex absolute -left-3 top-1/2 -translate-y-1/2 z-20 size-10 rounded-full bg-black/80 hover:bg-[#f53b70] border border-white/15 text-white items-center justify-center opacity-0 group-hover/scroller:opacity-100 transition-all shadow-xl hover:scale-110 active:scale-95 cursor-pointer backdrop-blur-sm"
+          title="Scroll Left"
+        >
+          <ChevronLeft className="size-5" />
+        </button>
+
+        {/* Floating Right Arrow (Desktop) */}
+        <button
+          onClick={scrollRight}
+          className="hidden md:flex absolute -right-3 top-1/2 -translate-y-1/2 z-20 size-10 rounded-full bg-black/80 hover:bg-[#f53b70] border border-white/15 text-white items-center justify-center opacity-0 group-hover/scroller:opacity-100 transition-all shadow-xl hover:scale-110 active:scale-95 cursor-pointer backdrop-blur-sm"
+          title="Scroll Right"
+        >
+          <ChevronRight className="size-5" />
+        </button>
+
+        <div
+          ref={scrollerRef}
+          className="flex items-stretch space-x-4 overflow-x-auto scrollbar-thin pb-3 scroll-smooth snap-x snap-mandatory"
+        >
+          {characters.map((char) => (
+            <div
+              key={char.id}
+              className="w-56 sm:w-64 md:w-72 shrink-0 snap-start"
+            >
+              <CharacterCard
+                character={char}
+                onSelect={onSelect}
+                onStartChat={onStartChat}
+                onStartCall={onStartCall}
+                isLiked={likedIds.includes(char.id)}
+                onToggleLike={onToggleLike}
+                isPaidUser={isPaidUser}
+              />
+            </div>
+          ))}
+        </div>
       </div>
     </section>
   );

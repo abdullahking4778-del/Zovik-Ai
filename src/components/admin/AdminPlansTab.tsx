@@ -220,8 +220,8 @@ export const AdminPlansTab: React.FC<AdminPlansTabProps> = ({
 
       {/* Plan Edit / Create Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="w-full max-w-lg p-6 rounded-3xl bg-[#170e20] border border-white/10 shadow-2xl text-white space-y-4 max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
+          <div className="w-full max-w-lg p-5 sm:p-6 rounded-3xl bg-[#170e20] border border-white/10 shadow-2xl text-white space-y-4 max-h-[min(90dvh,720px)] overflow-y-auto scrollbar-thin overscroll-contain">
             <div className="flex items-center justify-between pb-3 border-b border-white/10">
               <h3 className="text-base font-black flex items-center space-x-2">
                 <Tag className="size-4 text-[#f53b70]" />
@@ -383,7 +383,7 @@ export const AdminPlansTab: React.FC<AdminPlansTabProps> = ({
                 </label>
               </div>
 
-              <div className="flex items-center justify-end space-x-3 pt-3 border-t border-white/10">
+              <div className="sticky bottom-0 bg-[#170e20]/95 backdrop-blur-md -mx-5 sm:-mx-6 -mb-5 sm:-mb-6 p-4 rounded-b-3xl border-t border-white/10 flex items-center justify-end space-x-3 z-10">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
