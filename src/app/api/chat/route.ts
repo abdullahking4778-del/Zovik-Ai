@@ -523,18 +523,26 @@ CRITICAL RULES (ABSOLUTE PRIORITY):
 
     // Active Groq production models for this API key
     const preferredModels = [
-      process.env.GROQ_MODEL || "qwen/qwen3.8-27b",
-      "qwen/qwen3.8-27b",
-      process.env.GROQ_FALLBACK_MODEL || "openai/gpt-oss-120b",
-      "openai/gpt-oss-120b",
-      "openai/gpt-oss-20b",
+      process.env.GROQ_MODEL || "llama3-70b-8192",
+      "llama3-70b-8192",
+      process.env.GROQ_FALLBACK_MODEL || "llama3-8b-8192",
+      "llama3-8b-8192",
+      "mixtral-8x7b-32768",
     ].filter((m, i, arr) => arr.indexOf(m) === i && !!m);
 
     let reply = "";
+    const requestStartTime = Date.now();
 
     for (const model of preferredModels) {
+      // Stay strictly within Vercel Free Serverless 10-second hard limit (break if > 7.5s elapsed)
+      if (Date.now() - requestStartTime > 7500) {
+        console.warn("[Chat API] Approaching Vercel serverless execution limit, falling back instantly.");
+        break;
+      }
+
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 25000); // 25s comfortable timeout for large models
+      // Groq typical response is 400ms-1200ms; timeout at 6500ms to prevent serverless lockup
+      const timeoutId = setTimeout(() => controller.abort(), 6500);
 
       try {
         const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -580,7 +588,7 @@ CRITICAL RULES (ABSOLUTE PRIORITY):
         const isAbort = err instanceof Error && err.name === "AbortError";
         const errMsg = err instanceof Error ? err.message : String(err);
         if (isAbort) {
-          console.warn(`Model ${model} timed out after 25s.`);
+          console.warn(`Model ${model} timed out after 6.5s to preserve Vercel execution window.`);
         } else {
           console.warn(`Model ${model} fetch failed:`, errMsg);
         }

@@ -28,7 +28,11 @@ function getStoragePath(fileName: string): string {
   if (process.env.VERCEL) {
     return path.join("/tmp", fileName);
   }
-  return path.join(process.cwd(), "src", "data", fileName);
+  const dotDataPath = path.join(process.cwd(), ".data", fileName);
+  if (fs.existsSync(dotDataPath)) return dotDataPath;
+  const srcDataPath = path.join(process.cwd(), "src", "data", fileName);
+  if (fs.existsSync(srcDataPath)) return srcDataPath;
+  return dotDataPath;
 }
 
 // Helper: Safe cryptographic ID generator
@@ -119,7 +123,7 @@ export async function getPersistentShorts(): Promise<ShortReel[]> {
   const localList = safeReadJsonFile<ShortReel[]>(storagePath, []);
   if (localList.length > 0) return localList;
 
-  const rootPath = path.join(process.cwd(), "src", "data", "shorts.json");
+  const rootPath = path.join(process.cwd(), ".data", "shorts.json");
   return safeReadJsonFile<ShortReel[]>(rootPath, []);
 }
 
@@ -190,7 +194,7 @@ export async function deletePersistentShort(shortId: string): Promise<boolean> {
 
   // 4. Delete from root seed data (for local dev)
   try {
-    const rootPath = path.join(process.cwd(), "src", "data", "shorts.json");
+    const rootPath = path.join(process.cwd(), ".data", "shorts.json");
     const list = safeReadJsonFile<ShortReel[]>(rootPath, []);
     if (Array.isArray(list) && list.length > 0) {
       const filtered = list.filter((s) => s.id !== shortId);
@@ -276,30 +280,38 @@ export async function getPersistentCustomCharacters(): Promise<Character[]> {
         .eq("is_custom", true);
 
       if (!error && Array.isArray(data) && data.length > 0) {
-        return data.map((d) => ({
-          id: d.id,
-          slug: d.id,
-          name: d.name,
-          age: 21,
-          gender: (d.gender === "male" ? "male" : "female") as "female" | "male" | "anime",
-          style: "realistic" as const,
-          tagline: d.tagline || "",
-          desc: d.tagline || "",
-          image: d.avatar || d.image_url || "/characters/zovik_01.jpg",
-          badge: d.is_vip || d.tier === "vip" ? "VIP" : undefined,
-          category: d.category || "General",
-          series: true,
-          verified: true,
-          online: true,
-          tags: ["Custom", "AI Companion"],
-          voice: "Sweet & Warm",
-          greeting: `Hi sweetheart, I'm ${d.name}! So happy to talk to you 💕`,
-          videoUrl: d.intro_video || undefined,
-          gallery: Array.isArray(d.gallery) ? d.gallery : [],
-          messages: [],
-          accessTier: (d.tier === "vip" || d.tier === "plus" ? d.tier : d.is_vip ? "vip" : "free") as "free" | "plus" | "vip",
-          isVipOnly: Boolean(d.is_vip || d.tier === "vip"),
-        }));
+        // Read local storage to enrich any custom fields (voice, age, tags)
+        const filePath = getStoragePath("custom_characters.json");
+        const localList = safeReadJsonFile<Character[]>(filePath, []);
+        const localMap = new Map(localList.map((c) => [c.id, c]));
+
+        return data.map((d) => {
+          const localMatch = localMap.get(d.id);
+          return {
+            id: d.id,
+            slug: localMatch?.slug || d.id,
+            name: d.name,
+            age: localMatch?.age || 21,
+            gender: (d.gender === "male" ? "male" : "female") as "female" | "male" | "anime",
+            style: localMatch?.style || ("realistic" as const),
+            tagline: d.tagline || localMatch?.tagline || "",
+            desc: localMatch?.desc || d.tagline || "",
+            image: d.avatar || d.image_url || localMatch?.image || "/characters/zovik_01.jpg",
+            badge: d.is_vip || d.tier === "vip" ? "VIP" : localMatch?.badge,
+            category: d.category || localMatch?.category || "General",
+            series: true,
+            verified: true,
+            online: true,
+            tags: localMatch?.tags || ["Custom", "AI Companion"],
+            voice: localMatch?.voice || "Sweet & Warm",
+            greeting: localMatch?.greeting || `Hi sweetheart, I'm ${d.name}! So happy to talk to you 💕`,
+            videoUrl: d.intro_video || localMatch?.videoUrl || undefined,
+            gallery: Array.isArray(d.gallery) && d.gallery.length > 0 ? d.gallery : localMatch?.gallery || [],
+            messages: localMatch?.messages || [],
+            accessTier: (d.tier === "vip" || d.tier === "plus" ? d.tier : d.is_vip ? "vip" : "free") as "free" | "plus" | "vip",
+            isVipOnly: Boolean(d.is_vip || d.tier === "vip"),
+          };
+        });
       }
     } catch (err: unknown) {
       console.warn("[ServerDb] Supabase custom companions read note:", err);
@@ -330,7 +342,7 @@ export async function savePersistentCustomCharacter(character: Character): Promi
   // 1. Primary: Save to Supabase PostgreSQL
   if (isSupabaseConfigured()) {
     try {
-      await supabaseAdmin.from("companions").upsert({
+      const { error } = await supabaseAdmin.from("companions").upsert({
         id: charId,
         name: charWithId.name,
         tagline: charWithId.tagline || charWithId.desc || "",
@@ -344,6 +356,9 @@ export async function savePersistentCustomCharacter(character: Character): Promi
         is_vip: Boolean(charWithId.isVipOnly || charWithId.accessTier === "vip"),
         is_custom: true,
       });
+      if (error) {
+        console.error("[ServerDb] Supabase save companion error details:", error);
+      }
     } catch (err: unknown) {
       console.warn("[ServerDb] Supabase save companion note:", err);
     }
@@ -355,21 +370,31 @@ export async function savePersistentCustomCharacter(character: Character): Promi
     await setDoc(docRef, charWithId);
   } catch {}
 
-  // 3. Save to local fallback
+  // 3. Save to local fallback (custom_characters.json)
   try {
     const filePath = getStoragePath("custom_characters.json");
-    const existing = await getPersistentCustomCharacters();
-    const updated = [charWithId, ...existing.filter((c) => c.id !== charId)];
+    const localExisting = safeReadJsonFile<Character[]>(filePath, []);
+    const updated = [charWithId, ...localExisting.filter((c) => c.id !== charId && c.slug !== charWithId.slug)];
     safeWriteJsonFile(filePath, updated);
   } catch {}
 
-  // 4. Also sync root characters.json for local dev if exists
+  // 4. Also sync root and src characters.json for local persistence
   try {
-    const rootPath = path.join(process.cwd(), "src", "data", "characters.json");
-    const list = safeReadJsonFile<Character[]>(rootPath, []);
-    if (Array.isArray(list) && list.some((c) => c.id === charId || c.slug === charWithId.slug)) {
-      const updatedList = list.map((c) => (c.id === charId || c.slug === charWithId.slug ? { ...c, ...charWithId } : c));
-      safeWriteJsonFile(rootPath, updatedList);
+    const rootPaths = [
+      path.join(process.cwd(), ".data", "characters.json"),
+      path.join(process.cwd(), "src", "data", "characters.json"),
+    ];
+    for (const rootPath of rootPaths) {
+      if (fs.existsSync(rootPath)) {
+        const list = safeReadJsonFile<Character[]>(rootPath, []);
+        if (Array.isArray(list)) {
+          const matchIndex = list.findIndex((c) => c.id === charId || c.slug === charWithId.slug);
+          if (matchIndex >= 0) {
+            list[matchIndex] = { ...list[matchIndex], ...charWithId };
+            safeWriteJsonFile(rootPath, list);
+          }
+        }
+      }
     }
   } catch {}
 
@@ -405,13 +430,20 @@ export async function deletePersistentCharacter(characterId: string): Promise<bo
     }
   } catch {}
 
-  // 5. Remove from root characters.json (local seed)
+  // 5. Remove from root and src characters.json (local seed)
   try {
-    const rootPath = path.join(process.cwd(), "src", "data", "characters.json");
-    const list = safeReadJsonFile<Character[]>(rootPath, []);
-    if (Array.isArray(list) && list.length > 0) {
-      const filtered = list.filter((c) => c.id !== cleanId && c.slug !== cleanId);
-      safeWriteJsonFile(rootPath, filtered);
+    const rootPaths = [
+      path.join(process.cwd(), ".data", "characters.json"),
+      path.join(process.cwd(), "src", "data", "characters.json"),
+    ];
+    for (const rootPath of rootPaths) {
+      if (fs.existsSync(rootPath)) {
+        const list = safeReadJsonFile<Character[]>(rootPath, []);
+        if (Array.isArray(list) && list.length > 0) {
+          const filtered = list.filter((c) => c.id !== cleanId && c.slug !== cleanId);
+          safeWriteJsonFile(rootPath, filtered);
+        }
+      }
     }
   } catch {}
 
@@ -423,35 +455,80 @@ export async function deletePersistentCharacter(characterId: string): Promise<bo
  * Returns all active characters (Default + Custom - Deleted), prioritizing Supabase Cloud Database!
  */
 export async function getPersistentCharacters(): Promise<Character[]> {
+  const [customChars, deletedIds] = await Promise.all([
+    getPersistentCustomCharacters(),
+    getPersistentDeletedCharacterIds(),
+  ]);
+
+  const dotPath = path.join(process.cwd(), ".data", "characters.json");
+  const srcPath = path.join(process.cwd(), "src", "data", "characters.json");
+  const rootPath = fs.existsSync(dotPath) ? dotPath : srcPath;
+  const defaultChars = safeReadJsonFile<Character[]>(rootPath, []);
+
+  // Build a lookup map of all local metadata
+  const localMap = new Map<string, Character>();
+  for (const c of defaultChars) {
+    localMap.set(c.id.toLowerCase(), c);
+    if (c.slug) localMap.set(c.slug.toLowerCase(), c);
+  }
+  for (const c of customChars) {
+    localMap.set(c.id.toLowerCase(), c);
+    if (c.slug) localMap.set(c.slug.toLowerCase(), c);
+  }
+
   // 1. Primary: Read directly from Supabase Cloud Database
   if (isSupabaseConfigured()) {
     try {
       const { data, error } = await supabaseAdmin.from("companions").select("*");
       if (!error && Array.isArray(data) && data.length > 0) {
-        return data.map((d) => ({
-          id: d.id,
-          slug: d.id,
-          name: d.name,
-          age: 21,
-          gender: (d.gender === "male" ? "male" : "female") as "female" | "male" | "anime",
-          style: "realistic" as const,
-          tagline: d.tagline || "",
-          desc: d.tagline || "",
-          image: d.avatar || d.image_url || "/characters/zovik_01.jpg",
-          badge: d.is_vip || d.tier === "vip" ? "VIP" : undefined,
-          category: d.category || "General",
-          series: true,
-          verified: true,
-          online: true,
-          tags: ["Verified", "AI Companion"],
-          voice: "Sweet & Warm",
-          greeting: `Hi sweetheart, I'm ${d.name}! So happy to talk to you 💕`,
-          videoUrl: d.intro_video || undefined,
-          gallery: Array.isArray(d.gallery) ? d.gallery : [],
-          messages: [],
-          accessTier: (d.tier === "vip" || d.tier === "plus" ? d.tier : d.is_vip ? "vip" : "free") as "free" | "plus" | "vip",
-          isVipOnly: Boolean(d.is_vip || d.tier === "vip"),
-        }));
+        const resultChars: Character[] = [];
+        const seenIds = new Set<string>();
+
+        for (const d of data) {
+          const charId = (d.id || "").trim();
+          const cleanId = charId.toLowerCase();
+          if (deletedIds.includes(cleanId)) continue;
+
+          seenIds.add(cleanId);
+          const localMatch = localMap.get(cleanId);
+          const tier = (d.tier === "vip" || d.tier === "plus" ? d.tier : d.is_vip ? "vip" : localMatch?.accessTier || "free") as "free" | "plus" | "vip";
+
+          resultChars.push({
+            id: charId,
+            slug: localMatch?.slug || d.slug || charId,
+            name: d.name || localMatch?.name || "AI Companion",
+            age: localMatch?.age ?? (typeof d.age === "number" ? d.age : 21),
+            gender: (d.gender || localMatch?.gender || "female") as "female" | "male" | "anime",
+            style: localMatch?.style || ("realistic" as const),
+            tagline: d.tagline || localMatch?.tagline || "",
+            desc: localMatch?.desc || d.tagline || localMatch?.tagline || "",
+            image: d.avatar || d.image_url || localMatch?.image || "/characters/zovik_01.jpg",
+            badge: d.is_vip || d.tier === "vip" ? "VIP" : localMatch?.badge || "NEW",
+            category: d.category || localMatch?.category || "General",
+            series: localMatch?.series ?? true,
+            verified: localMatch?.verified ?? true,
+            online: localMatch?.online ?? true,
+            tags: localMatch?.tags && localMatch.tags.length > 0 ? localMatch.tags : (d.category ? [d.category, "AI Companion"] : ["Trending", "AI Companion"]),
+            voice: localMatch?.voice || "Warm Whisper",
+            greeting: localMatch?.greeting || `Hi sweetheart, I'm ${d.name || "Zovik AI"}! So happy to talk to you 💕`,
+            videoUrl: d.intro_video || localMatch?.videoUrl || undefined,
+            gallery: Array.isArray(d.gallery) && d.gallery.length > 0 ? d.gallery : localMatch?.gallery || [],
+            messages: localMatch?.messages || [],
+            accessTier: tier,
+            isVipOnly: Boolean(d.is_vip || d.tier === "vip" || localMatch?.isVipOnly),
+          });
+        }
+
+        // Also append any local characters (custom or default) not in Supabase
+        for (const [, c] of localMap.entries()) {
+          const cleanId = c.id.toLowerCase();
+          if (!seenIds.has(cleanId) && !deletedIds.includes(cleanId)) {
+            seenIds.add(cleanId);
+            resultChars.push(c);
+          }
+        }
+
+        return resultChars;
       }
     } catch (err) {
       console.warn("[ServerDb] Supabase all companions read note:", err);
@@ -459,14 +536,6 @@ export async function getPersistentCharacters(): Promise<Character[]> {
   }
 
   // 2. Secondary / Local Fallback: Merge custom and local seed minus deleted
-  const [customChars, deletedIds] = await Promise.all([
-    getPersistentCustomCharacters(),
-    getPersistentDeletedCharacterIds(),
-  ]);
-
-  const rootPath = path.join(process.cwd(), "src", "data", "characters.json");
-  const defaultChars = safeReadJsonFile<Character[]>(rootPath, []);
-
   const charMap = new Map<string, Character>();
 
   for (const c of defaultChars) {
@@ -503,20 +572,24 @@ export async function getPersistentPayments(): Promise<PaymentRequest[]> {
         .order("created_at", { ascending: false });
 
       if (!error && Array.isArray(data) && data.length > 0) {
-        return data.map((d) => ({
-          id: d.id,
-          userEmail: d.user_email,
-          plan: (d.plan_name === "plus" ? "plus" : "vip") as "plus" | "vip",
-          planName: d.plan_name || "VIP Membership",
-          currency: "PKR",
-          amount: typeof d.amount === "number" ? d.amount : parseFloat(d.amount) || 0,
-          method: d.method || "Manual",
-          trxId: d.trx_id || "",
-          senderName: d.user_email.split("@")[0],
-          screenshot: d.screenshot || null,
-          status: (d.status || "pending") as "pending" | "approved" | "rejected",
-          createdAt: d.created_at,
-        }));
+        return data.map((d) => {
+          const planStr = ((d.plan || d.plan_name || "") as string).toLowerCase();
+          const isPlus = planStr === "plus" || planStr.includes("plus");
+          return {
+            id: d.id,
+            userEmail: d.user_email,
+            plan: (isPlus ? "plus" : "vip") as "plus" | "vip",
+            planName: d.plan_name || (isPlus ? "Plus Plan" : "VIP Membership"),
+            currency: "PKR",
+            amount: typeof d.amount === "number" ? d.amount : parseFloat(d.amount) || 0,
+            method: d.method || "Manual",
+            trxId: d.trx_id || "",
+            senderName: d.user_email.split("@")[0],
+            screenshot: d.screenshot || null,
+            status: (d.status || "pending") as "pending" | "approved" | "rejected",
+            createdAt: d.created_at,
+          };
+        });
       }
     } catch (err: unknown) {
       console.warn("[ServerDb] Supabase payment_requests read note:", err);
@@ -542,7 +615,7 @@ export async function getPersistentPayments(): Promise<PaymentRequest[]> {
   const localList = safeReadJsonFile<PaymentRequest[]>(storagePath, []);
   if (localList.length > 0) return localList;
 
-  const rootPath = path.join(process.cwd(), "src", "data", "payment_requests.json");
+  const rootPath = path.join(process.cwd(), ".data", "payment_requests.json");
   return safeReadJsonFile<PaymentRequest[]>(rootPath, []);
 }
 
@@ -638,4 +711,54 @@ export async function updatePersistentPaymentStatus(
   } catch {}
 
   return null;
+}
+
+export async function deletePersistentPayment(paymentId: string): Promise<boolean> {
+  const cleanId = paymentId.trim();
+
+  // 1. Check if payment has screenshot in Supabase Storage and remove it
+  try {
+    const all = await getPersistentPayments();
+    const target = all.find((p) => p.id === cleanId);
+    if (target?.screenshot && isSupabaseConfigured()) {
+      try {
+        const marker = "/zovik-media/";
+        if (target.screenshot.includes(marker)) {
+          const filePath = target.screenshot.split(marker)[1];
+          if (filePath) {
+            await supabaseAdmin.storage.from("zovik-media").remove([decodeURIComponent(filePath)]);
+          }
+        }
+      } catch (err) {
+        console.warn("[ServerDb] Supabase storage slip delete note:", err);
+      }
+    }
+  } catch {}
+
+  // 2. Delete from Supabase PostgreSQL
+  if (isSupabaseConfigured()) {
+    try {
+      await supabaseAdmin.from("payment_requests").delete().eq("id", cleanId);
+    } catch (err) {
+      console.warn("[ServerDb] Supabase delete payment note:", err);
+    }
+  }
+
+  // 3. Delete from Firestore
+  try {
+    const docRef = doc(db, "payment_requests", cleanId);
+    await deleteDoc(docRef);
+  } catch {}
+
+  // 4. Delete from local cache
+  try {
+    const filePath = getStoragePath("payment_requests.json");
+    const list = safeReadJsonFile<PaymentRequest[]>(filePath, []);
+    if (Array.isArray(list) && list.length > 0) {
+      const filtered = list.filter((p) => p.id !== cleanId);
+      safeWriteJsonFile(filePath, filtered);
+    }
+  } catch {}
+
+  return true;
 }

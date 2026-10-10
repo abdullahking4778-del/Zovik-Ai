@@ -1,16 +1,40 @@
 import { NextRequest, NextResponse } from "next/server";
 import sharp from "sharp";
 import AdmZip from "adm-zip";
+import path from "path";
 import { verifyAdminRequest } from "@/lib/adminAuth";
 import { uploadToCloudStorage } from "@/lib/cloudStorage";
 import { savePersistentShort, generateUniqueId } from "@/lib/serverDb";
 import { ShortReel } from "@/types";
 
+// Security limits to prevent Denial of Service (DoS) & resource exhaustion
+const MAX_SINGLE_FILE_BYTES = 50 * 1024 * 1024; // 50MB max for video/image
+const MAX_ZIP_FILE_BYTES = 100 * 1024 * 1024;    // 100MB max for zip archive
+const MAX_ZIP_ENTRIES = 50;                     // Max 50 files inside zip
+const MAX_UNCOMPRESSED_ZIP_BYTES = 250 * 1024 * 1024; // Max 250MB total decompressed size
+
+// Permitted extensions
+const ALLOWED_VIDEO_EXTS = new Set([".mp4", ".webm", ".mov", ".m4v"]);
+const ALLOWED_IMAGE_EXTS = new Set([".jpg", ".jpeg", ".png", ".webp"]);
+
+/**
+ * Validates against Path Traversal / Zip Slip vulnerability
+ */
+function isPathTraversal(entryName: string): boolean {
+  if (!entryName) return true;
+  // Check for directory traversal sequences
+  if (entryName.includes("..") || entryName.startsWith("/") || entryName.startsWith("\\")) {
+    return true;
+  }
+  const normalized = path.normalize(entryName);
+  return normalized.startsWith("..") || path.isAbsolute(normalized);
+}
+
 export async function POST(req: NextRequest) {
   try {
     if (!verifyAdminRequest(req)) {
       return NextResponse.json(
-        { error: "Unauthorized access: Valid admin token required" },
+        { error: "Unauthorized access: Valid admin credentials required." },
         { status: 401 }
       );
     }
@@ -26,26 +50,67 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
     }
 
-    const buffer = Buffer.from(await file.arrayBuffer());
     const originalName = file.name.toLowerCase();
+    const isZip = originalName.endsWith(".zip");
 
+    // 1. File Size Verification
+    if (isZip && file.size > MAX_ZIP_FILE_BYTES) {
+      return NextResponse.json(
+        { error: `ZIP archive exceeds maximum permitted size (${MAX_ZIP_FILE_BYTES / (1024 * 1024)}MB).` },
+        { status: 413 }
+      );
+    }
+
+    if (!isZip && file.size > MAX_SINGLE_FILE_BYTES) {
+      return NextResponse.json(
+        { error: `File exceeds maximum permitted size (${MAX_SINGLE_FILE_BYTES / (1024 * 1024)}MB).` },
+        { status: 413 }
+      );
+    }
+
+    const buffer = Buffer.from(await file.arrayBuffer());
     const results: { url: string; type: "video" | "image"; name: string }[] = [];
 
-    // ================= 1. HANDLE ZIP ARCHIVE =================
-    if (originalName.endsWith(".zip")) {
+    // ================= 1. HANDLE ZIP ARCHIVE (HARDENED AGAINST ZIP SLIP & ZIP BOMBS) =================
+    if (isZip) {
       const zip = new AdmZip(buffer);
       const zipEntries = zip.getEntries();
+
+      // Check entry count limit
+      if (zipEntries.length > MAX_ZIP_ENTRIES) {
+        return NextResponse.json(
+          { error: `Archive contains too many entries (max ${MAX_ZIP_ENTRIES} permitted).` },
+          { status: 400 }
+        );
+      }
+
+      let totalDecompressedBytes = 0;
 
       for (const entry of zipEntries) {
         if (entry.isDirectory || entry.entryName.includes("__MACOSX") || entry.name.startsWith(".")) {
           continue;
         }
 
-        const entryName = entry.name.toLowerCase();
+        // Zip Slip / Path Traversal Check
+        if (isPathTraversal(entry.entryName) || isPathTraversal(entry.name)) {
+          console.warn("[Upload Security] Blocked path traversal attempt in zip entry:", entry.entryName);
+          continue;
+        }
+
+        // Zip Bomb protection: check uncompressed size
+        totalDecompressedBytes += entry.header.size;
+        if (totalDecompressedBytes > MAX_UNCOMPRESSED_ZIP_BYTES) {
+          return NextResponse.json(
+            { error: "Archive uncompressed size exceeds maximum safe limit (250MB)." },
+            { status: 413 }
+          );
+        }
+
+        const ext = path.extname(entry.name).toLowerCase();
         const safeBaseName = entry.name.replace(/[^a-zA-Z0-9._-]/g, "_");
 
         // Video inside ZIP
-        if (entryName.endsWith(".mp4") || entryName.endsWith(".webm") || entryName.endsWith(".mov")) {
+        if (ALLOWED_VIDEO_EXTS.has(ext)) {
           const fileName = `reel_${Date.now()}_${safeBaseName}`;
           const videoUrl = await uploadToCloudStorage(
             `videos/shorts/${fileName}`,
@@ -71,12 +136,7 @@ export async function POST(req: NextRequest) {
         }
 
         // Image inside ZIP
-        if (
-          entryName.endsWith(".jpg") ||
-          entryName.endsWith(".jpeg") ||
-          entryName.endsWith(".png") ||
-          entryName.endsWith(".webp")
-        ) {
+        if (ALLOWED_IMAGE_EXTS.has(ext)) {
           const fileName = `char_${Date.now()}_${safeBaseName.replace(/\.[^/.]+$/, "")}.webp`;
           let imgData = entry.getData();
           try {
@@ -104,12 +164,9 @@ export async function POST(req: NextRequest) {
     }
 
     // ================= 2. HANDLE SINGLE VIDEO =================
-    if (
-      originalName.endsWith(".mp4") ||
-      originalName.endsWith(".webm") ||
-      originalName.endsWith(".mov") ||
-      originalName.endsWith(".m4v")
-    ) {
+    const singleExt = path.extname(file.name).toLowerCase();
+
+    if (ALLOWED_VIDEO_EXTS.has(singleExt)) {
       const safeName = `reel_${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
       const videoUrl = await uploadToCloudStorage(
         `videos/shorts/${safeName}`,
@@ -147,12 +204,7 @@ export async function POST(req: NextRequest) {
     }
 
     // ================= 3. HANDLE SINGLE IMAGE =================
-    if (
-      originalName.endsWith(".jpg") ||
-      originalName.endsWith(".jpeg") ||
-      originalName.endsWith(".png") ||
-      originalName.endsWith(".webp")
-    ) {
+    if (ALLOWED_IMAGE_EXTS.has(singleExt)) {
       const safeBase = file.name.replace(/\.[^/.]+$/, "").replace(/[^a-zA-Z0-9_-]/g, "_");
       const fileName = `char_${Date.now()}_${safeBase}.webp`;
       let imgData = buffer;
@@ -177,12 +229,11 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json(
-      { error: "Unsupported file type. Please upload MP4, WEBM, JPG, PNG, or a .ZIP archive." },
+      { error: "Unsupported file type. Permitted formats: MP4, WEBM, MOV, JPG, PNG, WEBP, or ZIP." },
       { status: 400 }
     );
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Upload processing failed";
-    console.error("Upload error:", err);
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error("[Upload Processing Note]:", err instanceof Error ? err.message : "Upload error");
+    return NextResponse.json({ error: "Secure file upload processing failed." }, { status: 500 });
   }
 }

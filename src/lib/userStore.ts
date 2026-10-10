@@ -24,7 +24,7 @@ function getUsersFilePath(): string {
   if (process.env.VERCEL) {
     return path.join("/tmp", "zovik_users.json");
   }
-  return path.join(process.cwd(), "src", "data", "users.json");
+  return path.join(process.cwd(), ".data", "users.json");
 }
 
 export function getAllStoredUsers(): StoredUser[] {
@@ -158,6 +158,70 @@ export function upsertStoredUser(
   }
 
   return resultUser;
+}
+
+/**
+ * Awaitable, explicit cloud persistence for user accounts.
+ * Validates and propagates database errors instead of silent failures.
+ */
+export async function upsertStoredUserAsync(
+  identifier: string,
+  updates: Partial<StoredUser>
+): Promise<{ user: StoredUser; dbSynced: boolean; error?: string }> {
+  const resultUser = upsertStoredUser(identifier, updates);
+  let dbSynced = false;
+  let syncError: string | undefined;
+
+  // 1. Direct await to Firestore
+  try {
+    const docId = resultUser.id || resultUser.email;
+    if (docId) {
+      const userRef = doc(db, "users", docId);
+      await setDoc(
+        userRef,
+        {
+          zovik_tier: resultUser.tier,
+          email: resultUser.email,
+          name: resultUser.name,
+          isVip: resultUser.isVip,
+          subscriptionDays: resultUser.subscriptionDays,
+          subscriptionStart: resultUser.subscriptionStart || null,
+          subscriptionEndsAt: resultUser.subscriptionEndsAt || null,
+          storageRetentionDays: resultUser.storageRetentionDays,
+          lastLoginAt: resultUser.lastLoginAt,
+        },
+        { merge: true }
+      );
+      dbSynced = true;
+    }
+  } catch (err) {
+    syncError = err instanceof Error ? err.message : String(err);
+    console.warn("[UserStore] Firestore explicit write warning:", err);
+  }
+
+  // 2. Direct await to Supabase
+  if (isSupabaseConfigured() && resultUser.email) {
+    try {
+      const { error } = await supabaseAdmin.from("user_accounts").upsert({
+        email: resultUser.email.toLowerCase(),
+        tier: resultUser.tier,
+        is_vip: resultUser.isVip,
+        subscription_start: resultUser.subscriptionStart || null,
+        subscription_end: resultUser.subscriptionEndsAt || null,
+        updated_at: new Date().toISOString(),
+      });
+      if (error) {
+        syncError = error.message;
+        console.warn("[UserStore] Supabase explicit write warning:", error.message);
+      } else {
+        dbSynced = true;
+      }
+    } catch (sbErr) {
+      syncError = sbErr instanceof Error ? sbErr.message : String(sbErr);
+    }
+  }
+
+  return { user: resultUser, dbSynced, error: syncError };
 }
 
 /**

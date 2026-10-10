@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import fs from "fs";
-import path from "path";
-import { verifyAdminRequest, getDynamicAdminPassword, setDynamicAdminPassword } from "@/lib/adminAuth";
+import { verifyAdminRequest, getDynamicAdminPassword, setDynamicAdminPassword, safeVerifyPassword } from "@/lib/adminAuth";
 
 export async function POST(req: NextRequest) {
   try {
     if (!verifyAdminRequest(req)) {
-      return NextResponse.json({ error: "Unauthorized access: Valid admin token required" }, { status: 401 });
+      return NextResponse.json({ error: "Unauthorized access: Valid admin session required" }, { status: 401 });
     }
 
     const body = await req.json();
@@ -19,51 +17,36 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (typeof newPassword !== "string" || newPassword.length < 6) {
+    if (typeof newPassword !== "string" || newPassword.length < 8) {
       return NextResponse.json(
-        { error: "New password must be at least 6 characters long" },
+        { error: "New password must be at least 8 characters long" },
         { status: 400 }
       );
     }
 
-    const activePassword = await getDynamicAdminPassword();
+    const activeStored = await getDynamicAdminPassword();
 
-    if (currentPassword !== activePassword) {
+    if (!activeStored || !safeVerifyPassword(currentPassword, activeStored)) {
       return NextResponse.json(
         { error: "Incorrect current master password" },
         { status: 403 }
       );
     }
 
-    // 1. Authoritative persistence in Firestore & process memory
-    await setDynamicAdminPassword(newPassword);
+    // Authoritative persistence in Firestore & server storage with salted scrypt hash
+    const saveSuccess = await setDynamicAdminPassword(newPassword);
 
-    // 2. Local development best-effort sync only (never crashes on Vercel read-only disk)
-    if (!process.env.VERCEL) {
-      try {
-        const envPath = path.join(process.cwd(), ".env.local");
-        let envContent = "";
-        if (fs.existsSync(envPath)) {
-          envContent = fs.readFileSync(envPath, "utf-8");
-        }
-
-        const regex = /^ADMIN_PASSWORD=.*$/m;
-        if (regex.test(envContent)) {
-          envContent = envContent.replace(regex, `ADMIN_PASSWORD="${newPassword}"`);
-        } else {
-          envContent = envContent ? `${envContent}\nADMIN_PASSWORD="${newPassword}"` : `ADMIN_PASSWORD="${newPassword}"\n`;
-        }
-
-        fs.writeFileSync(envPath, envContent, "utf-8");
-      } catch (localErr) {
-        console.warn("[Admin Change Password] Local .env.local write skipped (Safe for Cloud/Serverless):", localErr);
-      }
+    if (!saveSuccess) {
+      return NextResponse.json(
+        { error: "Failed to persist new password to storage. Password change was not applied." },
+        { status: 500 }
+      );
     }
 
+    // Never return updatedPassword or secrets in the response
     return NextResponse.json({
       success: true,
-      message: "Master Password successfully updated! It is now permanently active.",
-      updatedPassword: newPassword,
+      message: "Master Password successfully updated and securely hashed.",
     });
   } catch (err: unknown) {
     console.error("[Admin Change Password Error]:", err);

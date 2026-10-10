@@ -11,7 +11,7 @@ export interface QuotaRecord {
 
 export type QuotaType = "chat" | "photo";
 
-const QUOTA_LIMITS: Record<QuotaType, Record<"free" | "plus" | "vip", number>> = {
+const DEFAULT_QUOTA_LIMITS: Record<QuotaType, Record<"free" | "plus" | "vip", number>> = {
   chat: {
     free: 20,
     plus: 200,
@@ -19,10 +19,41 @@ const QUOTA_LIMITS: Record<QuotaType, Record<"free" | "plus" | "vip", number>> =
   },
   photo: {
     free: 0,
-    plus: 5,
-    vip: 10,
+    plus: 10,
+    vip: 30,
   },
 };
+
+const cachedDynamicLimits: Record<QuotaType, Record<"free" | "plus" | "vip", number>> = {
+  chat: { free: 20, plus: 200, vip: 500 },
+  photo: { free: 0, plus: 10, vip: 30 },
+};
+let lastLimitsFetchTime = 0;
+
+export function getDynamicQuotaLimit(type: QuotaType, tier: "free" | "plus" | "vip"): number {
+  const now = Date.now();
+  if (now - lastLimitsFetchTime > 10000) {
+    try {
+      const plansFilePath = path.join(process.cwd(), ".data", "plans.json");
+      if (fs.existsSync(plansFilePath)) {
+        const raw = fs.readFileSync(plansFilePath, "utf-8");
+        const plans = JSON.parse(raw);
+        if (Array.isArray(plans)) {
+          const plusPlan = plans.find((p) => p.id === "plus");
+          const vipPlan = plans.find((p) => p.id === "vip" || p.id === "vip_plus");
+          if (plusPlan?.dailyMessages) cachedDynamicLimits.chat.plus = Number(plusPlan.dailyMessages);
+          if (plusPlan?.dailyPhotos !== undefined) cachedDynamicLimits.photo.plus = Number(plusPlan.dailyPhotos);
+          if (vipPlan?.dailyMessages) cachedDynamicLimits.chat.vip = Number(vipPlan.dailyMessages);
+          if (vipPlan?.dailyPhotos !== undefined) cachedDynamicLimits.photo.vip = Number(vipPlan.dailyPhotos);
+        }
+      }
+      lastLimitsFetchTime = now;
+    } catch {}
+  }
+
+  return cachedDynamicLimits[type]?.[tier] ?? DEFAULT_QUOTA_LIMITS[type][tier];
+}
+
 
 // Memory cache
 const memoryStores: Record<QuotaType, Map<string, QuotaRecord>> = {
@@ -40,7 +71,7 @@ function getQuotaFilePath(type: QuotaType): string {
   if (process.env.VERCEL) {
     return path.join("/tmp", `zovik_${fileName}`);
   }
-  return path.join(process.cwd(), "src", "data", fileName);
+  return path.join(process.cwd(), ".data", fileName);
 }
 
 function loadStore(type: QuotaType): void {
@@ -113,7 +144,7 @@ export function checkQuotaAllowed(
     storeLoaded[type] = true;
   }
 
-  const limit = QUOTA_LIMITS[type][tier];
+  const limit = getDynamicQuotaLimit(type, tier);
   const now = Date.now();
   const record = memoryStores[type].get(identifier);
 
@@ -148,7 +179,7 @@ export function consumeQuotaOnSuccess(
     storeLoaded[type] = true;
   }
 
-  const limit = QUOTA_LIMITS[type][tier];
+  const limit = getDynamicQuotaLimit(type, tier);
   const now = Date.now();
   const twentyFourHours = 24 * 60 * 60 * 1000;
 
@@ -171,4 +202,20 @@ export function consumeQuotaOnSuccess(
     remaining: Math.max(0, limit - record.count),
     limit,
   };
+}
+
+/**
+ * 3. RESET QUOTA: Wipes quota records for a user when deleted or reset
+ */
+export function resetQuota(identifier: string): void {
+  for (const type of ["chat", "photo"] as QuotaType[]) {
+    if (!storeLoaded[type]) {
+      loadStore(type);
+      storeLoaded[type] = true;
+    }
+    if (memoryStores[type].has(identifier)) {
+      memoryStores[type].delete(identifier);
+      persistStore(type);
+    }
+  }
 }

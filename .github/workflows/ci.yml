@@ -1,0 +1,41 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  verify:
+    name: Build, Lint & Test
+    runs-on: ubuntu-latest
+
+    env:
+      ADMIN_JWT_SECRET: "ci_jwt_secret_test_mock_at_least_24_characters"
+      ADMIN_PASSWORD: "ci_test_admin_password_12345"
+      NEXT_PUBLIC_FIREBASE_API_KEY: "mock_api_key_for_ci_build"
+      NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: "zovik-ai-ci.firebaseapp.com"
+      NEXT_PUBLIC_FIREBASE_PROJECT_ID: "zovik-ai-ci"
+      NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: "zovik-ai-ci.appspot.com"
+      NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: "1234567890"
+      NEXT_PUBLIC_FIREBASE_APP_ID: "1:1234567890:web:abcdef123456"
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: TypeScript Type Check
+        run: npm run lint
+
+      - name: Build Application
+        run: npm run build

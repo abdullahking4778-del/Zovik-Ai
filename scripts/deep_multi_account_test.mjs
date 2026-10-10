@@ -2,14 +2,19 @@ import fs from 'fs';
 import path from 'path';
 
 const BASE_URL = 'http://localhost:3000';
-const ADMIN_PASSWORD = '#Abdullah786099#';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || process.env.TEST_ADMIN_PASSWORD || '';
 
 async function runDeepMultiAccountTest() {
   console.log('\n=============================================================');
   console.log('🚀 ZOVIK AI: DEEP MULTI-ACCOUNT & LIFECYCLE VERIFICATION');
   console.log('=============================================================\n');
 
-  let adminToken = '';
+  if (!ADMIN_PASSWORD) {
+    console.log('[SKIP] ADMIN_PASSWORD environment variable not set. Skipping live test.');
+    return;
+  }
+
+  let adminCookie = '';
   const testUsers = {
     free: { email: 'demo_free_tester@zovik.ai', tier: 'free', uid: 'uid_demo_free_99' },
     plus: { email: 'demo_plus_tester@zovik.ai', tier: 'plus', uid: 'uid_demo_plus_88' },
@@ -29,15 +34,16 @@ async function runDeepMultiAccountTest() {
     console.log('--- MODULE 1: ADMIN AUTHENTICATION ---');
     const loginRes = await fetch(`${BASE_URL}/api/admin/auth`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'x-zovik-admin-request': '1' },
       body: JSON.stringify({ password: ADMIN_PASSWORD })
     });
     const loginData = await loginRes.json();
-    if (!loginData.success || !loginData.token) {
+    if (!loginData.success) {
       throw new Error('Admin login failed: ' + JSON.stringify(loginData));
     }
-    adminToken = loginData.token;
-    console.log('✅ [PASS] Admin Authenticated successfully with JWT Token.');
+    const cookieHeader = loginRes.headers.get('set-cookie') || '';
+    adminCookie = cookieHeader.split(';')[0];
+    console.log('✅ [PASS] Admin Authenticated successfully with session cookie.');
 
     // -------------------------------------------------------------
     // MODULE 2: MULTI-ACCOUNT CREATION & SUBSCRIPTIONS
@@ -78,7 +84,8 @@ async function runDeepMultiAccountTest() {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${adminToken}`
+        'Cookie': adminCookie,
+        'x-zovik-admin-request': '1'
       },
       body: JSON.stringify({ paymentId: plusPayId, action: 'approve' })
     });
@@ -121,7 +128,8 @@ async function runDeepMultiAccountTest() {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${adminToken}`
+        'Cookie': adminCookie,
+        'x-zovik-admin-request': '1'
       },
       body: JSON.stringify({ paymentId: vipPayId, action: 'approve' })
     });
@@ -244,7 +252,8 @@ async function runDeepMultiAccountTest() {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${adminToken}`
+        'Cookie': adminCookie,
+        'x-zovik-admin-request': '1'
       },
       body: JSON.stringify(demoCompanionPayload)
     });
@@ -261,7 +270,8 @@ async function runDeepMultiAccountTest() {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${adminToken}`
+        'Cookie': adminCookie,
+        'x-zovik-admin-request': '1'
       },
       body: JSON.stringify({
         id: createdCompId,
@@ -280,7 +290,7 @@ async function runDeepMultiAccountTest() {
     // 5.3 Delete Companion & Verify Zero Resurrection
     const delCompRes = await fetch(`${BASE_URL}/api/admin/characters?id=${encodeURIComponent(createdCompId)}`, {
       method: 'DELETE',
-      headers: { 'Authorization': `Bearer ${adminToken}` }
+      headers: { 'Cookie': adminCookie, 'x-zovik-admin-request': '1' }
     });
     const delCompData = await delCompRes.json();
     if (!delCompData.success) {
@@ -312,7 +322,8 @@ async function runDeepMultiAccountTest() {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${adminToken}`
+        'Cookie': adminCookie,
+        'x-zovik-admin-request': '1'
       },
       body: JSON.stringify(demoShortPayload)
     });
@@ -327,7 +338,7 @@ async function runDeepMultiAccountTest() {
     // Delete Short Reel
     const delShortRes = await fetch(`${BASE_URL}/api/shorts?id=${encodeURIComponent(createdShortId)}`, {
       method: 'DELETE',
-      headers: { 'Authorization': `Bearer ${adminToken}` }
+      headers: { 'Cookie': adminCookie, 'x-zovik-admin-request': '1' }
     });
     const delShortData = await delShortRes.json();
     if (!delShortData.success) {

@@ -7,6 +7,7 @@ interface AdminSubscriptionsTabProps {
   payments: PaymentRequest[];
   handleApprovePayment: (id: string) => Promise<void> | void;
   handleRejectPayment: (id: string) => Promise<void> | void;
+  handleDeletePayment?: (id: string) => Promise<void> | void;
   setPreviewSlip: (url: string | null) => void;
 }
 
@@ -14,6 +15,7 @@ export const AdminSubscriptionsTab: React.FC<AdminSubscriptionsTabProps> = ({
   payments,
   handleApprovePayment,
   handleRejectPayment,
+  handleDeletePayment,
   setPreviewSlip,
 }) => {
   return (
@@ -22,7 +24,7 @@ export const AdminSubscriptionsTab: React.FC<AdminSubscriptionsTabProps> = ({
         <div>
           <h2 className="text-xl font-black text-white">Payment Requests & Approvals</h2>
           <p className="text-xs text-[#aeaeae]">
-            Review Transaction IDs sent via JazzCash, EasyPaisa, NayaPay, or Binance.
+            Review Transaction IDs, approve VIP tiers, or permanently remove test/old slips.
           </p>
         </div>
       </div>
@@ -85,25 +87,40 @@ export const AdminSubscriptionsTab: React.FC<AdminSubscriptionsTabProps> = ({
                     {p.status}
                   </span>
                 </td>
-                <td className="p-4 text-right space-x-2">
+                <td className="p-4 text-right space-x-2 whitespace-nowrap">
                   {p.status === "pending" && (
                     <>
                       <button
                         onClick={() => handleApprovePayment(p.id)}
-                        className="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-extrabold text-xs shadow-md transition-all"
+                        className="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-extrabold text-xs shadow-md transition-all active:scale-95"
                       >
                         Approve
                       </button>
                       <button
                         onClick={() => handleRejectPayment(p.id)}
-                        className="px-3 py-1.5 rounded-xl bg-red-500/20 hover:bg-red-500/40 text-red-400 font-bold text-xs transition-all"
+                        className="px-3 py-1.5 rounded-xl bg-red-500/20 hover:bg-red-500/40 text-red-400 font-bold text-xs transition-all active:scale-95"
                       >
                         Reject
                       </button>
                     </>
                   )}
                   {p.status === "approved" && (
-                    <span className="text-[11px] text-emerald-400 font-bold">✓ Active VIP</span>
+                    <span className="text-[11px] text-emerald-400 font-bold mr-1">✓ Active VIP</span>
+                  )}
+
+                  {/* Delete / Purge button */}
+                  {handleDeletePayment && (
+                    <button
+                      onClick={() => {
+                        if (confirm(`Permanently delete payment record (${p.trxId}) and remove slip from cloud storage?`)) {
+                          handleDeletePayment(p.id);
+                        }
+                      }}
+                      className="px-2.5 py-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/30 text-red-400 border border-red-500/20 text-xs font-bold transition-all active:scale-95 ml-1"
+                      title="Permanently remove from database & Supabase Storage"
+                    >
+                      🗑️ Delete
+                    </button>
                   )}
                 </td>
               </tr>

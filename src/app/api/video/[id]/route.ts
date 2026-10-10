@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
 import { Readable } from "stream";
+import { isSafeExternalUrl } from "@/lib/securityUrl";
 
 export async function GET(
   request: NextRequest,
@@ -17,8 +18,8 @@ export async function GET(
     // 1. External Video Proxy Support (Prevents IDM interception on external CDN links like Catbox / Cloudinary)
     if (rawId === "proxy") {
       const targetUrl = request.nextUrl.searchParams.get("url");
-      if (!targetUrl || (!targetUrl.startsWith("http://") && !targetUrl.startsWith("https://"))) {
-        return new NextResponse("Invalid proxy URL", { status: 400 });
+      if (!targetUrl || !isSafeExternalUrl(targetUrl)) {
+        return new NextResponse("Invalid or blocked proxy URL", { status: 400 });
       }
 
       const rangeHeader = request.headers.get("range");

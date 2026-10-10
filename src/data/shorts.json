@@ -1,20 +1,5 @@
 [
   {
-    "id": "short-2",
-    "characterId": "raven-steele",
-    "characterName": "The rooftop lights are glowing tonight, but I only have eyes for you ✨",
-    "characterAge": 22,
-    "avatar": "/characters/zovik_01.jpg",
-    "videoUrl": "/videos/companions/raven-steele.mp4",
-    "caption": "The rooftop lights are glowing tonight, but I only have eyes for you ✨",
-    "tags": [
-      "Trending",
-      "HD"
-    ],
-    "likes": 120,
-    "createdAt": "2026-10-03T07:44:16.357746+00:00"
-  },
-  {
     "id": "short-3",
     "characterId": "genevieve-claire",
     "characterName": "Lost in a good book, but I would rather get lost in conversation with you 🥰",
@@ -285,13 +270,13 @@
     "createdAt": "2026-10-03T07:44:16.357746+00:00"
   },
   {
-    "id": "short-22",
-    "characterId": "zoe-summers",
-    "characterName": "Ocean breeze and salty air... Summer never ends when you are here 🏝️",
+    "id": "short-2",
+    "characterId": "raven-steele",
+    "characterName": "The rooftop lights are glowing tonight, but I only have eyes for you ✨",
     "characterAge": 22,
     "avatar": "/characters/zovik_01.jpg",
-    "videoUrl": "/videos/companions/zoe-summers.mp4",
-    "caption": "Ocean breeze and salty air... Summer never ends when you are here 🏝️",
+    "videoUrl": "/videos/companions/raven-steele.mp4",
+    "caption": "The rooftop lights are glowing tonight, but I only have eyes for you ✨",
     "tags": [
       "Trending",
       "HD"
@@ -562,6 +547,21 @@
     "avatar": "/characters/zovik_01.jpg",
     "videoUrl": "/videos/companions/mateo-silva.mp4",
     "caption": "Brewing the finest espresso at the corner cafe... Can I save you a seat? ☕",
+    "tags": [
+      "Trending",
+      "HD"
+    ],
+    "likes": 120,
+    "createdAt": "2026-10-03T07:44:16.357746+00:00"
+  },
+  {
+    "id": "short-22",
+    "characterId": "zoe-summers",
+    "characterName": "Ocean breeze and salty air... Summer never ends when you are here 🏝️",
+    "characterAge": 22,
+    "avatar": "/characters/zovik_01.jpg",
+    "videoUrl": "/videos/companions/zoe-summers.mp4",
+    "caption": "Ocean breeze and salty air... Summer never ends when you are here 🏝️",
     "tags": [
       "Trending",
       "HD"

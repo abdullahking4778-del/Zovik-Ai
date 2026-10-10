@@ -6,10 +6,12 @@
     "dev": "next dev --webpack",
     "build": "next build",
     "start": "next start",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "type-check": "tsc --noEmit",
+    "test": "node scripts/run_security_suite.mjs"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.117.2",
+    "@supabase/supabase-js": "^2.117.3",
     "@types/adm-zip": "^0.5.8",
     "adm-zip": "^0.6.1",
     "clsx": "^2.1.1",
@@ -28,6 +30,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "postcss": "^8.4.38",
+    "puppeteer-core": "^25.13.0",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

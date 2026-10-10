@@ -95,10 +95,31 @@ export const safeLocalStorage = {
     }
   },
 
+  setRawItem(key: string, value: string): boolean {
+    if (typeof window === "undefined") return false;
+    try {
+      window.localStorage.setItem(key, value);
+      return true;
+    } catch (err) {
+      console.warn(`[safeLocalStorage] Failed to set raw item for key "${key}":`, err);
+      return false;
+    }
+  },
+
   removeItem(key: string): boolean {
     if (typeof window === "undefined") return false;
     try {
       window.localStorage.removeItem(key);
+      return true;
+    } catch {
+      return false;
+    }
+  },
+
+  clear(): boolean {
+    if (typeof window === "undefined") return false;
+    try {
+      window.localStorage.clear();
       return true;
     } catch {
       return false;

@@ -53,7 +53,7 @@ export interface ShortReel {
 export interface PaymentRequest {
   id: string;
   userEmail: string;
-  plan: "plus" | "vip";
+  plan: "plus" | "vip" | string;
   planName: string;
   currency: string;
   amount: number;
@@ -109,4 +109,42 @@ export interface SavedPhoto {
   createdAt?: number;
   time?: string;
   isUnlocked?: boolean;
+}
+
+export interface PricingPlan {
+  id: string;
+  name: string;
+  badge?: string;
+  badgeColor?: string;
+  pricePKR: number;
+  originalPricePKR: number;
+  priceUSD: number;
+  originalPriceUSD: number;
+  durationDays: number;
+  dailyMessages?: number;
+  dailyPhotos?: number;
+  features: string[];
+  isPopular?: boolean;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface PaymentAccountConfig {
+  id: string;
+  name: string;
+  label: string;
+  number: string;
+  title: string;
+  instructions: string;
+  isActive: boolean;
+}
+
+export interface AnnouncementConfig {
+  enabled: boolean;
+  text: string;
+  badge?: string;
+  actionType: "open_premium" | "custom_link";
+  linkUrl?: string;
+  updatedAt?: string;
 }

@@ -4,6 +4,8 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 import { auth, db, googleProvider } from "@/lib/firebase";
 import { 
   signInWithPopup, 
+  signInWithRedirect,
+  getRedirectResult,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
@@ -68,15 +70,31 @@ const AuthContext = createContext<AuthContextType>({
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [tier, setTier] = useState<string>("free");
-  const [userData, setUserData] = useState<UserFirestoreData | null>(null);
+  const [tier, setTier] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return safeLocalStorage.getRawItem("zovik_tier") || "free";
+    }
+    return "free";
+  });
+  const [userData, setUserData] = useState<UserFirestoreData | null>(() => {
+    if (typeof window !== "undefined") {
+      const cached = safeLocalStorage.getItem<UserFirestoreData>("zovik_user_cache");
+      if (cached && typeof cached === "object") return cached;
+    }
+    return null;
+  });
   const [loading, setLoading] = useState(true);
-  const [isLocallyLoggedIn, setIsLocallyLoggedIn] = useState(false);
+  const [isLocallyLoggedIn, setIsLocallyLoggedIn] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      return safeLocalStorage.getBoolean("zovik_logged_in");
+    }
+    return false;
+  });
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [loginPromptMessage, setLoginPromptMessage] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
 
-  // Instant hydration from local storage on mount (prevents "Log In" button flicker on page refresh)
+  // Synchronize local storage on mount (prevents any button flicker on page refresh)
   useEffect(() => {
     const savedLogin = safeLocalStorage.getBoolean("zovik_logged_in");
     setIsLocallyLoggedIn(savedLogin);
@@ -98,6 +116,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setLoginPromptMessage(null);
     }
   }, [user, pendingAction]);
+
+  // Handle redirect result if user authenticated via Google redirect
+  useEffect(() => {
+    getRedirectResult(auth)
+      .then(async (result) => {
+        if (result?.user) {
+          setIsLocallyLoggedIn(true);
+          safeLocalStorage.setItem("zovik_logged_in", "true");
+        }
+      })
+      .catch((err) => {
+        console.warn("Redirect auth check:", err?.message || err);
+      });
+  }, []);
 
   useEffect(() => {
     let firestoreUnsubscribe: (() => void) | null = null;
@@ -157,10 +189,40 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             }
           });
 
-          // Check authoritative server status for instant VIP / Plus grants
-          fetch(`/api/user/status?email=${encodeURIComponent(currentUser.email || "")}&uid=${currentUser.uid}`)
-            .then((res) => res.json())
-            .then(async (statusData) => {
+          // Check authoritative server status for instant VIP / Plus grants or permanent deletion eviction
+          currentUser
+            .getIdToken()
+            .then(async (token) => {
+              const res = await fetch(`/api/user/status`, {
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                },
+              });
+              const statusData = await res.json().catch(() => ({}));
+
+              // If admin deleted this user, enforce immediate wipeout and logout
+              if (res.status === 410 || statusData.deleted === true) {
+                if (firestoreUnsubscribe) {
+                  firestoreUnsubscribe();
+                  firestoreUnsubscribe = null;
+                }
+                await signOut(auth).catch(() => {});
+                safeLocalStorage.clear();
+                if (typeof window !== "undefined") {
+                  Object.keys(localStorage).forEach((k) => {
+                    if (k.startsWith("zovik_") || k.startsWith("firebase:")) {
+                      localStorage.removeItem(k);
+                    }
+                  });
+                  sessionStorage.clear();
+                }
+                setUser(null);
+                setIsLocallyLoggedIn(false);
+                setTier("free");
+                setUserData(null);
+                return;
+              }
+
               if (statusData && statusData.tier && statusData.tier !== "free") {
                 setTier(statusData.tier);
                 setUserData((prev) => ({
@@ -226,8 +288,32 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const loginWithGoogle = async () => {
     try {
-      const result = await signInWithPopup(auth, googleProvider);
-      if (result.user) {
+      let result;
+      try {
+        result = await signInWithPopup(auth, googleProvider);
+      } catch (popupErr: unknown) {
+        const pErr = popupErr as { code?: string };
+        if (pErr?.code === "auth/popup-blocked") {
+          console.warn("Popup blocked by browser. Attempting redirect fallback...");
+          try {
+            await signInWithRedirect(auth, googleProvider);
+            return;
+          } catch {
+            throw popupErr;
+          }
+        }
+        throw popupErr;
+      }
+
+      if (result?.user) {
+        try {
+          const freshToken = await result.user.getIdToken();
+          await fetch("/api/user/unmark-deleted", {
+            method: "POST",
+            headers: { Authorization: `Bearer ${freshToken}` },
+          });
+        } catch {}
+
         setIsLocallyLoggedIn(true);
         safeLocalStorage.setItem("zovik_logged_in", "true");
         const userDocRef = doc(db, "users", result.user.uid);
@@ -250,8 +336,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           });
         }
       }
-    } catch (error) {
-      console.error("Error logging in with Google:", error);
+    } catch (error: unknown) {
+      const errObj = error as { code?: string; message?: string };
+      if (errObj?.code === "auth/popup-blocked" || errObj?.code === "auth/popup-closed-by-user") {
+        console.warn("Google sign-in prevented by browser:", errObj.code);
+      } else {
+        console.warn("Google authentication notice:", errObj?.message || error);
+      }
       throw error;
     }
   };
@@ -260,6 +351,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     try {
       const result = await signInWithEmailAndPassword(auth, email.trim(), password);
       if (result.user) {
+        try {
+          const freshToken = await result.user.getIdToken();
+          await fetch("/api/user/unmark-deleted", {
+            method: "POST",
+            headers: { Authorization: `Bearer ${freshToken}` },
+          });
+        } catch {}
+
         setIsLocallyLoggedIn(true);
         safeLocalStorage.setItem("zovik_logged_in", "true");
         const userDocRef = doc(db, "users", result.user.uid);
@@ -267,8 +366,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           lastLoginAt: new Date().toISOString(),
         }).catch(() => {});
       }
-    } catch (error) {
-      console.error("Error logging in with email and password:", error);
+    } catch (error: unknown) {
+      const errObj = error as { code?: string; message?: string };
+      if (errObj?.code === "auth/invalid-credential" || errObj?.code === "auth/wrong-password" || errObj?.code === "auth/user-not-found") {
+        console.warn("Invalid email/password attempt");
+      } else {
+        console.warn("Email login notice:", errObj?.message || error);
+      }
       throw error;
     }
   };

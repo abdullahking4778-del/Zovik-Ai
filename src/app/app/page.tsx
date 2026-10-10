@@ -47,6 +47,18 @@ import {
 
 export default function Home() {
   const [characters, setCharacters] = useState<Character[]>(rawCharacters as Character[]);
+
+  useEffect(() => {
+    fetch("/api/characters", { cache: "no-store" })
+      .then(res => res.json())
+      .then(data => {
+        if (data?.success && Array.isArray(data.characters)) {
+          setCharacters(data.characters);
+        }
+      })
+      .catch(err => console.error("Error fetching live characters:", err));
+  }, []);
+
   const [activeTab, setActiveTab] = useState("home");
   const [genderFilter, setGenderFilter] = useState<"female" | "male" | "anime">("female");
   const [selectedCategory, setSelectedCategory] = useState("All");
@@ -105,7 +117,7 @@ export default function Home() {
         return;
       }
       setActiveChatCharacter(char);
-    }, `${char.name} ke sath chat shuru karne ke liye pehle login ya create account karein.`);
+    }, `${char.name} ke sath chat shuru karne ke liye pehle sign in karein.`);
   };
 
   const handleStartCallWithAuth = (char: Character) => {
@@ -116,7 +128,7 @@ export default function Home() {
         return;
       }
       setActiveCallCharacter(char);
-    }, `${char.name} ke sath live voice call ke liye pehle login ya create account karein.`);
+    }, `${char.name} ke sath live voice call ke liye pehle sign in karein.`);
   };
   const [isShortsOpen, setIsShortsOpen] = useState(false);
   const [initialReelId, setInitialReelId] = useState<string | null>(null);
@@ -179,7 +191,9 @@ export default function Home() {
         const loginParam = params.get("login");
         const createParam = params.get("create");
         const shortsParam = params.get("shorts");
+        const premiumParam = params.get("openPremium") || params.get("premium");
 
+        if (premiumParam === "true") setIsPremiumOpen(true);
         if (loginParam === "true") {
           if (!currentUser && !isLocallyLoggedIn) {
             setIsLoginOpen(true);
@@ -205,6 +219,12 @@ export default function Home() {
         }
       } catch {}
     }
+
+    const handleOpenPremiumEvent = () => setIsPremiumOpen(true);
+    window.addEventListener("open-premium-modal", handleOpenPremiumEvent);
+    return () => {
+      window.removeEventListener("open-premium-modal", handleOpenPremiumEvent);
+    };
   }, []);
 
   // Sync Generated Photos for Private VIP Gallery
@@ -577,7 +597,7 @@ export default function Home() {
         return;
       }
       setIsCreateOpen(true);
-    }, "Apna custom AI Companion banane ke liye pehle login ya sign up karein.");
+    }, "Apna custom AI Companion banane ke liye pehle sign in karein.");
   };
 
   const handleDeleteGeneratedPhoto = (e: React.MouseEvent, photoId: string) => {
@@ -1194,7 +1214,7 @@ export default function Home() {
           if (tab === "shorts") {
             setIsShortsOpen(true);
           } else if (tab === "chat") {
-            requireAuth(() => setActiveTab(tab), "Apni chats dekhne ke liye pehle login ya sign up karein.");
+            requireAuth(() => setActiveTab(tab), "Apni chats dekhne ke liye pehle sign in karein.");
           } else {
             setActiveTab(tab);
           }

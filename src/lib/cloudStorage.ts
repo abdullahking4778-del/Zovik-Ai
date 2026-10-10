@@ -67,27 +67,56 @@ export async function uploadToCloudStorage(
     const publicUrl = await getDownloadURL(storageRef);
     return publicUrl;
   } catch {
-    // 3. Fallback: Compress to ultra-compact WebP Data URL (<50KB)
-    if (contentType.startsWith("image/")) {
-      try {
+    // 3. Fallback: Save to Local Public Directory (Zero-budget & Local Network)
+    try {
+      const fs = require("fs");
+      const path = require("path");
+
+      const publicDir = path.join(process.cwd(), "public");
+      const localFilePath = path.join(publicDir, cleanPath);
+      const localDir = path.dirname(localFilePath);
+
+      if (!fs.existsSync(localDir)) {
+        fs.mkdirSync(localDir, { recursive: true });
+      }
+
+      if (contentType.startsWith("image/")) {
         const compressedWebp = await sharp(inputBuffer)
-          .resize({ width: 800, withoutEnlargement: true })
-          .webp({ quality: 70 })
+          .resize({ width: 1200, withoutEnlargement: true })
+          .webp({ quality: 80 })
           .toBuffer();
 
-        return `data:image/webp;base64,${compressedWebp.toString("base64")}`;
-      } catch (sharpErr) {
-        console.warn("[CloudStorage] Sharp compression note:", sharpErr);
-        if (typeof data === "string" && data.startsWith("data:")) {
-          return data;
+        fs.writeFileSync(localFilePath, compressedWebp);
+      } else {
+        fs.writeFileSync(localFilePath, inputBuffer);
+      }
+
+      return `/${cleanPath}`;
+    } catch (localErr) {
+      console.warn("[CloudStorage] Local fallback failed:", localErr);
+
+      // 4. Final Fallback: Compress to ultra-compact WebP Data URL (<50KB) (only for images)
+      if (contentType.startsWith("image/")) {
+        try {
+          const compressedWebp = await sharp(inputBuffer)
+            .resize({ width: 800, withoutEnlargement: true })
+            .webp({ quality: 70 })
+            .toBuffer();
+
+          return `data:image/webp;base64,${compressedWebp.toString("base64")}`;
+        } catch (sharpErr) {
+          console.warn("[CloudStorage] Sharp compression note:", sharpErr);
+          if (typeof data === "string" && data.startsWith("data:")) {
+            return data;
+          }
         }
       }
-    }
 
-    if (typeof data === "string" && (data.startsWith("http://") || data.startsWith("https://") || data.startsWith("data:"))) {
-      return data;
-    }
+      if (typeof data === "string" && (data.startsWith("http://") || data.startsWith("https://") || data.startsWith("data:"))) {
+        return data;
+      }
 
-    throw new Error("Cloud Storage upload failed and no zero-card fallback available for this asset type.");
+      throw new Error("Cloud Storage upload failed and local fallback failed.");
+    }
   }
 }

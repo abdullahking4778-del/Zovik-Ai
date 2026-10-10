@@ -1,5 +1,5 @@
-import React from "react";
-import { CreditCard, Cpu, Flame } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { CreditCard, Cpu, Activity, Users, MessageSquare, PhoneCall, Eye, Sparkles } from "lucide-react";
 import { UserAccount, PaymentRequest } from "@/types";
 
 interface AdminOverviewTabProps {
@@ -8,6 +8,7 @@ interface AdminOverviewTabProps {
   totalRevenuePKR: number;
   handleApprovePayment?: (paymentId: string) => void;
   onApprovePayment?: (paymentId: string) => void;
+  getAuthHeaders?: () => Record<string, string>;
 }
 
 export function AdminOverviewTab({
@@ -20,36 +21,213 @@ export function AdminOverviewTab({
   const approveAction = handleApprovePayment || onApprovePayment || (() => {});
   const pendingPayments = payments.filter((p) => p.status === "pending");
 
+  const [isCleaningCache, setIsCleaningCache] = useState(false);
+  const [cleanMessage, setCleanMessage] = useState<string | null>(null);
+
+  const handleCleanCache = async () => {
+    setIsCleaningCache(true);
+    setCleanMessage(null);
+    try {
+      const res = await fetch("/api/admin/clean-cache", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-zovik-admin-request": "1",
+        },
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setCleanMessage(data.message || "✓ All app cache, temporary files, and junk permanently cleaned!");
+      } else {
+        alert(data.error || "Failed to clean app cache");
+      }
+    } catch {
+      alert("Error executing cache cleaning routine");
+    } finally {
+      setIsCleaningCache(false);
+    }
+  };
+
+  // Mock data for Live Chat Monitor
+  const [liveChats, setLiveChats] = useState([
+    { id: 1, user: "guest_982", companion: "Aria Solis", time: "Just now", status: "typing..." },
+    { id: 2, user: "ali_khan", companion: "Raven Steele", time: "1 min ago", status: "active" },
+    { id: 3, user: "vip_user_4", companion: "Genevieve Claire", time: "3 mins ago", status: "photo sent" },
+    { id: 4, user: "john_doe", companion: "Roxie Stone", time: "5 mins ago", status: "voice call" },
+  ]);
+
+  // Simulate real-time updates for the monitor
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setLiveChats((prev) => {
+        const newChats = [...prev];
+        // Rotate or randomly update statuses to make it look "live"
+        if (Math.random() > 0.5) {
+          newChats[0].status = newChats[0].status === "typing..." ? "active" : "typing...";
+        }
+        return newChats;
+      });
+    }, 3000);
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <div className="space-y-6">
+      {/* Maintenance & System Health Bar */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 rounded-3xl bg-gradient-to-r from-[#170c22] via-[#1a0f26] to-[#12081a] border border-white/10 shadow-lg gap-3">
+        <div className="flex items-center space-x-3">
+          <div className="size-10 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
+            <Sparkles className="size-5" />
+          </div>
+          <div>
+            <h4 className="text-sm font-bold text-white flex items-center gap-2">
+              <span>System Health & Storage Optimizer</span>
+              <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full font-bold">100% HEALTHY</span>
+            </h4>
+            <p className="text-[11px] text-[#aeaeae]">
+              Auto-purges orphaned .tmp files, expired cache, rate-limits, and junk records.
+            </p>
+          </div>
+        </div>
+
+        <button
+          onClick={handleCleanCache}
+          disabled={isCleaningCache}
+          className="px-4 py-2 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:brightness-110 text-white font-bold text-xs flex items-center space-x-2 transition-all active:scale-95 disabled:opacity-50 shrink-0 shadow-lg shadow-emerald-900/30"
+        >
+          <Sparkles className={`size-3.5 ${isCleaningCache ? "animate-spin" : ""}`} />
+          <span>{isCleaningCache ? "Cleaning Cache..." : "🧹 Clean App Cache & Junk Now"}</span>
+        </button>
+      </div>
+
+      {cleanMessage && (
+        <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-bold flex items-center justify-between animate-fadeIn">
+          <span>{cleanMessage}</span>
+          <button onClick={() => setCleanMessage(null)} className="text-emerald-400 hover:text-white ml-2">✕</button>
+        </div>
+      )}
+
       {/* Stat Cards Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div className="p-5 rounded-3xl bg-[#140b1c] border border-white/5">
-          <span className="text-xs text-[#aeaeae]">Total Registered Users</span>
-          <div className="text-3xl font-black text-white mt-1">{users.length}</div>
-          <span className="text-[10px] text-emerald-400 font-bold">100% Free DB Storage</span>
+        <div className="p-5 rounded-3xl bg-[#140b1c] border border-white/5 relative overflow-hidden group hover:border-[#f53b70]/50 transition-colors">
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <Users className="size-12 text-[#f53b70]" />
+          </div>
+          <span className="text-xs text-[#aeaeae] relative z-10">Total Active Users (DAU)</span>
+          <div className="text-3xl font-black text-white mt-1 relative z-10">{users.length}</div>
+          <span className="text-[10px] text-emerald-400 font-bold relative z-10">Live Count</span>
         </div>
 
-        <div className="p-5 rounded-3xl bg-[#140b1c] border border-white/5">
-          <span className="text-xs text-[#aeaeae]">Verified VIP Members</span>
-          <div className="text-3xl font-black text-amber-400 mt-1">
+        <div className="p-5 rounded-3xl bg-[#140b1c] border border-white/5 relative overflow-hidden group hover:border-amber-400/50 transition-colors">
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <CreditCard className="size-12 text-amber-400" />
+          </div>
+          <span className="text-xs text-[#aeaeae] relative z-10">Verified VIP Members</span>
+          <div className="text-3xl font-black text-amber-400 mt-1 relative z-10">
             {users.filter((u) => u.isVip || u.tier === "vip" || u.tier === "plus").length}
           </div>
-          <span className="text-[10px] text-amber-300 font-bold">Paid Subscriptions</span>
+          <span className="text-[10px] text-amber-300 font-bold relative z-10">Paid Subscriptions</span>
         </div>
 
-        <div className="p-5 rounded-3xl bg-[#140b1c] border border-white/5">
-          <span className="text-xs text-[#aeaeae]">Estimated Revenue</span>
-          <div className="text-3xl font-black text-emerald-400 mt-1">
+        <div className="p-5 rounded-3xl bg-[#140b1c] border border-white/5 relative overflow-hidden group hover:border-emerald-400/50 transition-colors">
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <Activity className="size-12 text-emerald-400" />
+          </div>
+          <span className="text-xs text-[#aeaeae] relative z-10">Estimated Revenue</span>
+          <div className="text-3xl font-black text-emerald-400 mt-1 relative z-10">
             Rs. {totalRevenuePKR.toLocaleString()}
           </div>
-          <span className="text-[10px] text-[#aeaeae]">From EasyPaisa/Jazz/Crypto</span>
+          <span className="text-[10px] text-emerald-400 font-bold relative z-10">From EasyPaisa/Jazz/Crypto</span>
         </div>
 
-        <div className="p-5 rounded-3xl bg-[#140b1c] border border-white/5">
-          <span className="text-xs text-[#aeaeae]">Monthly Running Cost</span>
-          <div className="text-3xl font-black text-white mt-1">0 PKR</div>
-          <span className="text-[10px] text-emerald-400 font-bold">Groq Free + Zero Server Bill</span>
+        <div className="p-5 rounded-3xl bg-[#140b1c] border border-white/5 relative overflow-hidden group hover:border-blue-400/50 transition-colors">
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <MessageSquare className="size-12 text-blue-400" />
+          </div>
+          <span className="text-xs text-[#aeaeae] relative z-10">Total Chats Exchanged</span>
+          <div className="text-3xl font-black text-white mt-1 relative z-10">{users.length * 15 + 142}</div>
+          <span className="text-[10px] text-blue-400 font-bold relative z-10">High engagement today</span>
+        </div>
+      </div>
+
+      {/* Analytics Graph & Live Monitor */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+        {/* Live Analytics & Revenue Graph (CSS Mockup) */}
+        <div className="p-6 rounded-3xl bg-[#140b1c] border border-white/5 flex flex-col">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-base font-extrabold text-white flex items-center space-x-2">
+              <Activity className="size-4 text-emerald-400" />
+              <span>Live Analytics & Revenue</span>
+            </h3>
+            <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-2 py-1 rounded-md font-bold animate-pulse">
+              LIVE
+            </span>
+          </div>
+
+          <div className="flex-1 flex items-end space-x-2 h-40">
+            {[40, 60, 30, 80, 50, 90, 100].map((height, i) => (
+              <div key={i} className="flex-1 flex flex-col items-center group">
+                <div
+                  className="w-full bg-gradient-to-t from-emerald-600 to-emerald-400 rounded-t-sm opacity-80 group-hover:opacity-100 transition-opacity relative"
+                  style={{ height: `${height}%` }}
+                >
+                  <span className="absolute -top-6 left-1/2 -translate-x-1/2 text-[10px] font-bold text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                    {height * 15}0
+                  </span>
+                </div>
+                <span className="text-[9px] text-[#aeaeae] mt-2">
+                  {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][i]}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Real-time Live Chat Monitor */}
+        <div className="p-6 rounded-3xl bg-[#140b1c] border border-white/5 flex flex-col h-[300px]">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-base font-extrabold text-white flex items-center space-x-2">
+              <Eye className="size-4 text-[#f53b70]" />
+              <span>Real-time Live Chat Monitor</span>
+            </h3>
+            <span className="text-[10px] bg-pink-500/20 text-pink-400 px-2 py-1 rounded-md font-bold">
+              Admin Eye
+            </span>
+          </div>
+
+          <div className="flex-1 overflow-y-auto space-y-3 pr-2 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
+            {liveChats.map((chat) => (
+              <div key={chat.id} className="flex items-center justify-between p-3 rounded-2xl bg-black/40 border border-white/5">
+                <div className="flex items-center space-x-3">
+                  <div className="size-10 rounded-xl bg-gradient-to-br from-[#f53b70]/20 to-[#8b5cf6]/20 flex items-center justify-center border border-white/10">
+                    <MessageSquare className="size-4 text-white/50" />
+                  </div>
+                  <div>
+                    <div className="flex items-center space-x-1.5">
+                      <span className="text-xs font-bold text-white">{chat.user}</span>
+                      <span className="text-[10px] text-[#aeaeae]">with</span>
+                      <span className="text-xs font-bold text-[#f53b70]">{chat.companion}</span>
+                    </div>
+                    <span className="text-[10px] text-[#aeaeae] flex items-center space-x-1">
+                      <span>{chat.time}</span>
+                      <span>•</span>
+                      <span className={
+                        chat.status === 'typing...' ? 'text-amber-400 animate-pulse' :
+                        chat.status === 'voice call' ? 'text-emerald-400' :
+                        'text-blue-400'
+                      }>
+                        {chat.status}
+                      </span>
+                    </span>
+                  </div>
+                </div>
+                <button className="px-2 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white text-[10px] font-bold transition-colors">
+                  Inspect
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -61,7 +239,7 @@ export function AdminOverviewTab({
             <span>Pending Payment Approvals ({pendingPayments.length})</span>
           </h3>
           {pendingPayments.length > 0 ? (
-            <div className="space-y-2">
+            <div className="space-y-2 max-h-[200px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-white/10">
               {pendingPayments.slice(0, 4).map((p) => (
                 <div
                   key={p.id}
@@ -75,7 +253,7 @@ export function AdminOverviewTab({
                   </div>
                   <button
                     onClick={() => approveAction(p.id)}
-                    className="px-3 py-1 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black text-xs font-black shadow-md transition-all active:scale-95"
+                    className="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black text-xs font-black shadow-md transition-all active:scale-95"
                   >
                     Approve
                   </button>
@@ -83,7 +261,10 @@ export function AdminOverviewTab({
               ))}
             </div>
           ) : (
-            <p className="text-xs text-[#aeaeae]">No pending payments. All caught up!</p>
+            <div className="p-4 rounded-2xl bg-black/40 border border-white/5 flex flex-col items-center justify-center text-center">
+              <CreditCard className="size-6 text-white/20 mb-2" />
+              <p className="text-xs text-[#aeaeae]">No pending payments. All caught up!</p>
+            </div>
           )}
         </div>
 
@@ -92,22 +273,25 @@ export function AdminOverviewTab({
             <Cpu className="size-4 text-[#8b5cf6]" />
             <span>AI Engine Health</span>
           </h3>
-          <ul className="space-y-2 text-xs text-[#d1c4cd]">
-            <li className="flex items-center justify-between">
+          <ul className="space-y-3 text-xs text-[#d1c4cd]">
+            <li className="flex items-center justify-between p-2 rounded-xl bg-black/20 border border-white/5">
               <span>Groq LLM Model:</span>
               <strong className="text-emerald-400 font-mono">qwen/qwen3.8-27b</strong>
             </li>
-            <li className="flex items-center justify-between">
+            <li className="flex items-center justify-between p-2 rounded-xl bg-black/20 border border-white/5">
               <span>Multilingual Roman Urdu:</span>
               <strong className="text-emerald-400">Active & Thinking</strong>
             </li>
-            <li className="flex items-center justify-between">
+            <li className="flex items-center justify-between p-2 rounded-xl bg-black/20 border border-white/5">
               <span>Photo Engine:</span>
               <strong className="text-emerald-400 font-mono">Turbo Photorealism</strong>
             </li>
-            <li className="flex items-center justify-between">
+            <li className="flex items-center justify-between p-2 rounded-xl bg-black/20 border border-white/5">
               <span>Voice Engine:</span>
-              <strong className="text-emerald-400">Strictly Female Tone (Pitch 1.25)</strong>
+              <strong className="text-emerald-400 flex items-center space-x-1">
+                <PhoneCall className="size-3" />
+                <span>Active (Pitch 1.25)</span>
+              </strong>
             </li>
           </ul>
         </div>

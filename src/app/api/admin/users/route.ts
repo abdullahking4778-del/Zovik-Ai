@@ -2,8 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifyAdminRequest } from "@/lib/adminAuth";
 import { db } from "@/lib/firebase";
 import { collection, getDocs, doc, updateDoc, deleteDoc } from "firebase/firestore";
-import { getAllStoredUsers, upsertStoredUser, saveAllStoredUsers } from "@/lib/userStore";
+import { getAllStoredUsers, upsertStoredUser, upsertStoredUserAsync, saveAllStoredUsers } from "@/lib/userStore";
 import { UserAccount } from "@/types";
+import { supabaseAdmin, isSupabaseConfigured } from "@/lib/supabase";
+import { recordDeletedUser } from "@/lib/deletedUsers";
+import { resetQuota } from "@/lib/quotaManager";
+import { cleanAppCacheAndJunk } from "@/lib/maintenanceCleaner";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export async function GET(req: NextRequest) {
   if (!verifyAdminRequest(req)) {
@@ -82,8 +89,8 @@ export async function PUT(req: NextRequest) {
 
     const primaryKey = userId || email;
 
-    // 1. Authoritative local store update (Guaranteed to succeed, zero permission issues)
-    const updatedLocal = upsertStoredUser(primaryKey, {
+    // 1. Authoritative store & cloud database update
+    const syncResult = await upsertStoredUserAsync(primaryKey, {
       id: userId || primaryKey,
       email: email || undefined,
       tier: assignedTier,
@@ -93,6 +100,19 @@ export async function PUT(req: NextRequest) {
       subscriptionEndsAt: endsAt,
       storageRetentionDays: retention,
     });
+    const updatedLocal = syncResult.user;
+
+    // Reject and report error if required persistent database write failed
+    if (!syncResult.dbSynced && syncResult.error) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Persistent database write failed: ${syncResult.error}`,
+          dbSynced: false,
+        },
+        { status: 502 }
+      );
+    }
 
     if (email && userId && email !== userId) {
       try {
@@ -127,8 +147,10 @@ export async function PUT(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
+      dbSynced: syncResult.dbSynced,
       user: {
-        id: userId,
+        id: updatedLocal.id || userId,
+        email: updatedLocal.email || email,
         tier: assignedTier,
         isVip: assignedTier === "vip",
         subscriptionDays: days,
@@ -151,29 +173,72 @@ export async function DELETE(req: NextRequest) {
 
   try {
     const { searchParams } = new URL(req.url);
-    const userId = searchParams.get("userId");
+    const userId = (searchParams.get("userId") || "").trim();
+    const email = (searchParams.get("email") || "").toLowerCase().trim();
 
-    if (!userId) {
-      return NextResponse.json({ error: "Missing userId parameter" }, { status: 400 });
+    if (!userId && !email) {
+      return NextResponse.json({ error: "Missing userId or email parameter" }, { status: 400 });
     }
 
-    // 1. Delete from local store
+    // 1. Delete from local authoritative store
     try {
-      const localUsers = getAllStoredUsers().filter((u) => u.id !== userId);
+      const localUsers = getAllStoredUsers().filter(
+        (u) =>
+          (!userId || u.id !== userId) &&
+          (!email || u.email?.toLowerCase() !== email) &&
+          (!email || u.id !== email)
+      );
       saveAllStoredUsers(localUsers);
     } catch (err) {
-      console.warn("Local user deletion failed:", err);
+      console.warn("[Admin Users DELETE] Local user deletion note:", err);
     }
 
-    // 2. Delete from Firestore
+    // 2. Wipe from Supabase Cloud Database (user_accounts & payment_requests)
+    if (isSupabaseConfigured()) {
+      try {
+        if (userId) {
+          await supabaseAdmin.from("user_accounts").delete().eq("id", userId);
+          await supabaseAdmin.from("payment_requests").delete().eq("user_id", userId);
+        }
+        if (email) {
+          await supabaseAdmin.from("user_accounts").delete().eq("email", email);
+          await supabaseAdmin.from("payment_requests").delete().eq("user_email", email);
+        }
+      } catch (sbErr) {
+        console.warn("[Admin Users DELETE] Supabase deletion note:", sbErr);
+      }
+    }
+
+    // 3. Delete from Firestore
     try {
-      const userRef = doc(db, "users", userId);
-      await deleteDoc(userRef);
+      if (userId) {
+        const userRef = doc(db, "users", userId);
+        await deleteDoc(userRef);
+      }
+      if (email && email !== userId) {
+        const emailRef = doc(db, "users", email);
+        await deleteDoc(emailRef);
+      }
     } catch (fsErr) {
-      console.warn("Firestore deleteDoc note:", fsErr);
+      console.warn("[Admin Users DELETE] Firestore deleteDoc note:", fsErr);
     }
 
-    return NextResponse.json({ success: true, message: "User deleted successfully" });
+    // 4. Record in tombstone blacklist to enforce client eviction & logouts
+    await recordDeletedUser(userId, email);
+
+    // 5. Reset user quotas
+    if (userId) resetQuota(userId);
+    if (email) resetQuota(email);
+
+    // 6. Clean orphaned atomic write temp files and caches
+    try {
+      cleanAppCacheAndJunk();
+    } catch {}
+
+    return NextResponse.json({
+      success: true,
+      message: `User account (${email || userId}) and all associated data permanently wiped across all databases.`,
+    });
   } catch (e: unknown) {
     console.error("[Admin Users DELETE Error]:", e);
     return NextResponse.json({ error: "Internal server error deleting user" }, { status: 500 });
