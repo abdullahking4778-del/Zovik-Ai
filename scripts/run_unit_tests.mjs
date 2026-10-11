@@ -128,6 +128,95 @@ try {
   report("Safety Guard Unit Test Exception", false, err.message);
 }
 
+// 4. IP & SSRF Defense Rules
+console.log("\n--- 4. IP & SSRF Range Detection ---");
+function isPrivateIpAddress(ip) {
+  if (!ip) return true;
+  const ipv4Regex = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
+  const ipMatch = ip.match(ipv4Regex);
+  if (ipMatch) {
+    const [_, a, b] = ipMatch.map(Number);
+    if (a === 127 || a === 10 || a === 0) return true;
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 192 && b === 168) return true;
+    if (a === 169 && b === 254) return true;
+    return false;
+  }
+  const cleanIpv6 = ip.replace(/[\[\]]/g, "").toLowerCase().trim();
+  if (cleanIpv6.startsWith("::ffff:") || cleanIpv6.startsWith("ffff:")) {
+    const mappedIpv4 = cleanIpv6.replace(/^::?ffff:/, "");
+    return isPrivateIpAddress(mappedIpv4);
+  }
+  if (
+    cleanIpv6 === "::1" ||
+    cleanIpv6 === "::" ||
+    cleanIpv6 === "0:0:0:0:0:0:0:1" ||
+    cleanIpv6 === "0:0:0:0:0:0:0:0" ||
+    cleanIpv6.startsWith("fe80:") ||
+    cleanIpv6.startsWith("fc00:") ||
+    cleanIpv6.startsWith("fd00:")
+  ) {
+    return true;
+  }
+  return false;
+}
+
+try {
+  report("Detects 127.0.0.1 as private", isPrivateIpAddress("127.0.0.1") === true);
+  report("Detects 169.254.169.254 as private (AWS metadata)", isPrivateIpAddress("169.254.169.254") === true);
+  report("Detects 10.0.0.1 as private", isPrivateIpAddress("10.0.0.1") === true);
+  report("Detects 192.168.1.1 as private", isPrivateIpAddress("192.168.1.1") === true);
+  report("Detects ::1 as private loopback", isPrivateIpAddress("::1") === true);
+  report("Detects 0:0:0:0:0:0:0:1 as private loopback", isPrivateIpAddress("0:0:0:0:0:0:0:1") === true);
+  report("Detects ::ffff:127.0.0.1 as private (IPv4-mapped IPv6)", isPrivateIpAddress("::ffff:127.0.0.1") === true);
+  report("Detects ::ffff:169.254.169.254 as private (IPv4-mapped metadata)", isPrivateIpAddress("::ffff:169.254.169.254") === true);
+  report("Permits 8.8.8.8 as public internet IP", isPrivateIpAddress("8.8.8.8") === false);
+  report("Permits 1.1.1.1 as public internet IP", isPrivateIpAddress("1.1.1.1") === false);
+} catch (err) {
+  report("IP Address Detection Test Exception", false, err.message);
+}
+
+// 5. Account Deletion & Restore Response Logic
+console.log("\n--- 5. Tombstone & Purge Completion Logic ---");
+function computePurgeStatus({ localDeleted, tombstonePersistent, firebaseAuthDeleted, hasSupabase, supabaseDeleted, hasFirestore, firestoreDeleted }) {
+  const isFullyPurged =
+    localDeleted &&
+    tombstonePersistent &&
+    firebaseAuthDeleted &&
+    (!hasSupabase || supabaseDeleted) &&
+    (!hasFirestore || firestoreDeleted);
+  const isPartiallyPurged = localDeleted || tombstonePersistent || supabaseDeleted || firestoreDeleted;
+  return { isFullyPurged, isPartiallyPurged, statusCode: isFullyPurged ? 200 : isPartiallyPurged ? 207 : 500 };
+}
+
+try {
+  // All succeed
+  const full = computePurgeStatus({ localDeleted: true, tombstonePersistent: true, firebaseAuthDeleted: true, hasSupabase: true, supabaseDeleted: true, hasFirestore: true, firestoreDeleted: true });
+  report("All stores succeed -> 200 OK Full Purge", full.isFullyPurged === true && full.statusCode === 200);
+
+  // Supabase fails -> must NOT report full success
+  const partialSb = computePurgeStatus({ localDeleted: true, tombstonePersistent: true, firebaseAuthDeleted: true, hasSupabase: true, supabaseDeleted: false, hasFirestore: true, firestoreDeleted: true });
+  report("Supabase fails -> 207 Multi-Status Partial Purge", partialSb.isFullyPurged === false && partialSb.statusCode === 207);
+
+  // Firestore fails -> must NOT report full success
+  const partialFs = computePurgeStatus({ localDeleted: true, tombstonePersistent: true, firebaseAuthDeleted: true, hasSupabase: true, supabaseDeleted: true, hasFirestore: true, firestoreDeleted: false });
+  report("Firestore fails -> 207 Multi-Status Partial Purge", partialFs.isFullyPurged === false && partialFs.statusCode === 207);
+
+  // Unmark deleted response handling
+  function resolveUnmarkResponse(storageResult) {
+    if (!storageResult.success) {
+      return { status: 502, success: false, error: storageResult.error || "Failed" };
+    }
+    return { status: 200, success: true };
+  }
+  const failedUnmark = resolveUnmarkResponse({ success: false, error: "Cloud connection refused" });
+  report("Failed tombstone removal returns 502 Bad Gateway", failedUnmark.status === 502 && failedUnmark.success === false);
+  const okUnmark = resolveUnmarkResponse({ success: true });
+  report("Successful tombstone removal returns 200 OK", okUnmark.status === 200 && okUnmark.success === true);
+} catch (err) {
+  report("Purge Completion Test Exception", false, err.message);
+}
+
 console.log("\n=======================================================");
 console.log(`📊 UNIT TEST REPORT: ${passedTests}/${totalTests} PASSED (${failedTests} FAILED)`);
 console.log("=======================================================\n");

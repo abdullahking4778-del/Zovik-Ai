@@ -29,7 +29,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    await removeDeletedUserTombstone(targetId, targetEmail);
+    const result = await removeDeletedUserTombstone(targetId, targetEmail);
+    if (!result.success) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: result.error || "Failed to remove tombstone record from authoritative cloud storage.",
+        },
+        { status: 502 }
+      );
+    }
 
     return NextResponse.json({
       success: true,

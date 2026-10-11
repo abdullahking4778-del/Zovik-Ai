@@ -269,6 +269,9 @@ async function runHttpSecurityTests() {
     { name: "Local File Scheme", url: "file:///etc/passwd" },
     { name: "FTP Scheme", url: "ftp://example.com/malicious.jpg" },
     { name: "Javascript Scheme", url: "javascript:alert(1)" },
+    { name: "IPv4-Mapped Loopback IPv6", url: "http://[::ffff:127.0.0.1]:3000/api/characters" },
+    { name: "IPv4-Mapped Cloud Metadata", url: "http://[::ffff:169.254.169.254]/latest/meta-data/" },
+    { name: "Expanded IPv6 Loopback", url: "http://[0:0:0:0:0:0:0:1]:3000/api/characters" },
   ];
 
   for (const item of unsafeUrls) {

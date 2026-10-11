@@ -217,10 +217,24 @@ export function isUserDeleted(id?: string, email?: string): boolean {
 
 /**
  * Async authoritative check against both cache and cloud storage.
+ * On cold start or stale cache, awaits cloud sync before authenticating.
  */
 export async function isUserDeletedAsync(id?: string, email?: string): Promise<boolean> {
   if (isUserDeleted(id, email)) return true;
-  await syncFromCloudStore();
+
+  if (lastCloudFetchTime === 0 || Date.now() - lastCloudFetchTime > 30000) {
+    try {
+      await Promise.race([
+        syncFromCloudStore(),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("Cloud tombstone sync timeout")), 1500)
+        ),
+      ]);
+    } catch (syncErr) {
+      console.warn("[DeletedUsers] Cold-start cloud sync notice:", syncErr);
+    }
+  }
+
   return isUserDeleted(id, email);
 }
 

@@ -34,12 +34,22 @@ export function isPrivateIpAddress(ip: string): boolean {
     return false;
   }
 
-  // IPv6 Loopback & Private / Link-Local:
-  // ::1, fe80::/10, fc00::/7, fd00::/8
-  const cleanIpv6 = ip.replace(/[\[\]]/g, "").toLowerCase();
+  // IPv6 & IPv4-mapped IPv6 normalization
+  const cleanIpv6 = ip.replace(/[\[\]]/g, "").toLowerCase().trim();
+
+  // IPv4-mapped IPv6 addresses (e.g. ::ffff:127.0.0.1, ::ffff:169.254.169.254)
+  if (cleanIpv6.startsWith("::ffff:") || cleanIpv6.startsWith("ffff:")) {
+    const mappedIpv4 = cleanIpv6.replace(/^::?ffff:/, "");
+    return isPrivateIpAddress(mappedIpv4);
+  }
+
+  // IPv6 Loopback & Private / Link-Local / Unique-Local:
+  // ::1, 0:0:0:0:0:0:0:1, fe80::/10, fc00::/7, fd00::/8
   if (
     cleanIpv6 === "::1" ||
     cleanIpv6 === "::" ||
+    cleanIpv6 === "0:0:0:0:0:0:0:1" ||
+    cleanIpv6 === "0:0:0:0:0:0:0:0" ||
     cleanIpv6.startsWith("fe80:") ||
     cleanIpv6.startsWith("fc00:") ||
     cleanIpv6.startsWith("fd00:")

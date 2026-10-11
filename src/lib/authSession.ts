@@ -3,7 +3,7 @@ import { adminAuth } from "./firebaseAdmin";
 import { db } from "./firebase";
 import { doc, getDoc } from "firebase/firestore";
 import { getActiveUserTier } from "./userStore";
-import { isUserDeleted } from "./deletedUsers";
+import { isUserDeletedAsync } from "./deletedUsers";
 
 export async function resolveServerUser(req: NextRequest, clientToken?: string): Promise<{
   authenticated: boolean;
@@ -46,7 +46,7 @@ export async function resolveServerUser(req: NextRequest, clientToken?: string):
   }
 
   // Immediately reject deleted / tombstoned users even if an unexpired token is still presented
-  if (isUserDeleted(resolvedUid, resolvedEmail)) {
+  if (await isUserDeletedAsync(resolvedUid, resolvedEmail)) {
     return { authenticated: false, tier: "free" };
   }
 

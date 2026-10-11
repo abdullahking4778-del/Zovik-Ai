@@ -263,7 +263,15 @@ export async function DELETE(req: NextRequest) {
       cleanAppCacheAndJunk();
     } catch {}
 
-    const isFullyPurged = localDeleted && tombstoneRes.persistent && (firebaseAuthDeleted || !userId);
+    const hasSupabase = isSupabaseConfigured();
+    const hasFirestore = Boolean(adminDb && typeof adminDb.collection === "function");
+
+    const isFullyPurged =
+      localDeleted &&
+      tombstoneRes.persistent &&
+      (firebaseAuthDeleted || !userId) &&
+      (!hasSupabase || supabaseDeleted) &&
+      (!hasFirestore || firestoreDeleted);
     const isPartiallyPurged = localDeleted || tombstoneRes.success || supabaseDeleted || firestoreDeleted;
 
     if (!isPartiallyPurged) {
