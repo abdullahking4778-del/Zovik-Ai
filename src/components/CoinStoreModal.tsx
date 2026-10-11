@@ -60,8 +60,8 @@ const DEFAULT_ACCOUNTS: Record<string, PaymentAccount> = {
   binance: {
     name: "Binance Pay (USDT)",
     account: "1204011189",
-    title: "Binance Pay ID (USDT)",
-    notes: "Binance App → Pay → Send to Pay ID: 1204011189. Paste Order / Pay ID below.",
+    title: "IQ-MALIK",
+    notes: "Binance App → Pay → Send to Pay ID: 1204011189 (Name: IQ-MALIK). Paste Order / Pay ID below.",
     badge: "CRYPTO 🌐",
   },
 };
@@ -85,12 +85,10 @@ export default function CoinStoreModal({ isOpen, onClose }: CoinStoreModalProps)
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
 
-  // Sync logged in email
+  // Allow custom recipient email - not forcing admin/personal email
   useEffect(() => {
-    if (user?.email) {
-      setUserEmail(user.email);
-    }
-  }, [user]);
+    // Keep empty by default so user can specify where they want coins delivered
+  }, []);
 
   // Packages from economy config or sensible defaults
   const packages = economy?.packages && economy.packages.length > 0 ? economy.packages : [
@@ -509,9 +507,16 @@ export default function CoinStoreModal({ isOpen, onClose }: CoinStoreModalProps)
                     </button>
                   </div>
 
-                  <div className="pt-2 border-t border-white/5 text-xs text-[#aeaeae]">
-                    <span className="text-white/60 font-semibold">Account Title: </span>
-                    <span className="text-white font-bold">{DEFAULT_ACCOUNTS[paymentMethod].title}</span>
+                  <div className="pt-2 border-t border-white/5 text-xs text-[#aeaeae] flex flex-wrap items-center justify-between gap-1">
+                    <div>
+                      <span className="text-white/60 font-semibold">Account Title / Name: </span>
+                      <span className="text-amber-400 font-black">{DEFAULT_ACCOUNTS[paymentMethod].title}</span>
+                    </div>
+                    {paymentMethod === "binance" && (
+                      <span className="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 font-mono text-[10px] font-black border border-amber-500/30">
+                        ID: 1204011189 (IQ-MALIK)
+                      </span>
+                    )}
                   </div>
 
                   <p className="text-[11px] text-white/50 italic pt-1">
@@ -522,12 +527,14 @@ export default function CoinStoreModal({ isOpen, onClose }: CoinStoreModalProps)
                 {/* Form Fields: Email & Trx ID */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-bold text-white mb-1">Your Account Email</label>
+                    <label className="block text-xs font-bold text-white mb-1">
+                      Recipient Email (Coins Delivery)
+                    </label>
                     <input
                       type="email"
                       value={userEmail}
                       onChange={(e) => setUserEmail(e.target.value)}
-                      placeholder="account@example.com"
+                      placeholder="e.g. yourname@gmail.com"
                       className="w-full px-3.5 py-2.5 rounded-xl bg-black/40 border border-white/10 text-white text-xs font-mono focus:outline-none focus:border-amber-400"
                       required
                     />

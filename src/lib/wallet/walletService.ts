@@ -215,3 +215,16 @@ export async function deductVoiceCredits(userId: string, voiceId?: string) {
   });
 }
 
+/**
+ * Deduct credits for custom companion creation (100 coins).
+ */
+export async function deductCompanionCreationCredits(userId: string, characterId?: string) {
+  return debitUserWallet({
+    userId,
+    amount: 100,
+    reason: "Custom AI Companion Creation 🎨",
+    referenceId: characterId,
+    idempotencyKey: characterId ? `char_create_${characterId}` : undefined,
+  });
+}
+

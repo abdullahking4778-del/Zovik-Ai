@@ -8,6 +8,7 @@ import {
   generateUniqueId,
 } from "@/lib/serverDb";
 import { Character } from "@/types";
+import { getUserWallet, deductCompanionCreationCredits } from "@/lib/wallet/walletService";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -113,9 +114,29 @@ export async function POST(req: NextRequest) {
       creatorEmail: sessionUser.userEmail || (isAdmin ? "admin@zovik.ai" : undefined),
     };
 
+    // 100 Coins Wallet Check for Non-Admin Companion Creation
+    let remainingCoins: number | undefined = undefined;
+    if (!isAdmin && sessionUser.authenticated && sessionUser.userId) {
+      const wallet = await getUserWallet(sessionUser.userId);
+      if (wallet.balance < 100) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Aapke paas custom companion create karne ke liye kafi coins nahi hain (100 coins required)",
+            coinsRequired: 100,
+            currentBalance: wallet.balance,
+          },
+          { status: 402 }
+        );
+      }
+
+      const debitRes = await deductCompanionCreationCredits(sessionUser.userId, charId);
+      remainingCoins = debitRes.wallet.balance;
+    }
+
     const saved = await savePersistentCustomCharacter(formattedChar);
 
-    return NextResponse.json({ success: true, character: saved });
+    return NextResponse.json({ success: true, character: saved, remainingCoins });
   } catch (err: unknown) {
     console.error("[Characters POST Error]:", err);
     return NextResponse.json({ success: false, error: "Internal server error adding companion" }, { status: 500 });

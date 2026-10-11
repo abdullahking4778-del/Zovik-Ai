@@ -14,21 +14,32 @@ import {
   Flame,
   HeartHandshake,
   Crown,
+  Coins,
+  AlertCircle,
+  Loader2,
+  ArrowRight,
 } from "lucide-react";
 import { Character } from "@/types";
 import { safeLocalStorage } from "@/lib/storage";
+import { useWallet, notifyWalletUpdated } from "@/hooks/useWallet";
 
 interface CreateCharacterModalProps {
   isOpen: boolean;
   onClose: () => void;
   onCharacterCreated: (character: Character) => void;
+  openPremiumModal?: () => void;
 }
 
 export default function CreateCharacterModal({
   isOpen,
   onClose,
   onCharacterCreated,
+  openPremiumModal,
 }: CreateCharacterModalProps) {
+  const { balance, refreshWallet } = useWallet();
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [pendingChar, setPendingChar] = useState<Character | null>(null);
+  const [isCreating, setIsCreating] = useState(false);
   const [step, setStep] = useState(1);
   const [style, setStyle] = useState<"realistic" | "anime">("realistic");
   const [gender, setGender] = useState<"female" | "male">("female");
@@ -119,8 +130,30 @@ export default function CreateCharacterModal({
       ],
     };
 
-    onCharacterCreated(newChar);
-    onClose();
+    setPendingChar(newChar);
+    setShowConfirmModal(true);
+  };
+
+  const handleConfirmAndCreate = async () => {
+    if (!pendingChar) return;
+    if (balance < 100) {
+      if (openPremiumModal) {
+        openPremiumModal();
+      } else {
+        window.dispatchEvent(new CustomEvent("open-premium-modal"));
+      }
+      return;
+    }
+
+    setIsCreating(true);
+    try {
+      await onCharacterCreated(pendingChar);
+      notifyWalletUpdated();
+      setShowConfirmModal(false);
+      onClose();
+    } finally {
+      setIsCreating(false);
+    }
   };
 
   return (
@@ -142,9 +175,9 @@ export default function CreateCharacterModal({
           <div>
             <div className="flex items-center space-x-2">
               <h2 className="text-xl sm:text-2xl font-black text-white">Create Custom Companion</h2>
-              <span className="px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-black text-[9px] font-black uppercase tracking-wider flex items-center space-x-1">
-                <Crown className="size-3 fill-black" />
-                <span>VIP & Plus Exclusive</span>
+              <span className="px-2.5 py-0.5 rounded-full bg-gradient-to-r from-amber-500 to-yellow-400 text-black text-[10px] font-black uppercase tracking-wider flex items-center space-x-1 shadow-sm">
+                <Coins className="size-3 text-black" />
+                <span>100 Coins</span>
               </span>
             </div>
             <p className="text-xs text-[#aeaeae] mt-0.5">
@@ -488,6 +521,109 @@ export default function CreateCharacterModal({
           </div>
         )}
       </div>
+
+      {/* ================= 100 COINS CONFIRMATION POPUP ================= */}
+      {showConfirmModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
+          <div className="relative w-full max-w-md bg-[#160f20] border border-amber-500/40 rounded-3xl p-6 sm:p-7 shadow-2xl shadow-amber-950/40 space-y-4 text-left">
+            {/* Close confirmation */}
+            <button
+              type="button"
+              onClick={() => setShowConfirmModal(false)}
+              className="absolute top-4 right-4 size-7 rounded-full bg-white/5 hover:bg-white/10 text-white/70 hover:text-white flex items-center justify-center transition-colors"
+            >
+              <X className="size-4" />
+            </button>
+
+            <div className="flex items-center space-x-3">
+              <div className="size-12 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0 shadow-inner">
+                <Coins className="size-6 text-amber-400" />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-white">Confirm Creation</h3>
+                <p className="text-xs text-[#aeaeae]">Cost: 100 Coins</p>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-black/40 border border-white/5 space-y-2.5 text-xs">
+              <div className="flex justify-between">
+                <span className="text-[#888]">Companion Name:</span>
+                <span className="font-bold text-white">{pendingChar?.name}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#888]">Creation Fee:</span>
+                <span className="font-bold text-amber-400">🪙 100 Coins</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#888]">Your Wallet Balance:</span>
+                <span className="font-bold text-white">🪙 {balance.toLocaleString()} Coins</span>
+              </div>
+              <div className="pt-2 border-t border-white/10 flex justify-between">
+                <span className="text-[#888]">Balance After Creation:</span>
+                <span className={`font-black ${balance >= 100 ? "text-emerald-400" : "text-red-400"}`}>
+                  🪙 {Math.max(0, balance - 100).toLocaleString()} Coins
+                </span>
+              </div>
+            </div>
+
+            {balance < 100 ? (
+              <div className="p-3 rounded-xl bg-red-500/15 border border-red-500/30 text-red-200 text-xs flex items-start space-x-2">
+                <AlertCircle className="size-4 text-red-400 shrink-0 mt-0.5" />
+                <span>
+                  Aapke wallet mein kafi coins nahi hain (Required: 100, Balance: {balance}). Pehle Coin Store se recharge karein.
+                </span>
+              </div>
+            ) : (
+              <p className="text-[11px] text-[#aeaeae] text-center">
+                Confirm karne par aapke wallet se 100 Coins deduct kar ke aapka custom companion create ho jayega.
+              </p>
+            )}
+
+            <div className="flex items-center space-x-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setShowConfirmModal(false)}
+                className="w-1/3 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-white font-bold text-xs transition-colors"
+              >
+                Cancel
+              </button>
+              {balance >= 100 ? (
+                <button
+                  type="button"
+                  disabled={isCreating}
+                  onClick={handleConfirmAndCreate}
+                  className="w-2/3 py-3 rounded-xl bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-600 text-black font-black text-xs uppercase tracking-wider shadow-lg hover:brightness-110 active:scale-95 transition-all flex items-center justify-center space-x-1.5"
+                >
+                  {isCreating ? (
+                    <>
+                      <Loader2 className="size-3.5 animate-spin" />
+                      <span>Creating...</span>
+                    </>
+                  ) : (
+                    <span>Confirm & Deduct 100 Coins 🚀</span>
+                  )}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowConfirmModal(false);
+                    if (openPremiumModal) {
+                      openPremiumModal();
+                    } else {
+                      window.dispatchEvent(new CustomEvent("open-premium-modal"));
+                    }
+                  }}
+                  className="w-2/3 py-3 rounded-xl bg-gradient-to-r from-[#f53b70] to-[#ff457c] text-white font-black text-xs uppercase tracking-wider shadow-lg hover:brightness-110 active:scale-95 transition-all flex items-center justify-center space-x-1.5"
+                >
+                  <span>Recharge Coins 🪙</span>
+                  <ArrowRight className="size-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

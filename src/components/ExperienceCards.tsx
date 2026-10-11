@@ -41,8 +41,8 @@ export default function ExperienceCards({
     {
       id: "creators",
       title: "Zovik Creators",
-      subtitle: "Build Custom AI (VIP & Plus)",
-      badge: "VIP EXCLUSIVE",
+      subtitle: "Build Custom AI (🪙 100 Coins)",
+      badge: "🪙 100 COINS",
       icon: Users,
       bg: "from-[#29183d] via-[#1c0f2d] to-[#0f091c]",
       image: "/promos/zovik_creators.jpg",

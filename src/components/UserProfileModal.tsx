@@ -14,9 +14,13 @@ import {
   Edit3, 
   Check, 
   Loader2, 
-  HardDrive 
+  HardDrive,
+  Coins,
+  Phone,
+  Zap,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import { useWallet } from "@/hooks/useWallet";
 
 interface UserProfileModalProps {
   isOpen: boolean;
@@ -39,6 +43,7 @@ export default function UserProfileModal({
   openPremiumModal,
 }: UserProfileModalProps) {
   const { user: currentUser, tier: currentTier, userData, updateUserProfile, logout } = useAuth();
+  const { balance } = useWallet();
 
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState("");
@@ -118,21 +123,14 @@ export default function UserProfileModal({
             <div className="min-w-0">
               <h3 className="text-base font-black text-white truncate">{displayName}</h3>
               <p className="text-xs text-[#aeaeae] truncate">{currentUser.email}</p>
-              <div className="mt-1 flex items-center space-x-1.5">
-                {isVip ? (
-                  <span className="px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-black text-[9px] font-black uppercase tracking-wider flex items-center space-x-1 shadow-sm">
-                    <Crown className="size-3 fill-black" />
-                    <span>VIP Member</span>
-                  </span>
-                ) : isPlus ? (
-                  <span className="px-2 py-0.5 rounded-full bg-pink-500 text-white text-[9px] font-black uppercase tracking-wider">
-                    Plus Member
-                  </span>
-                ) : (
-                  <span className="px-2 py-0.5 rounded-full bg-white/10 text-[#cbb6bf] text-[9px] font-black uppercase tracking-wider">
-                    Free Member
-                  </span>
-                )}
+              <div className="mt-1.5 flex items-center space-x-1.5">
+                <span className="px-2.5 py-0.5 rounded-full bg-gradient-to-r from-amber-500 to-yellow-400 text-black text-[10px] font-black uppercase tracking-wider flex items-center space-x-1 shadow-sm">
+                  <Coins className="size-3 text-black" />
+                  <span>🪙 {balance.toLocaleString()} Coins</span>
+                </span>
+                <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[9px] font-extrabold uppercase border border-emerald-500/30">
+                  Active Wallet
+                </span>
               </div>
             </div>
           </div>
@@ -222,64 +220,80 @@ export default function UserProfileModal({
             </button>
           </form>
         ) : (
-          /* Status & Features Card */
           <div className="p-4 rounded-2xl bg-[#1b1024] border border-white/5 space-y-3">
+            <div className="flex items-center justify-between text-xs pb-2 border-b border-white/5">
+              <span className="text-[#aeaeae] flex items-center space-x-1.5">
+                <Coins className="size-3.5 text-amber-400" />
+                <span className="font-bold text-white">Wallet Balance:</span>
+              </span>
+              <span className="font-black text-amber-400 text-sm">
+                🪙 {balance.toLocaleString()} Coins
+              </span>
+            </div>
+
             <div className="flex items-center justify-between text-xs">
               <span className="text-[#aeaeae] flex items-center space-x-1.5">
                 <MessageCircle className="size-3.5 text-[#f53b70]" />
-                <span>Daily Message Quota:</span>
+                <span>AI Text Message:</span>
               </span>
               <span className="font-extrabold text-white">
-                {isVip ? "500 Messages / Day" : isPlus ? "200 Messages / Day" : "20 Messages / Day"}
+                1 Coin / msg
               </span>
             </div>
 
             <div className="flex items-center justify-between text-xs">
               <span className="text-[#aeaeae] flex items-center space-x-1.5">
                 <Sparkles className="size-3.5 text-amber-400" />
-                <span>Photo Unblur:</span>
-              </span>
-              <span className={`font-extrabold ${isVip || isPlus ? "text-emerald-400" : "text-[#888]"}`}>
-                {isVip || isPlus ? "Unlocked & HD" : "Blurred (Free)"}
-              </span>
-            </div>
-
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-[#aeaeae] flex items-center space-x-1.5">
-                <HardDrive className="size-3.5 text-blue-400" />
-                <span>Data Retention:</span>
+                <span>Private HD Photo:</span>
               </span>
               <span className="font-extrabold text-white">
-                {storageRetention} Days Cloud Storage
+                5 Coins (Permanent HD)
               </span>
             </div>
 
             <div className="flex items-center justify-between text-xs">
               <span className="text-[#aeaeae] flex items-center space-x-1.5">
-                <Calendar className="size-3.5 text-purple-400" />
+                <Phone className="size-3.5 text-purple-400" />
+                <span>Voice Call:</span>
+              </span>
+              <span className="font-extrabold text-white">
+                2 Coins / min
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-[#aeaeae] flex items-center space-x-1.5">
+                <Zap className="size-3.5 text-blue-400" />
+                <span>Create Companion:</span>
+              </span>
+              <span className="font-extrabold text-white">
+                100 Coins
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between text-xs pt-1 border-t border-white/5">
+              <span className="text-[#aeaeae] flex items-center space-x-1.5">
+                <ShieldCheck className="size-3.5 text-emerald-400" />
                 <span>Account Status:</span>
               </span>
-              <span className="font-extrabold text-emerald-400 flex items-center space-x-1">
-                <ShieldCheck className="size-3.5" />
-                <span>Active & Synced</span>
+              <span className="font-extrabold text-emerald-400">
+                Verified & Synced
               </span>
             </div>
           </div>
         )}
 
-        {/* Upgrade / Extend CTA */}
-        {!isVip && (
-          <button
-            onClick={() => {
-              onClose();
-              openPremiumModal();
-            }}
-            className="w-full py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 text-black font-black text-xs flex items-center justify-center space-x-2 shadow-lg hover:brightness-110 active:scale-95 transition-all"
-          >
-            <Crown className="size-4 fill-black" />
-            <span>Upgrade to Full VIP Plan</span>
-          </button>
-        )}
+        {/* Recharge Coins CTA */}
+        <button
+          onClick={() => {
+            onClose();
+            openPremiumModal();
+          }}
+          className="w-full py-3 rounded-2xl bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 text-black font-black text-xs uppercase tracking-wider flex items-center justify-center space-x-2 shadow-lg shadow-amber-500/20 hover:brightness-110 active:scale-95 transition-all"
+        >
+          <Coins className="size-4 text-black" />
+          <span>Recharge Coins 🪙 (Min Rs. 50)</span>
+        </button>
 
         {/* Logout */}
         <button

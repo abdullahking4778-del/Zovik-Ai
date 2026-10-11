@@ -16,6 +16,7 @@ import {
   CameraOff,
   PhoneCall,
   Crown,
+  Coins,
   Loader2,
   Languages,
 } from "lucide-react";
@@ -433,7 +434,7 @@ export default function VoiceCallModal({
           setQuotaExceeded(true);
           const limitReply =
             data.reply ||
-            "Meri jaan, aapki aaj ki message limit poori ho chuki hai! Unlimited baat karne ke liye VIP upgrade karein 💕";
+            "Meri jaan, call jari rakhne ke liye coins kam hain! Coin Store se recharge karein 💕";
           speak(limitReply);
           return;
         }
@@ -1014,20 +1015,20 @@ export default function VoiceCallModal({
             )}
           </div>
 
-          {/* Quota Exceeded In-Call Notice */}
+          {/* Insufficient Coins In-Call Notice */}
           {quotaExceeded && (
             <div className="mt-2 flex items-center justify-between w-full max-w-sm px-3.5 py-2 rounded-xl bg-amber-500/25 border border-amber-500/40 text-amber-200 text-xs animate-fadeIn shadow-lg">
               <div className="flex items-center space-x-1.5 text-left">
-                <Crown className="size-3.5 text-amber-400 shrink-0" />
-                <span className="text-[11px] leading-tight">Daily message limit reached!</span>
+                <Coins className="size-3.5 text-amber-400 shrink-0" />
+                <span className="text-[11px] leading-tight">Coins balance kam hai (2 Coins/min)</span>
               </div>
               <button
                 onClick={() => {
                   window.dispatchEvent(new CustomEvent("open-premium-modal"));
                 }}
-                className="px-2.5 py-1 rounded-lg bg-gradient-to-r from-amber-400 to-orange-500 text-black font-extrabold text-[10px] hover:brightness-110 transition-all cursor-pointer shadow-md"
+                className="px-2.5 py-1 rounded-lg bg-gradient-to-r from-amber-400 to-yellow-500 text-black font-extrabold text-[10px] hover:brightness-110 transition-all cursor-pointer shadow-md"
               >
-                Unlock VIP
+                Recharge Coins 🪙
               </button>
             </div>
           )}

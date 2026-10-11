@@ -254,16 +254,6 @@ export default function Header({
                 <span className="truncate text-xs font-bold text-white">
                   {userData?.name || currentUser?.displayName || (currentUser?.email ? currentUser.email.split("@")[0] : "User")}
                 </span>
-                {currentTier === "vip" ? (
-                  <span className="px-1.5 py-0.5 rounded-md bg-gradient-to-r from-amber-500 to-orange-500 text-black text-[9px] font-black uppercase tracking-wider flex items-center shrink-0 shadow-sm">
-                    <Crown className="size-2.5 fill-black mr-0.5" />
-                    VIP
-                  </span>
-                ) : currentTier === "plus" ? (
-                  <span className="px-1.5 py-0.5 rounded-md bg-pink-500 text-white text-[9px] font-black uppercase tracking-wider shrink-0">
-                    Plus
-                  </span>
-                ) : null}
               </button>
               <button
                 onClick={onLogout}

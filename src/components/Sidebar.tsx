@@ -81,13 +81,6 @@ export default function Sidebar({
             </span>
           </div>
         </Link>
-        <a
-          href="/"
-          className="mx-3 -mt-4 mb-1 px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-[11px] font-bold text-pink-400 hover:text-white border border-white/5 flex items-center justify-between transition-all"
-        >
-          <span>← Zovik Labs</span>
-          <span className="text-[9px] px-1.5 py-0.5 rounded bg-pink-500/20 text-pink-300 uppercase tracking-wider font-mono">Home</span>
-        </a>
 
         {/* Navigation List */}
         <nav className="flex flex-col space-y-1">
@@ -120,8 +113,8 @@ export default function Sidebar({
                 </div>
 
                 {item.id === "create" ? (
-                  <span className="px-1.5 py-0.5 rounded-md bg-gradient-to-r from-amber-500 to-orange-500 text-black text-[9px] font-black uppercase tracking-wider shadow-sm">
-                    VIP
+                  <span className="px-1.5 py-0.5 rounded-md bg-gradient-to-r from-amber-500 to-yellow-400 text-black text-[9px] font-black uppercase tracking-wider shadow-sm">
+                    🪙 100
                   </span>
                 ) : item.badge && item.badge > 0 ? (
                   <span className="size-5 rounded-full bg-[#f53b70] text-white text-[11px] font-bold flex items-center justify-center shadow-sm">
@@ -136,7 +129,7 @@ export default function Sidebar({
         {/* Official Coins Economy Banner */}
         <div
           onClick={openPremiumModal}
-          className="relative overflow-hidden p-3.5 rounded-2xl bg-gradient-to-br from-[#2a1a0c] via-[#1a1024] to-[#120a1a] border border-amber-500/40 hover:border-amber-400 transition-all cursor-pointer group shadow-lg shadow-amber-950/20"
+          className="relative overflow-hidden p-3.5 rounded-2xl bg-gradient-to-br from-[#1a1024]/95 via-[#140b1c]/90 to-[#0d0714] border border-amber-500/35 hover:border-amber-400/60 backdrop-blur-md transition-all cursor-pointer group shadow-xl shadow-amber-950/20"
         >
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center space-x-1.5">

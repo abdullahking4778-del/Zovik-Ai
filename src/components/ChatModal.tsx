@@ -181,16 +181,10 @@ export default function ChatModal({
     };
   }, []);
 
-  // User VIP/Plus Status and Daily Message Limit (Free: 20, Plus: 200, VIP: 500 / 24h)
-  const [isVipUser, setIsVipUser] = useState(false);
+  // User Tier & Coins State
   const [userTier, setUserTier] = useState<"free" | "plus" | "vip">("free");
+  const isVipBlocked = false; // In coins economy, all companions are accessible via pay-as-you-go coins
 
-  const isCompanionVip = character?.accessTier === "vip" || character?.accessTier === "plus" || character?.isVipOnly === true;
-  const isVipBlocked = isCompanionVip && !isVipUser;
-  const [messagesRemaining, setMessagesRemaining] = useState(20);
-  const [timeUntilReset, setTimeUntilReset] = useState("");
-
-  // Check VIP status and calculate 24h message reset
   const [clearedNotice, setClearedNotice] = useState(false);
   const [previewPhotoUrl, setPreviewPhotoUrl] = useState<string | null>(null);
   const [previewVideoUrl, setPreviewVideoUrl] = useState<string | null>(null);
@@ -199,55 +193,13 @@ export default function ChatModal({
   const [copiedMsgIdx, setCopiedMsgIdx] = useState<number | null>(null);
 
   useEffect(() => {
-    const directTier = localStorage.getItem("zovik_tier");
-    const directVip = localStorage.getItem("zovik_is_vip");
-    
     let tier: "free" | "plus" | "vip" = "free";
-    if (authTier === "vip" || directTier === "vip" || directVip === "true") {
+    if (authTier === "vip") {
       tier = "vip";
-    } else if (authTier === "plus" || directTier === "plus") {
+    } else if (authTier === "plus") {
       tier = "plus";
     }
-
-    const savedUser = localStorage.getItem("zovik_user");
-    if (savedUser) {
-      try {
-        const u = JSON.parse(savedUser);
-        if (u.tier === "vip") tier = "vip";
-        else if (u.tier === "plus") tier = "plus";
-        else if (u.isVip) tier = "vip";
-      } catch {}
-    }
-
     setUserTier(tier);
-    const isSubscriber = tier === "vip" || tier === "plus";
-    setIsVipUser(isSubscriber);
-
-    // Quotas: Free: 20, Plus: 200, VIP: 500
-    const dailyQuota = tier === "vip" ? 500 : tier === "plus" ? 200 : 20;
-
-    const now = Date.now();
-    const storedTime = localStorage.getItem("zovik_daily_limit_timestamp");
-    const storedCount = localStorage.getItem("zovik_daily_msg_count");
-    const twentyFourHours = 24 * 60 * 60 * 1000;
-
-    let count = 0;
-    if (!storedTime || now - parseInt(storedTime, 10) > twentyFourHours) {
-      // 24-hour cycle reset
-      localStorage.setItem("zovik_daily_limit_timestamp", now.toString());
-      localStorage.setItem("zovik_daily_msg_count", "0");
-      count = 0;
-    } else {
-      count = parseInt(storedCount || "0", 10);
-    }
-
-    setMessagesRemaining(Math.max(0, dailyQuota - count));
-
-    const startTime = parseInt(storedTime || now.toString(), 10);
-    const msLeft = Math.max(0, twentyFourHours - (now - startTime));
-    const hoursLeft = Math.floor(msLeft / (1000 * 60 * 60));
-    const minsLeft = Math.floor((msLeft % (1000 * 60 * 60)) / (1000 * 60));
-    setTimeUntilReset(`${hoursLeft}h ${minsLeft}m`);
   }, [authTier]);
 
   // Load chat history from localStorage or greeting (Zovik companion introductory video)
@@ -389,13 +341,9 @@ export default function ChatModal({
       return;
     }
 
-    // Check message quota
-    if (messagesRemaining <= 0) {
-      if (!isVipUser) {
-        openPremiumModal();
-      } else {
-        alert("You have reached your daily message limit. It will reset after 24 hours.");
-      }
+    // Check coins balance (1 Coin per message)
+    if (chatCoins < 1) {
+      openPremiumModal();
       return;
     }
 
@@ -429,11 +377,6 @@ export default function ChatModal({
       window.dispatchEvent(new CustomEvent("zovik_chat_updated", { detail: { characterId: character.id } }));
     } catch {}
 
-    // Deduct message count from daily cycle
-    const storedCount = parseInt(localStorage.getItem("zovik_daily_msg_count") || "0", 10) + 1;
-    localStorage.setItem("zovik_daily_msg_count", storedCount.toString());
-    setMessagesRemaining((prev) => Math.max(0, prev - 1));
-
     try {
       // Call Full-Stack Groq API backend with context
       const preferredLang = localStorage.getItem("zovik_lang") || "ur";
@@ -464,9 +407,9 @@ export default function ChatModal({
 
       // Check if server rejected request due to daily quota limit or coins
       if (res.status === 402 || res.status === 429 || data.quotaExceeded || data.coinsExceeded) {
-        setMessagesRemaining(0);
         setIsTyping(false);
         setIsStreamingAiText(false);
+        notifyWalletUpdated();
         const limitNoticeMsg: Message = {
           sender: "ai",
           text: data.reply || "Meri jaan, aapke paas chat ke liye coins khatam ho chuke hain! Coin Store se recharge karein 💕",
@@ -478,9 +421,7 @@ export default function ChatModal({
         return;
       }
 
-      if (data.quota?.remaining !== undefined) {
-        setMessagesRemaining(data.quota.remaining);
-      }
+      notifyWalletUpdated();
 
       const rawAiReply = data.reply || "Aapke sath baat kar ke bohot sukoon milta hai... Aur batao 💕";
       const aiReply = rawAiReply.replace(/\*[^*]*\*/g, "").trim();
@@ -575,7 +516,7 @@ export default function ChatModal({
     if (isTyping) return;
 
     // Check if user has sufficient coins (requires 5 coins)
-    if (chatCoins < 5 && !isVipUser) {
+    if (chatCoins < 5) {
       openPremiumModal();
       return;
     }
@@ -736,11 +677,9 @@ export default function ChatModal({
               <div className="flex items-center space-x-1.5">
                 <h3 className="text-base font-bold text-white">{character.name}</h3>
                 <span className="text-xs text-[#aeaeae]">• {character.age}</span>
-                {isVipUser ? (
-                  <span className="px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400 text-[10px] font-black uppercase">
-                    VIP
-                  </span>
-                ) : null}
+                <span className="px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] font-black uppercase tracking-wider">
+                  Active
+                </span>
               </div>
               <span className="text-[11px] text-emerald-400 font-medium">Online • Active Now</span>
             </div>
@@ -773,7 +712,7 @@ export default function ChatModal({
             <button
               onClick={() => {
                 stopVoice();
-                if (!isVipUser) {
+                if (chatCoins < 2) {
                   openPremiumModal();
                 } else {
                   onStartCall(character);
@@ -812,23 +751,21 @@ export default function ChatModal({
           </div>
         )}
 
-        {/* Daily 24H Message Counter Bar for Free, Plus, and VIP */}
-        <div className="flex items-center justify-between px-4 py-1.5 bg-[#1f1225] border-b border-[#f53b70]/20 text-[11px] text-[#f1d0de]">
+        {/* Live Virtual Coins Wallet Balance Bar */}
+        <div className="flex items-center justify-between px-4 py-1.5 bg-[#170e1d] border-b border-amber-500/20 text-[11px] text-[#f1d0de]">
           <div className="flex items-center space-x-2">
-            <Sparkles className="size-3.5 text-[#f53b70]" />
+            <Coins className="size-3.5 text-amber-400" />
             <span>
-              {userTier === "vip" ? (
-                <>VIP Elite: <strong className="text-white">{messagesRemaining} / 500</strong> Daily Messages</>
-              ) : userTier === "plus" ? (
-                <>Plus Plan: <strong className="text-white">{messagesRemaining} / 200</strong> Daily Messages</>
-              ) : (
-                <>Free Daily Messages: <strong className="text-white">{messagesRemaining} / 20</strong></>
-              )}
+              Wallet Balance: <strong className="text-amber-300 font-black">🪙 {chatCoins.toLocaleString()} Coins</strong>
+              <span className="text-white/40 ml-1.5 hidden sm:inline">(1 Coin / msg)</span>
             </span>
           </div>
-          {timeUntilReset && (
-            <span className="text-[10px] text-white/50">Resets in {timeUntilReset}</span>
-          )}
+          <button
+            onClick={openPremiumModal}
+            className="text-[10px] px-2.5 py-0.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-bold border border-amber-500/40 transition-colors flex items-center space-x-1"
+          >
+            <span>+ Recharge</span>
+          </button>
         </div>
 
         {/* Chat Messages Body */}
@@ -860,7 +797,7 @@ export default function ChatModal({
               );
             }
 
-            // Heavy Blurred Image Paywall for Free Users / Unblurred for VIP
+            // Unblurred HD Photo for all users who requested (5 Coins)
             if (msg.type === "image") {
               return (
                 <div key={idx} className="flex items-start space-x-2 max-w-[85%] sm:max-w-sm">
@@ -869,52 +806,22 @@ export default function ChatModal({
                   </div>
                   <div className="p-3 rounded-2xl bg-[#1a1221] border border-white/10 text-white shadow-md">
                     <div
-                      onClick={() => {
-                        if (isVipUser) {
-                          setPreviewPhotoUrl(msg.imageUrl || character.image);
-                        }
-                      }}
-                      className={`relative w-64 h-80 rounded-xl overflow-hidden bg-black mb-2 ${
-                        isVipUser ? "cursor-pointer group" : ""
-                      }`}
+                      onClick={() => setPreviewPhotoUrl(msg.imageUrl || character.image)}
+                      className="relative w-64 h-80 rounded-xl overflow-hidden bg-black mb-2 cursor-pointer group"
                     >
                       <Image
                         src={getSafeImageUrl(msg.imageUrl || character.image)}
                         alt="Private Photo"
                         fill
-                        className={`object-cover object-top transition-all duration-500 ${
-                          isVipUser ? "blur-0 group-hover:scale-105" : "blur-2xl scale-110"
-                        }`}
+                        className="object-cover object-top transition-all duration-500 blur-0 group-hover:scale-105"
                         unoptimized
                         referrerPolicy="no-referrer"
                       />
 
-                      {/* VIP Unblurred Tag */}
-                      {isVipUser && (
-                        <div className="absolute top-2 left-2 z-10 px-2 py-0.5 rounded-full bg-black/60 border border-emerald-400/40 text-emerald-300 text-[10px] font-black uppercase tracking-wider backdrop-blur-md flex items-center space-x-1">
-                          <span>✨ HD Unblurred</span>
-                        </div>
-                      )}
-
-                      {/* Heavy Blur Lock Overlay for Free User */}
-                      {!isVipUser && (
-                        <div className="absolute inset-0 bg-black/60 backdrop-blur-md flex flex-col items-center justify-center p-4 text-center select-none">
-                          <div className="size-14 rounded-full bg-[#f53b70]/20 border border-[#f53b70] flex items-center justify-center mb-3 shadow-lg shadow-pink-600/30">
-                            <Lock className="size-7 text-[#f53b70]" />
-                          </div>
-                          <span className="text-sm font-black text-white mb-1">Private Spicy Photo</span>
-                          <span className="text-[11px] text-[#aeaeae] mb-4">
-                            Photo is locked & blurred for Free users.
-                          </span>
-                          <button
-                            onClick={openPremiumModal}
-                            className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#f53b70] to-[#ff457c] text-white text-xs font-black tracking-wide shadow-xl shadow-pink-600/40 hover:scale-105 active:scale-95 transition-all flex items-center space-x-1.5"
-                          >
-                            <Crown className="size-4" />
-                            <span>Unlock with VIP</span>
-                          </button>
-                        </div>
-                      )}
+                      {/* HD Unblurred Tag */}
+                      <div className="absolute top-2 left-2 z-10 px-2 py-0.5 rounded-full bg-black/60 border border-emerald-400/40 text-emerald-300 text-[10px] font-black uppercase tracking-wider backdrop-blur-md flex items-center space-x-1">
+                        <span>✨ Full HD</span>
+                      </div>
                     </div>
                     {msg.text && (
                       <p className="text-xs text-[#e0d6dc] mb-1">
@@ -1041,31 +948,18 @@ export default function ChatModal({
           ))}
         </div>
 
-        {/* VIP Companion Locked Banner or Daily Quota Exhausted Banner */}
-        {isVipBlocked ? (
-          <div className="p-3 bg-gradient-to-r from-amber-950/90 via-[#2a1a08] to-amber-950/90 border-t border-amber-500/40 flex items-center justify-between">
+        {/* Insufficient Coins Warning Banner */}
+        {chatCoins < 1 ? (
+          <div className="p-3 bg-gradient-to-r from-amber-950/90 via-[#260a18] to-red-950/90 border-t border-amber-500/30 flex items-center justify-between">
             <div className="flex items-center space-x-2 text-xs text-amber-200">
-              <Crown className="size-4 text-amber-400 shrink-0" />
-              <span>👑 {character.name} sirf Plus aur VIP members ke liye exclusive hai! Upgrade karein.</span>
+              <Coins className="size-4 text-amber-400 shrink-0" />
+              <span>Coins balance kam hai (1 Coin/msg required). Recharge karein aur be-fakar chat karein!</span>
             </div>
             <button
               onClick={openPremiumModal}
-              className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 text-black text-xs font-black hover:brightness-110 shadow-md shadow-yellow-500/20 shrink-0 uppercase tracking-wider"
+              className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 text-black text-xs font-black hover:brightness-110 shadow-md shadow-amber-500/20 shrink-0"
             >
-              Unlock Now
-            </button>
-          </div>
-        ) : !isVipUser && messagesRemaining <= 0 ? (
-          <div className="p-3 bg-gradient-to-r from-red-950/80 via-[#260a18] to-red-950/80 border-t border-red-500/30 flex items-center justify-between">
-            <div className="flex items-center space-x-2 text-xs text-red-200">
-              <AlertCircle className="size-4 text-red-400 shrink-0" />
-              <span>You reached your 20 free daily messages! Upgrade to Plus or VIP for unlimited chat.</span>
-            </div>
-            <button
-              onClick={openPremiumModal}
-              className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-[#f53b70] to-[#ff5b8c] text-white text-xs font-bold hover:brightness-110 shadow-md shrink-0"
-            >
-              Upgrade Now
+              Recharge Coins 🪙
             </button>
           </div>
         ) : null}
@@ -1087,8 +981,8 @@ export default function ChatModal({
                   setHighlightPhotoBtn(false);
                   handleRequestPhoto();
                 }}
-                disabled={isVipBlocked}
-                title="Request Private Selfie (Press for photo)"
+                disabled={chatCoins < 5}
+                title={chatCoins < 5 ? "5 Coins required for private photo - Recharge" : "Request Private Selfie (5 Coins)"}
                 className={`size-10 rounded-xl flex items-center justify-center transition-all ${
                   highlightPhotoBtn
                     ? "bg-[#f53b70] text-white ring-4 ring-[#f53b70]/50 scale-105 shadow-lg shadow-pink-600/50 animate-pulse"
@@ -1109,12 +1003,10 @@ export default function ChatModal({
               type="text"
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
-              disabled={isVipBlocked || (!isVipUser && messagesRemaining <= 0)}
+              disabled={chatCoins < 1}
               placeholder={
-                isVipBlocked
-                  ? `👑 Upgrade to Plus or VIP to chat with ${character.name}...`
-                  : !isVipUser && messagesRemaining <= 0
-                  ? "Daily limit reached. Get VIP for unlimited chat..."
+                chatCoins < 1
+                  ? "Coins khatam ho chuke hain... Recharge to continue chat 💕"
                   : `Message ${character.name}...`
               }
               className="flex-1 px-4 py-2.5 rounded-xl bg-[#1b1322] border border-white/10 text-white placeholder-[#777] text-sm focus:outline-none focus:border-[#f53b70] transition-colors disabled:opacity-50"
@@ -1123,7 +1015,7 @@ export default function ChatModal({
             {/* Send Button */}
             <button
               type="submit"
-              disabled={!inputText.trim() || isTyping || isVipBlocked || (!isVipUser && messagesRemaining <= 0)}
+              disabled={!inputText.trim() || isTyping || chatCoins < 1}
               className="size-10 rounded-xl bg-gradient-to-r from-[#f53b70] to-[#ff457c] text-white flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition-all shrink-0 shadow-md shadow-pink-600/30"
             >
               {isTyping ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}

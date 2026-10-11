@@ -55,7 +55,6 @@ export default function CharacterModal({
   };
 
   const isVipChar = character.accessTier === "vip" || character.accessTier === "plus" || character.isVipOnly === true;
-  const isLocked = isVipChar && !isPaidUser;
   const currentPhoto = getSafeImageUrl(selectedPhoto || character.image || "/characters/zovik_01.jpg");
   const safeTags = normalizeTags(character.tags);
 
@@ -187,14 +186,10 @@ export default function CharacterModal({
                 onClose();
                 onStartChat(character);
               }}
-              className={`flex items-center justify-center space-x-2.5 w-full py-3.5 rounded-2xl font-black text-base shadow-xl active:scale-95 transition-all ${
-                isLocked
-                  ? "bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 text-black shadow-amber-500/25 hover:brightness-110"
-                  : "bg-gradient-to-r from-[#f53b70] to-[#ff457c] text-white shadow-pink-600/30 hover:brightness-110"
-              }`}
+              className="flex items-center justify-center space-x-2.5 w-full py-3.5 rounded-2xl font-black text-base shadow-xl active:scale-95 transition-all bg-gradient-to-r from-[#f53b70] to-[#ff457c] text-white shadow-pink-600/30 hover:brightness-110"
             >
-              {isLocked ? <Lock className="size-5 text-black" /> : <MessageCircle className="size-5" />}
-              <span>{isLocked ? t.unlockVip : t.chatNow}</span>
+              <MessageCircle className="size-5" />
+              <span>{t.chatNow}</span>
             </button>
 
             <button

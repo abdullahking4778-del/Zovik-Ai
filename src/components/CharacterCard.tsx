@@ -26,7 +26,6 @@ export default function CharacterCard({
   isPaidUser = false,
 }: CharacterCardProps) {
   const isVipChar = character.accessTier === "vip" || character.accessTier === "plus" || character.isVipOnly === true;
-  const isLocked = isVipChar && !isPaidUser;
 
   return (
     <div
@@ -120,14 +119,10 @@ export default function CharacterCard({
               e.stopPropagation();
               onStartChat(character);
             }}
-            className={`flex items-center justify-center space-x-1.5 py-2 rounded-xl text-xs font-bold transition-all shadow-md active:scale-95 ${
-              isLocked
-                ? "bg-gradient-to-r from-amber-500 to-yellow-400 text-black font-black shadow-amber-500/25 hover:brightness-110"
-                : "bg-gradient-to-r from-[#f53b70] to-[#ff457c] text-white shadow-pink-600/20 hover:brightness-110"
-            }`}
+            className="flex items-center justify-center space-x-1.5 py-2 rounded-xl text-xs font-bold transition-all shadow-md active:scale-95 bg-gradient-to-r from-[#f53b70] to-[#ff457c] text-white shadow-pink-600/20 hover:brightness-110"
           >
-            {isLocked ? <Lock className="size-3.5 text-black" /> : <MessageCircle className="size-3.5" />}
-            <span>{isLocked ? "VIP Chat" : "Chat"}</span>
+            <MessageCircle className="size-3.5" />
+            <span>Chat</span>
           </button>
 
           <button
@@ -135,14 +130,10 @@ export default function CharacterCard({
               e.stopPropagation();
               onStartCall(character);
             }}
-            className={`flex items-center justify-center space-x-1.5 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 ${
-              isLocked
-                ? "bg-[#23172e] border border-amber-500/30 text-amber-300 hover:bg-[#2d1e3a]"
-                : "bg-[#23172e] border border-white/10 hover:bg-[#2d1e3a] text-white"
-            }`}
+            className="flex items-center justify-center space-x-1.5 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 bg-[#23172e] border border-white/10 hover:bg-[#2d1e3a] text-white"
           >
-            {isLocked ? <Crown className="size-3.5 text-amber-400" /> : <Phone className="size-3.5 text-[#f53b70]" />}
-            <span>{isLocked ? "VIP Call" : "Call"}</span>
+            <Phone className="size-3.5 text-[#f53b70]" />
+            <span>Call</span>
           </button>
         </div>
       </div>

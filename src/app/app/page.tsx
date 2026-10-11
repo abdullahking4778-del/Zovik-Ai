@@ -108,25 +108,15 @@ export default function Home() {
     return char.accessTier === "vip" || char.accessTier === "plus" || char.isVipOnly === true;
   };
 
-  // Smart Auth Guarded Actions with VIP/Plus Access Verification
+  // Smart Auth Guarded Actions (pay-as-you-go Coins Economy)
   const handleStartChatWithAuth = (char: Character) => {
     requireAuth(() => {
-      if (isCharacterVip(char) && !isPaidUser) {
-        showNotice(`👑 ${char.name} sirf Plus aur VIP members ke liye unlock hai!`);
-        setIsPremiumOpen(true);
-        return;
-      }
       setActiveChatCharacter(char);
     }, `${char.name} ke sath chat shuru karne ke liye pehle sign in karein.`);
   };
 
   const handleStartCallWithAuth = (char: Character) => {
     requireAuth(() => {
-      if (isCharacterVip(char) && !isPaidUser) {
-        showNotice(`👑 ${char.name} ke sath live voice call sirf Plus aur VIP members ke liye hai!`);
-        setIsPremiumOpen(true);
-        return;
-      }
       setActiveCallCharacter(char);
     }, `${char.name} ke sath live voice call ke liye pehle sign in karein.`);
   };
@@ -249,70 +239,20 @@ export default function Home() {
     };
   }, []);
 
-  // Automated Data Retention & 32-Day Subscription Lifecycle Cleanup Engine
+  // Coins Economy: All requested photos and chats are preserved permanently
   useEffect(() => {
     try {
-      const now = Date.now();
-      let userObj = currentUser;
-
-      const isPaid = currentTier === "vip" || currentTier === "plus";
-
-      // 1. Subscription Grace Expiration Check (32 days auto-complete)
-      if (isPaid && userData?.subscriptionStart) {
-        const start = new Date(userData.subscriptionStart).getTime();
-        const thirtyTwoDaysMs = 32 * 24 * 60 * 60 * 1000;
-        if (now - start > thirtyTwoDaysMs) {
-          showNotice("Notice: Your 30-day VIP plan completed (32 days grace). Reverted to normal user.");
-        }
-      }
-
-      // 2. Data Retention Policy:
-      // Normal / Free user: 7 days max retention (7 * 24 * 60 * 60 * 1000 ms)
-      // Plus / VIP user: 35 days max retention (35 * 24 * 60 * 60 * 1000 ms)
-      const retentionDays = isPaid ? 35 : 7;
-      const maxAgeMs = retentionDays * 24 * 60 * 60 * 1000;
-
-      // Clean Generated Photos
       const savedPhotosStr = localStorage.getItem("zovik_generated_photos");
       if (savedPhotosStr) {
         const photos = JSON.parse(savedPhotosStr);
         if (Array.isArray(photos)) {
-          const freshPhotos = photos.filter((p: SavedPhoto) => {
-            const created = p.createdAt || now;
-            return now - created <= maxAgeMs;
-          });
-          if (freshPhotos.length !== photos.length) {
-            localStorage.setItem("zovik_generated_photos", JSON.stringify(freshPhotos));
-            setGeneratedPhotos(freshPhotos);
-          }
-        }
-      }
-
-      // Clean Conversations older than retention
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && key.startsWith("zovik_chat_")) {
-          try {
-            const rawChat = localStorage.getItem(key);
-            if (rawChat) {
-              const msgs = JSON.parse(rawChat);
-              if (Array.isArray(msgs)) {
-                const freshMsgs = msgs.filter((m: Message) => {
-                  if (!m.timestamp) return true; // keep initial greeting
-                  return now - m.timestamp <= maxAgeMs;
-                });
-                if (freshMsgs.length !== msgs.length) {
-                  localStorage.setItem(key, JSON.stringify(freshMsgs));
-                }
-              }
-            }
-          } catch {}
+          setGeneratedPhotos(photos);
         }
       }
     } catch (e) {
-      console.warn("Data retention cleaner warning:", e);
+      console.warn("Photos loader warning:", e);
     }
-  }, [currentUser]);
+  }, []);
 
 
   // Strictly Filtered Characters logic (Girls vs Boys vs Anime)
@@ -579,11 +519,6 @@ export default function Home() {
 
   const handleOpenCreateCompanion = () => {
     requireAuth(() => {
-      if (!isPaidUser) {
-        showNotice("🔒 Create Companion is an exclusive Plus & VIP feature. Please upgrade to unlock!");
-        setIsPremiumOpen(true);
-        return;
-      }
       setIsCreateOpen(true);
     }, "Apna custom AI Companion banane ke liye pehle sign in karein.");
   };
@@ -1076,30 +1011,18 @@ export default function Home() {
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6 bg-[#150d1a] border border-white/10 p-4 rounded-2xl">
                 <div>
                   <div className="flex items-center space-x-2">
-                    <Lock className="size-5 text-[#f53b70]" />
-                    <h2 className="text-2xl font-black text-white">Private VIP Gallery</h2>
+                    <Sparkles className="size-5 text-amber-400" />
+                    <h2 className="text-2xl font-black text-white">Private Gallery</h2>
                   </div>
                   <p className="text-xs text-[#aeaeae] mt-1">
-                    {isPaidUser
-                      ? "✨ VIP Active: All photos you requested are 100% unblurred & unlocked in HD (35 Days Cloud Storage)."
-                      : "🔒 Free Plan (7 Days Storage): Photos you generate are blurred. Upgrade to Plus/VIP to unblur and unlock in full HD!"}
+                    ✨ All photos requested from your companions are permanently saved and unlocked in full HD.
                   </p>
                 </div>
 
-                {!isPaidUser ? (
-                  <button
-                    onClick={() => setIsPremiumOpen(true)}
-                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-black text-xs font-black flex items-center space-x-1.5 shadow-lg hover:brightness-110 shrink-0"
-                  >
-                    <Crown className="size-4 fill-black" />
-                    <span>Unlock All with VIP</span>
-                  </button>
-                ) : (
-                  <div className="px-3.5 py-1.5 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 text-xs font-black flex items-center space-x-1.5 shrink-0">
-                    <Sparkles className="size-3.5" />
-                    <span>VIP Unlocked Active</span>
-                  </div>
-                )}
+                <div className="px-3.5 py-1.5 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-black flex items-center space-x-1.5 shrink-0">
+                  <Sparkles className="size-3.5" />
+                  <span>Permanent HD Unlocked</span>
+                </div>
               </div>
 
               {/* Only show photos that the USER actually requested/generated */}
@@ -1124,13 +1047,7 @@ export default function Home() {
                   {generatedPhotos.map((photo, i) => (
                     <div
                       key={photo.id || i}
-                      onClick={() => {
-                        if (isPaidUser) {
-                          setViewingPhoto(photo);
-                        } else {
-                          setIsPremiumOpen(true);
-                        }
-                      }}
+                      onClick={() => setViewingPhoto(photo)}
                       className="group relative aspect-[3/4] rounded-2xl overflow-hidden bg-black border border-white/10 cursor-pointer shadow-lg hover:border-[#f53b70]/50 transition-all"
                     >
                       {/* Delete Photo Button */}
@@ -1146,45 +1063,28 @@ export default function Home() {
                         src={photo.photoUrl || photo.url || "/characters/zovik_01.jpg"}
                         alt={photo.characterName || "Private photo"}
                         fill
-                        className={`object-cover object-top transition-all duration-300 ${
-                          isPaidUser ? "blur-0 group-hover:scale-105" : "blur-xl scale-110"
-                        }`}
+                        className="object-cover object-top transition-all duration-300 blur-0 group-hover:scale-105"
                         unoptimized
                       />
 
-                      {isPaidUser ? (
-                        /* UNBLURRED & UNLOCKED FOR PLUS & VIP */
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-transparent to-black/30 opacity-90 group-hover:opacity-100 flex flex-col justify-between p-3 transition-opacity">
-                          <div className="flex items-center justify-between pr-8">
-                            <span className="px-2 py-0.5 rounded-full bg-emerald-500/30 border border-emerald-500/50 text-emerald-300 text-[10px] font-black uppercase tracking-wider backdrop-blur-md">
-                              ✓ Unlocked HD
-                            </span>
-                            <span className="text-[10px] text-white/70">
-                              {new Date(photo.createdAt || Date.now()).toLocaleDateString()}
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-xs font-black text-white block">{photo.characterName}</span>
-                            <p className="text-[11px] text-[#ddd] line-clamp-1 mt-0.5">{photo.caption}</p>
-                            <div className="mt-2 text-[10px] text-pink-400 font-bold flex items-center space-x-1">
-                              <Eye className="size-3" />
-                              <span>Tap to view full HD →</span>
-                            </div>
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-transparent to-black/30 opacity-90 group-hover:opacity-100 flex flex-col justify-between p-3 transition-opacity">
+                        <div className="flex items-center justify-between pr-8">
+                          <span className="px-2 py-0.5 rounded-full bg-emerald-500/30 border border-emerald-500/50 text-emerald-300 text-[10px] font-black uppercase tracking-wider backdrop-blur-md">
+                            ✓ HD Photo
+                          </span>
+                          <span className="text-[10px] text-white/70">
+                            {new Date(photo.createdAt || Date.now()).toLocaleDateString()}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-xs font-black text-white block">{photo.characterName}</span>
+                          <p className="text-[11px] text-[#ddd] line-clamp-1 mt-0.5">{photo.caption}</p>
+                          <div className="mt-2 text-[10px] text-pink-400 font-bold flex items-center space-x-1">
+                            <Eye className="size-3" />
+                            <span>Tap to view full HD →</span>
                           </div>
                         </div>
-                      ) : (
-                        /* BLURRED & LOCKED FOR FREE USER */
-                        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center p-3 text-center select-none">
-                          <div className="size-10 rounded-full bg-[#f53b70]/20 border border-[#f53b70] flex items-center justify-center mb-2 shadow-md">
-                            <Lock className="size-5 text-[#f53b70]" />
-                          </div>
-                          <span className="text-xs font-black text-white">{photo.characterName}&apos;s Secret Shoot</span>
-                          <span className="text-[10px] text-amber-400 font-bold mt-1">VIP Exclusive</span>
-                          <button className="mt-3 px-3 py-1.5 rounded-xl bg-gradient-to-r from-[#f53b70] to-[#ff5b8c] text-white text-[10px] font-black shadow-md hover:scale-105 transition-all">
-                            Tap to Unblur
-                          </button>
-                        </div>
-                      )}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -1335,7 +1235,7 @@ export default function Home() {
             <div className="flex items-center justify-between mb-1.5">
               <h4 className="text-lg font-bold text-white">{viewingPhoto.characterName || "Zovik AI"}</h4>
               <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 text-[10px] font-black uppercase">
-                VIP Uncensored HD
+                Permanent HD Photo ✨
               </span>
             </div>
             <p className="text-xs text-[#ccc] mb-4">{viewingPhoto.caption}</p>
