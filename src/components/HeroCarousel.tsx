@@ -141,25 +141,33 @@ export default function HeroCarousel({
         {/* Carousel Slide Indicators & Arrows */}
         <div className="absolute bottom-3 right-6 flex items-center space-x-2 z-20">
           <button
+            type="button"
             onClick={handlePrev}
-            className="size-8 rounded-full bg-black/40 hover:bg-black/70 border border-white/10 flex items-center justify-center text-white backdrop-blur-md transition-all"
+            aria-label="Previous slide"
+            className="size-8 rounded-full bg-black/40 hover:bg-black/70 border border-white/10 flex items-center justify-center text-white backdrop-blur-md transition-all focus:outline-none focus:ring-2 focus:ring-[#f53b70]"
           >
             <ChevronLeft className="size-4" />
           </button>
-          <div className="flex space-x-1.5 px-2">
+          <div className="flex space-x-1.5 px-2" role="tablist" aria-label="Slide indicators">
             {slides.map((_, idx) => (
-              <span
+              <button
                 key={idx}
+                type="button"
+                role="tab"
+                aria-label={`Go to slide ${idx + 1}`}
+                aria-selected={currentSlide === idx}
                 onClick={() => setCurrentSlide(idx)}
-                className={`size-2 rounded-full cursor-pointer transition-all ${
-                  currentSlide === idx ? "w-6 bg-[#f53b70]" : "bg-white/20"
+                className={`h-2 rounded-full cursor-pointer transition-all focus:outline-none focus:ring-2 focus:ring-[#f53b70] ${
+                  currentSlide === idx ? "w-6 bg-[#f53b70]" : "w-2 bg-white/20 hover:bg-white/40"
                 }`}
               />
             ))}
           </div>
           <button
+            type="button"
             onClick={handleNext}
-            className="size-8 rounded-full bg-black/40 hover:bg-black/70 border border-white/10 flex items-center justify-center text-white backdrop-blur-md transition-all"
+            aria-label="Next slide"
+            className="size-8 rounded-full bg-black/40 hover:bg-black/70 border border-white/10 flex items-center justify-center text-white backdrop-blur-md transition-all focus:outline-none focus:ring-2 focus:ring-[#f53b70]"
           >
             <ChevronRight className="size-4" />
           </button>

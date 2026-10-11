@@ -601,7 +601,7 @@ export function AdminCompanionsTab({
                 disabled={isUploadingCompanionVideo || isUploadingCompanionAvatar}
                 className="w-full py-3 rounded-xl bg-gradient-to-r from-[#f53b70] to-[#ff457c] text-white font-extrabold text-xs shadow-lg shadow-pink-600/30 hover:brightness-110 active:scale-98 transition-all disabled:opacity-50 mt-2"
               >
-                {isUploadingCompanionVideo || isUploadingCompanionAvatar ? "Uploading & Publishing..." : "Publish Companion to App 🚀"}
+                {isUploadingCompanionVideo || isUploadingCompanionAvatar ? "Compressing & Publishing..." : "Publish Companion to App 🚀"}
               </button>
             </form>
           </div>
@@ -730,7 +730,7 @@ export function AdminCompanionsTab({
                 disabled={isSavingCompanionEdit || isUploadingEditVideo || isUploadingEditAvatar}
                 className="w-full py-3 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-extrabold text-xs shadow-lg hover:brightness-110 active:scale-98 transition-all disabled:opacity-50 mt-2"
               >
-                {isSavingCompanionEdit ? "Saving Changes..." : "Save Companion Changes ✨"}
+                {isSavingCompanionEdit || isUploadingEditAvatar || isUploadingEditVideo ? "Compressing & Saving Changes..." : "Save Companion Changes ✨"}
               </button>
             </form>
           </div>

@@ -263,19 +263,33 @@ export async function DELETE(req: NextRequest) {
       cleanAppCacheAndJunk();
     } catch {}
 
-    const isFullyPurged = localDeleted && tombstoneRes.persistent;
+    const isFullyPurged = localDeleted && tombstoneRes.persistent && (firebaseAuthDeleted || !userId);
+    const isPartiallyPurged = localDeleted || tombstoneRes.success || supabaseDeleted || firestoreDeleted;
+
+    if (!isPartiallyPurged) {
+      return NextResponse.json({
+        success: false,
+        partialSuccess: false,
+        tombstoneRecorded: false,
+        persistentTombstone: false,
+        firebaseAuthDeleted: false,
+        databaseRecordsDeleted: false,
+        error: "Failed to purge user records across storage engines.",
+      }, { status: 500 });
+    }
 
     return NextResponse.json({
-      success: true,
+      success: isFullyPurged,
+      partialSuccess: !isFullyPurged,
       tombstoneRecorded: tombstoneRes.success,
       persistentTombstone: tombstoneRes.persistent,
       firebaseAuthDeleted,
       databaseRecordsDeleted: localDeleted || supabaseDeleted || firestoreDeleted,
       message: isFullyPurged
         ? `User account (${email || userId}) deleted and permanently tombstoned.`
-        : `User account (${email || userId}) deactivated and tombstone registered.`,
+        : `User account (${email || userId}) deactivated with partial cloud cleanup.`,
       authNote: authNote ? "Firebase Auth identity may require manual console cleanup if admin credentials lack IAM rights." : undefined,
-    });
+    }, { status: isFullyPurged ? 200 : 207 });
   } catch (e: unknown) {
     console.error("[Admin Users DELETE Error]:", e);
     return NextResponse.json({ error: "Internal server error deleting user" }, { status: 500 });

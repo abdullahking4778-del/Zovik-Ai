@@ -57,24 +57,29 @@ function splitIntoChunks(text: string, maxLen = 150): string[] {
   return chunks.filter(Boolean);
 }
 
+const ALLOWED_LANGUAGES = new Set(["hi", "ur", "en", "ar", "es", "fr", "ru", "de", "tr"]);
+
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const text = searchParams.get("text") || "";
   const requestedLang = searchParams.get("lang");
   const gender = searchParams.get("gender") || "female";
 
-  if (!text.trim()) {
+  if (!text || !text.trim()) {
     return new NextResponse("Missing text parameter", { status: 400 });
   }
 
+  // Cap input text to prevent resource exhaustion / amplification (max 1000 characters)
+  const safeText = text.trim().slice(0, 1000);
+
   try {
     // 1. Detect optimal accent / language for voice
-    const isUrduScript = /[\u0600-\u06FF]/.test(text);
-    const isRomanUrdu = ROMAN_URDU_REGEX.test(text);
+    const isUrduScript = /[\u0600-\u06FF]/.test(safeText);
+    const isRomanUrdu = ROMAN_URDU_REGEX.test(safeText);
 
     let targetLang = "hi"; // Default to sweet South Asian voice for Roman Urdu
-    if (requestedLang) {
-      targetLang = requestedLang;
+    if (requestedLang && ALLOWED_LANGUAGES.has(requestedLang.toLowerCase().trim())) {
+      targetLang = requestedLang.toLowerCase().trim();
     } else if (isUrduScript) {
       targetLang = "ur";
     } else if (isRomanUrdu) {
@@ -83,13 +88,13 @@ export async function GET(req: NextRequest) {
       targetLang = "en"; // English
     }
 
-    // 2. Split into audio-sized chunks
-    const chunks = splitIntoChunks(text, 150);
+    // 2. Split into audio-sized chunks (capped to at most 8 chunks)
+    const chunks = splitIntoChunks(safeText, 150).slice(0, 8);
     if (chunks.length === 0) {
       return new NextResponse("Empty text after filtering", { status: 400 });
     }
 
-    // 3. Fetch audio buffers in parallel or sequential chunks
+    // 3. Fetch audio buffers in sequential chunks with 5-second timeout
     const audioBuffers: Buffer[] = [];
 
     for (const chunk of chunks) {
@@ -103,6 +108,7 @@ export async function GET(req: NextRequest) {
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
           Referer: "https://translate.google.com/",
         },
+        signal: AbortSignal.timeout(5000),
       });
 
       if (response.ok) {

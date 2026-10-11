@@ -667,7 +667,7 @@ export function AdminGalleriesTab({
             }
             className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#f53b70] to-[#ff457c] text-white text-xs font-black shadow-md hover:brightness-110 active:scale-95 transition-all disabled:opacity-50 shrink-0"
           >
-            {isUploadingGalleryAdd ? "Uploading..." : "Add to Sequence"}
+            {isUploadingGalleryAdd ? "Compressing & Uploading..." : "Add to Sequence"}
           </button>
         </div>
       </div>

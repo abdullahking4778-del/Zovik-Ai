@@ -3,6 +3,7 @@ import { adminAuth } from "./firebaseAdmin";
 import { db } from "./firebase";
 import { doc, getDoc } from "firebase/firestore";
 import { getActiveUserTier } from "./userStore";
+import { isUserDeleted } from "./deletedUsers";
 
 export async function resolveServerUser(req: NextRequest, clientToken?: string): Promise<{
   authenticated: boolean;
@@ -26,10 +27,10 @@ export async function resolveServerUser(req: NextRequest, clientToken?: string):
   let resolvedEmail: string | undefined = undefined;
   let isAuthenticated = false;
 
-  // 2. Try Firebase ID Token verification
+  // 2. Try Firebase ID Token verification (with revocation checking)
   if (token && typeof token === "string" && token.trim().length > 10) {
     try {
-      const decoded = await adminAuth.verifyIdToken(token);
+      const decoded = await adminAuth.verifyIdToken(token, true);
       resolvedUid = decoded.uid;
       resolvedEmail = decoded.email;
       isAuthenticated = true;
@@ -41,6 +42,11 @@ export async function resolveServerUser(req: NextRequest, clientToken?: string):
 
   // Fail-closed: Never trust raw unverified headers to elevate privileges
   if (!isAuthenticated || (!resolvedEmail && !resolvedUid)) {
+    return { authenticated: false, tier: "free" };
+  }
+
+  // Immediately reject deleted / tombstoned users even if an unexpired token is still presented
+  if (isUserDeleted(resolvedUid, resolvedEmail)) {
     return { authenticated: false, tier: "free" };
   }
 

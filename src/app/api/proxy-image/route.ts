@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { isSafeExternalUrl } from "@/lib/securityUrl";
+import { isSafeExternalUrl, isSafeResolvedUrl } from "@/lib/securityUrl";
 
 // Fallback 1x1 transparent or avatar image if remote host completely fails
 const FALLBACK_AVATAR = "/characters/zovik_01.jpg";
@@ -18,7 +18,7 @@ async function safeFetchUrl(
   let redirectsRemaining = maxRedirects;
 
   while (redirectsRemaining >= 0) {
-    if (!isSafeExternalUrl(currentUrl)) {
+    if (!isSafeExternalUrl(currentUrl) || !(await isSafeResolvedUrl(currentUrl))) {
       throw new Error("Blocked: Target or redirect URL is not permitted.");
     }
 
@@ -42,7 +42,7 @@ async function safeFetchUrl(
         }
 
         const nextUrl = new URL(location, currentUrl).toString();
-        if (!isSafeExternalUrl(nextUrl)) {
+        if (!isSafeExternalUrl(nextUrl) || !(await isSafeResolvedUrl(nextUrl))) {
           throw new Error("Blocked: Redirect target points to private or restricted network.");
         }
 
@@ -64,7 +64,7 @@ async function safeFetchUrl(
 export async function GET(request: NextRequest) {
   const targetUrl = request.nextUrl.searchParams.get("url");
 
-  if (!targetUrl || !isSafeExternalUrl(targetUrl)) {
+  if (!targetUrl || !isSafeExternalUrl(targetUrl) || !(await isSafeResolvedUrl(targetUrl))) {
     return new NextResponse("Invalid or blocked URL", { status: 400 });
   }
 

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
 import { Readable } from "stream";
-import { isSafeExternalUrl } from "@/lib/securityUrl";
+import { isSafeExternalUrl, isSafeResolvedUrl } from "@/lib/securityUrl";
 
 export async function GET(
   request: NextRequest,
@@ -18,7 +18,7 @@ export async function GET(
     // 1. External Video Proxy Support (Prevents IDM interception on external CDN links like Catbox / Cloudinary)
     if (rawId === "proxy") {
       const targetUrl = request.nextUrl.searchParams.get("url");
-      if (!targetUrl || !isSafeExternalUrl(targetUrl)) {
+      if (!targetUrl || !isSafeExternalUrl(targetUrl) || !(await isSafeResolvedUrl(targetUrl))) {
         return new NextResponse("Invalid or blocked proxy URL", { status: 400 });
       }
 
@@ -30,10 +30,51 @@ export async function GET(
         fetchHeaders["range"] = rangeHeader;
       }
 
-      const externalResponse = await fetch(targetUrl, { headers: fetchHeaders });
-      if (!externalResponse.ok && externalResponse.status !== 206) {
+      let currentUrl = targetUrl;
+      let redirectsRemaining = 3;
+      let externalResponse: Response | null = null;
+
+      while (redirectsRemaining >= 0) {
+        if (!isSafeExternalUrl(currentUrl) || !(await isSafeResolvedUrl(currentUrl))) {
+          return new NextResponse("Blocked: Target or redirect URL points to private network.", { status: 400 });
+        }
+
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 10000);
+
+        try {
+          const res = await fetch(currentUrl, {
+            headers: fetchHeaders,
+            redirect: "manual",
+            signal: controller.signal,
+          });
+          clearTimeout(timeout);
+
+          if (res.status >= 300 && res.status < 400) {
+            const location = res.headers.get("location");
+            if (!location) {
+              return new NextResponse("Redirect missing location header", { status: 400 });
+            }
+            const nextUrl = new URL(location, currentUrl).toString();
+            if (!isSafeExternalUrl(nextUrl) || !(await isSafeResolvedUrl(nextUrl))) {
+              return new NextResponse("Blocked: Redirect target points to private network.", { status: 400 });
+            }
+            currentUrl = nextUrl;
+            redirectsRemaining--;
+            continue;
+          }
+
+          externalResponse = res;
+          break;
+        } catch {
+          clearTimeout(timeout);
+          return new NextResponse("Failed to fetch external video stream", { status: 502 });
+        }
+      }
+
+      if (!externalResponse || (!externalResponse.ok && externalResponse.status !== 206)) {
         return new NextResponse("Failed to fetch external video stream", {
-          status: externalResponse.status,
+          status: externalResponse ? externalResponse.status : 502,
         });
       }
 

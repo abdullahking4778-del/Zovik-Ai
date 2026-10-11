@@ -1,5 +1,7 @@
+import dns from "dns";
+
 /**
- * Security utility to prevent Server-Side Request Forgery (SSRF)
+ * Security utility to prevent Server-Side Request Forgery (SSRF) and DNS Rebinding.
  * Validates external URLs before server-side fetching.
  */
 
@@ -13,6 +15,44 @@ const BLOCKED_HOSTNAMES = new Set([
   "instance-data",
 ]);
 
+/**
+ * Checks if an IP string belongs to private, loopback, or link-local ranges.
+ */
+export function isPrivateIpAddress(ip: string): boolean {
+  if (!ip) return true;
+
+  // IPv4 Private & Reserved Ranges:
+  // 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 127.0.0.0/8, 169.254.0.0/16, 0.0.0.0/8
+  const ipv4Regex = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
+  const ipMatch = ip.match(ipv4Regex);
+  if (ipMatch) {
+    const [_, a, b] = ipMatch.map(Number);
+    if (a === 127 || a === 10 || a === 0) return true;
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 192 && b === 168) return true;
+    if (a === 169 && b === 254) return true;
+    return false;
+  }
+
+  // IPv6 Loopback & Private / Link-Local:
+  // ::1, fe80::/10, fc00::/7, fd00::/8
+  const cleanIpv6 = ip.replace(/[\[\]]/g, "").toLowerCase();
+  if (
+    cleanIpv6 === "::1" ||
+    cleanIpv6 === "::" ||
+    cleanIpv6.startsWith("fe80:") ||
+    cleanIpv6.startsWith("fc00:") ||
+    cleanIpv6.startsWith("fd00:")
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Synchronous URL format and hostname pre-validation.
+ */
 export function isSafeExternalUrl(rawUrl: string): boolean {
   if (!rawUrl || typeof rawUrl !== "string") return false;
 
@@ -47,27 +87,15 @@ export function isSafeExternalUrl(rawUrl: string): boolean {
       return false;
     }
 
-    // 5. Block private IPv4 ranges:
-    // 10.0.0.0 - 10.255.255.255 (10.0.0.0/8)
-    // 172.16.0.0 - 172.31.255.255 (172.16.0.0/12)
-    // 192.168.0.0 - 192.168.255.255 (192.168.0.0/16)
-    // 127.0.0.0 - 127.255.255.255 (Loopback)
-    // 169.254.0.0 - 169.254.255.255 (Link-local / Cloud Metadata)
-    // 0.0.0.0 (Unspecified)
-    const ipv4Regex = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
-    const ipMatch = host.match(ipv4Regex);
-    if (ipMatch) {
-      const [_, a, b] = ipMatch.map(Number);
-      if (a === 127 || a === 10 || a === 0) return false;
-      if (a === 172 && b >= 16 && b <= 31) return false;
-      if (a === 192 && b === 168) return false;
-      if (a === 169 && b === 254) return false;
+    // 5. Block private IPv4 ranges if hostname is an IP
+    if (isPrivateIpAddress(host)) {
+      return false;
     }
 
     // 6. Block IPv6 loopback and private address notations
     if (host.startsWith("[") || host.includes(":")) {
       const cleanIpv6 = host.replace(/[\[\]]/g, "");
-      if (cleanIpv6 === "::1" || cleanIpv6.startsWith("fe80:") || cleanIpv6.startsWith("fc00:") || cleanIpv6.startsWith("fd00:")) {
+      if (isPrivateIpAddress(cleanIpv6)) {
         return false;
       }
     }
@@ -75,6 +103,38 @@ export function isSafeExternalUrl(rawUrl: string): boolean {
     // 7. Allowed ports only: 80, 443, 8080, 8443 or default
     if (parsed.port && !["80", "443", "8080", "8443"].includes(parsed.port)) {
       return false;
+    }
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Asynchronous validation that resolves hostnames via DNS lookup
+ * to prevent DNS Rebinding attacks (where a public domain points to 127.0.0.1 or cloud metadata).
+ */
+export async function isSafeResolvedUrl(rawUrl: string): Promise<boolean> {
+  if (!isSafeExternalUrl(rawUrl)) return false;
+
+  try {
+    const parsed = new URL(rawUrl);
+    const host = parsed.hostname.toLowerCase();
+
+    // If already validated IP address string, return true
+    const isDirectIpv4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.test(host);
+    if (isDirectIpv4) return true;
+
+    // Resolve DNS records across IPv4 & IPv6
+    const records = await dns.promises.lookup(host, { all: true });
+    if (!records || records.length === 0) return false;
+
+    for (const record of records) {
+      if (isPrivateIpAddress(record.address)) {
+        console.warn(`[Security Alert]: DNS Rebinding attempt blocked for ${host} -> ${record.address}`);
+        return false;
+      }
     }
 
     return true;

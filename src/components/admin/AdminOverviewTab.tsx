@@ -192,7 +192,7 @@ export function AdminOverviewTab({
               <span>Real-time Live Chat Monitor</span>
             </h3>
             <span className="text-[10px] bg-pink-500/20 text-pink-400 px-2 py-1 rounded-md font-bold">
-              Admin Eye
+              Admin Eye (Interactive Demo / Simulation)
             </span>
           </div>
 

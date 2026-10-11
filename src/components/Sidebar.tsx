@@ -18,6 +18,7 @@ import {
   Globe,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import { setLanguage, LanguageCode } from "@/lib/translations";
 
 interface SidebarProps {
   activeTab: string;
@@ -42,7 +43,7 @@ export default function Sidebar({
 
   const handleLangChange = (lang: string) => {
     setCurrentLang(lang);
-    window.dispatchEvent(new CustomEvent("zovik_lang_changed", { detail: { lang } }));
+    setLanguage(lang as LanguageCode);
   };
 
   const navItems = [

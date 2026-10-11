@@ -230,36 +230,54 @@ export async function isUserDeletedAsync(id?: string, email?: string): Promise<b
 export async function removeDeletedUserTombstone(
   id?: string,
   email?: string
-): Promise<{ success: boolean }> {
+): Promise<{ success: boolean; error?: string }> {
   const cleanId = (id || "").trim();
   const cleanEmail = (email || "").trim().toLowerCase();
-  if (!cleanId && !cleanEmail) return { success: false };
+  if (!cleanId && !cleanEmail) return { success: false, error: "Missing identifier" };
 
-  // 1. Remove from in-memory cache and local file
+  let cloudError: string | undefined;
+  let cloudSuccess = true;
+
+  // 1. Remove from Firestore if configured
+  if (adminDb && typeof adminDb.collection === "function") {
+    try {
+      const docKey = cleanId || cleanEmail.replace(/[^a-zA-Z0-9_-]/g, "_");
+      await adminDb.collection("deleted_users").doc(docKey).delete();
+    } catch (err) {
+      cloudError = err instanceof Error ? err.message : String(err);
+      cloudSuccess = false;
+      console.warn("[DeletedUsers] Firestore tombstone removal note:", err);
+    }
+  }
+
+  // 2. Remove from Supabase if configured
+  if (isSupabaseConfigured()) {
+    try {
+      if (cleanId) {
+        const { error: err1 } = await supabaseAdmin.from("deleted_users").delete().eq("id", cleanId);
+        if (err1) cloudSuccess = false;
+      }
+      if (cleanEmail) {
+        const { error: err2 } = await supabaseAdmin.from("deleted_users").delete().eq("email", cleanEmail);
+        if (err2) cloudSuccess = false;
+      }
+    } catch {
+      cloudSuccess = false;
+    }
+  }
+
+  // If cloud storage was configured and authoritative deletion failed, DO NOT mutate local state into inconsistency!
+  if (!cloudSuccess && (adminDb || isSupabaseConfigured())) {
+    return { success: false, error: cloudError || "Failed to remove tombstone from authoritative cloud storage" };
+  }
+
+  // 3. Remove from in-memory cache and local file ONLY after authoritative removal
   inMemoryTombstones = inMemoryTombstones.filter(
     (u) =>
       (!cleanId || u.id !== cleanId) &&
       (!cleanEmail || u.email?.toLowerCase() !== cleanEmail)
   );
   writeLocalDeletedUsers(inMemoryTombstones);
-
-  // 2. Remove from Firestore
-  try {
-    if (adminDb && typeof adminDb.collection === "function") {
-      const docKey = cleanId || cleanEmail.replace(/[^a-zA-Z0-9_-]/g, "_");
-      await adminDb.collection("deleted_users").doc(docKey).delete();
-    }
-  } catch (err) {
-    console.warn("[DeletedUsers] Firestore tombstone removal note:", err);
-  }
-
-  // 3. Remove from Supabase
-  if (isSupabaseConfigured()) {
-    try {
-      if (cleanId) await supabaseAdmin.from("deleted_users").delete().eq("id", cleanId);
-      if (cleanEmail) await supabaseAdmin.from("deleted_users").delete().eq("email", cleanEmail);
-    } catch {}
-  }
 
   return { success: true };
 }
