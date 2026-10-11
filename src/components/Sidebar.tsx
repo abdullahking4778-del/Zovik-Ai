@@ -16,8 +16,10 @@ import {
   Crown,
   HelpCircle,
   Globe,
+  Coins,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import { useWallet } from "@/hooks/useWallet";
 import { setLanguage, LanguageCode } from "@/lib/translations";
 
 interface SidebarProps {
@@ -36,6 +38,7 @@ export default function Sidebar({
   unreadCount = 0,
 }: SidebarProps) {
   const { tier: authTier } = useAuth();
+  const { balance: walletBalance } = useWallet();
   const [currentLang, setCurrentLang] = useLocalStorage<string>("zovik_lang", "ur");
 
   const isVip = authTier === "vip";
@@ -130,71 +133,36 @@ export default function Sidebar({
           })}
         </nav>
 
-        {/* Premium / VIP Status Banner */}
-        {isVip ? (
-          <div
-            onClick={openPremiumModal}
-            className="relative overflow-hidden p-3.5 rounded-2xl bg-gradient-to-br from-[#2b1f09] via-[#1f1525] to-[#120a1a] border border-amber-500/40 hover:border-amber-400/70 transition-all cursor-pointer group shadow-lg shadow-amber-950/30"
-          >
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center space-x-2">
-                <Crown className="size-4 text-amber-400 fill-amber-400" />
-                <span className="text-xs font-black tracking-wide text-amber-300 uppercase">VIP Active</span>
-              </div>
-              <span className="px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-500 to-yellow-400 text-black text-[10px] font-black tracking-wider">
-                ACTIVE 👑
-              </span>
+        {/* Official Coins Economy Banner */}
+        <div
+          onClick={openPremiumModal}
+          className="relative overflow-hidden p-3.5 rounded-2xl bg-gradient-to-br from-[#2a1a0c] via-[#1a1024] to-[#120a1a] border border-amber-500/40 hover:border-amber-400 transition-all cursor-pointer group shadow-lg shadow-amber-950/20"
+        >
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center space-x-1.5">
+              <Coins className="size-4 text-amber-400 group-hover:rotate-12 transition-transform" />
+              <span className="text-xs font-black tracking-wide text-amber-300 uppercase">My Coins</span>
             </div>
-            <p className="text-[11px] text-amber-200/80 leading-tight mb-2.5">
-              500 daily messages, unlimited HD photos & voice calls active.
-            </p>
-            <div className="w-full py-1.5 rounded-xl bg-gradient-to-r from-amber-500/20 to-yellow-500/20 border border-amber-500/40 text-amber-300 text-xs font-bold text-center group-hover:bg-amber-500/30 transition-all">
-              VIP Sanctuary Active
-            </div>
+            <span className="px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-500 to-yellow-400 text-black text-[10px] font-black tracking-wider">
+              1 PKR = 1 COIN
+            </span>
           </div>
-        ) : isPlus ? (
-          <div
-            onClick={openPremiumModal}
-            className="relative overflow-hidden p-3.5 rounded-2xl bg-gradient-to-br from-[#0c1f2d] via-[#141228] to-[#120a1a] border border-cyan-500/40 hover:border-cyan-400/70 transition-all cursor-pointer group shadow-lg shadow-cyan-950/30"
-          >
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center space-x-2">
-                <Sparkles className="size-4 text-cyan-400" />
-                <span className="text-xs font-black tracking-wide text-cyan-300 uppercase">Plus Member</span>
-              </div>
-              <span className="px-2 py-0.5 rounded-full bg-cyan-500 text-black text-[10px] font-black tracking-wider">
-                PLUS ⭐
-              </span>
-            </div>
-            <p className="text-[11px] text-cyan-200/80 leading-tight mb-2.5">
-              200 daily messages & Plus voice chat benefits active.
-            </p>
-            <div className="w-full py-1.5 rounded-xl bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border border-cyan-500/40 text-cyan-300 text-xs font-bold text-center group-hover:bg-cyan-500/30 transition-all">
-              Plus Plan Active
-            </div>
+
+          <div className="flex items-baseline space-x-1.5 mb-2">
+            <span className="text-xl font-black text-amber-400">
+              🪙 {walletBalance.toLocaleString()}
+            </span>
+            <span className="text-[11px] text-[#aeaeae] font-semibold">Coins</span>
           </div>
-        ) : (
-          <div
-            onClick={openPremiumModal}
-            className="relative overflow-hidden p-3.5 rounded-2xl bg-gradient-to-br from-[#2a1335] via-[#1a0f24] to-[#120a1a] border border-[#f53b70]/30 hover:border-[#f53b70]/60 transition-all cursor-pointer group shadow-lg shadow-pink-950/20"
-          >
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center space-x-2">
-                <Crown className="size-4 text-[#f53b70]" />
-                <span className="text-xs font-black tracking-wide text-white uppercase">Premium</span>
-              </div>
-              <span className="px-1.5 py-0.5 rounded-full bg-[#f53b70] text-white text-[10px] font-black tracking-wider">
-                -70% OFF
-              </span>
-            </div>
-            <p className="text-[11px] text-[#cbb6bf] leading-tight mb-2.5">
-              Unlimited chat, voice calls & HD unblurred character photos.
-            </p>
-            <button className="w-full py-1.5 rounded-xl bg-gradient-to-r from-[#f53b70] to-[#ff5b8c] text-white text-xs font-bold hover:brightness-110 transition-all">
-              Upgrade Now
-            </button>
-          </div>
-        )}
+
+          <p className="text-[10px] text-amber-200/70 leading-tight mb-2.5">
+            Pay as you go! Min Rs. 50. Unlimited chat, photos & voice calls.
+          </p>
+
+          <button className="w-full py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 text-black text-xs font-black hover:brightness-110 transition-all shadow-md shadow-amber-500/20 flex items-center justify-center space-x-1">
+            <span>Recharge Coins 🪙</span>
+          </button>
+        </div>
       </div>
 
       {/* Footer / Meta */}

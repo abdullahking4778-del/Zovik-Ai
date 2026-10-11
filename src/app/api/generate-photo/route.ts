@@ -7,6 +7,7 @@ import {
   consumeQuotaOnSuccess,
   getAuthoritativeIdentifier,
 } from "@/lib/quotaManager";
+import { ensureUserWelcomeBonus, deductPhotoCredits } from "@/lib/wallet/walletService";
 import { getPersistentCustomCharacters } from "@/lib/serverDb";
 import { Character } from "@/types";
 
@@ -40,34 +41,39 @@ export async function POST(req: NextRequest) {
     const userTier = serverAuth.tier;
     const clientId = getAuthoritativeIdentifier(req, serverAuth.userId);
 
-    // Free users are not permitted private selfies (0 / day)
-    if (userTier === "free") {
+    // 1. Authoritative Coins Wallet Check
+    let authenticatedUserId: string | null = null;
+    let userCoinsRemaining: number | undefined = undefined;
+
+    if (serverAuth.authenticated && serverAuth.userId) {
+      authenticatedUserId = serverAuth.userId;
+      const wallet = await ensureUserWelcomeBonus(authenticatedUserId, 20);
+      userCoinsRemaining = wallet.balance;
+
+      if (wallet.balance < 5) {
+        return NextResponse.json(
+          {
+            error: "Coins limit reached",
+            quotaExceeded: true,
+            coinsExceeded: true,
+            remainingCoins: wallet.balance,
+            reply: "Meri jaan, private HD photo unlock karne ke liye 5 coins darkar hain! Coin Store se recharge karein 💕",
+          },
+          { status: 402 }
+        );
+      }
+    } else {
+      // Guest users without login
       return NextResponse.json(
         {
-          error: "Upgrade required",
+          error: "Login & Coins required",
           quotaExceeded: true,
+          coinsExceeded: true,
           limit: 0,
           remaining: 0,
-          reply: "Meri jaan, private selfies sirf Plus (5 daily) aur VIP (10 daily) members ke liye hain! Upgrade kar ke unlock karein 💕",
+          reply: "Meri jaan, private HD photos dekhne ke liye account login karein (20 free welcome coins milenge!) ya Coin Store se recharge karein 💕",
         },
         { status: 403 }
-      );
-    }
-
-    // Check Quota (Pre-check only; does not deduct prematurely)
-    const quotaCheck = checkQuotaAllowed("photo", clientId, userTier);
-    if (!quotaCheck.allowed) {
-      const hoursLeft = Math.ceil(quotaCheck.resetInMs / (1000 * 60 * 60));
-      return NextResponse.json(
-        {
-          error: "Daily image limit reached",
-          quotaExceeded: true,
-          limit: quotaCheck.limit,
-          remaining: 0,
-          resetInHours: hoursLeft,
-          reply: `Meri jaan, aapki aaj ki ${quotaCheck.limit} private photos ki daily limit poori ho chuki hai! ${hoursLeft} ghante baad naya quota milega 💕`,
-        },
-        { status: 429 }
       );
     }
 
@@ -136,6 +142,14 @@ export async function POST(req: NextRequest) {
     const caption = captions[selectedIdx % captions.length];
 
     // Deduct on SUCCESS only
+    if (authenticatedUserId) {
+      try {
+        const debitRes = await deductPhotoCredits(authenticatedUserId);
+        userCoinsRemaining = debitRes.wallet.balance;
+      } catch (err) {
+        console.warn("[Photo] Deduct credits note:", err);
+      }
+    }
     const consumed = consumeQuotaOnSuccess("photo", clientId, userTier);
 
     return NextResponse.json({
@@ -144,6 +158,7 @@ export async function POST(req: NextRequest) {
       photoIndex: selectedIdx,
       totalPhotos: gallery.length,
       isLoopReset,
+      coins: userCoinsRemaining,
       quota: {
         limit: consumed.limit,
         remaining: consumed.remaining,

@@ -64,6 +64,7 @@ export interface PaymentRequest {
   senderName: string;
   screenshot: string | null;
   screenshotPurged?: boolean;
+  coins?: number;
   status: "pending" | "approved" | "rejected";
   createdAt: string;
   approvedAt?: string;

@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Home, Film, MessageCircle, Sparkles, User } from "lucide-react";
+import { Home, Film, MessageCircle, Sparkles, User, Coins } from "lucide-react";
 
 interface MobileNavProps {
   activeTab: string;
@@ -67,12 +67,10 @@ export default function MobileNav({
 
       <button
         onClick={openPremiumModal}
-        className={`flex flex-col items-center justify-center w-14 py-1 transition-colors ${
-          activeTab === "premium" ? "text-[#f53b70]" : "text-[#aeaeae] hover:text-white"
-        }`}
+        className="flex flex-col items-center justify-center w-14 py-1 transition-colors text-amber-400 hover:text-amber-300"
       >
-        <User className="size-5" />
-        <span className="text-[10px] font-medium mt-1">VIP</span>
+        <Coins className="size-5 text-amber-400" />
+        <span className="text-[10px] font-black mt-1 text-amber-300">Coins</span>
       </button>
     </nav>
   );

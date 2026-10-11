@@ -17,6 +17,7 @@ import {
   Camera,
   Cpu,
   Tag,
+  Coins,
 } from "lucide-react";
 import { Character, ShortReel, PaymentRequest, UserAccount, PricingPlan } from "@/types";
 import { AdminOverviewTab } from "@/components/admin/AdminOverviewTab";
@@ -27,6 +28,7 @@ import { AdminUsersTab } from "@/components/admin/AdminUsersTab";
 import { AdminCompanionsTab } from "@/components/admin/AdminCompanionsTab";
 import { AdminGalleriesTab } from "@/components/admin/AdminGalleriesTab";
 import { AdminShortsTab } from "@/components/admin/AdminShortsTab";
+import { AdminWalletTab } from "@/components/admin/AdminWalletTab";
 
 export default function AdminPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -36,7 +38,7 @@ export default function AdminPage() {
 
   // Active Admin Tab
   const [activeTab, setActiveTab] = useState<
-    "overview" | "companions" | "galleries" | "users" | "subscriptions" | "plans" | "shorts" | "settings"
+    "overview" | "companions" | "galleries" | "users" | "subscriptions" | "plans" | "shorts" | "settings" | "wallet"
   >("overview");
 
   // Admin Data State
@@ -471,6 +473,7 @@ export default function AdminPage() {
         <div className="flex items-center space-x-2 overflow-x-auto no-scrollbar p-1.5 bg-[#140b1a] border border-white/5 rounded-2xl shrink-0">
           {[
             { id: "overview", label: "Overview & Metrics", icon: Flame },
+            { id: "wallet", label: "Coins & Wallet 🪙", icon: Coins },
             { id: "companions", label: `Companions (${characters.length})`, icon: Sparkles },
             { id: "galleries", label: "Photo Sequence & Re-Order 📸", icon: Camera },
             { id: "shorts", label: `Shorts Reels (${shorts.length})`, icon: Film },
@@ -506,6 +509,11 @@ export default function AdminPage() {
             payments={payments}
             handleApprovePayment={handleApprovePayment}
           />
+        )}
+
+        {/* TAB: WALLET & COINS */}
+        {activeTab === "wallet" && (
+          <AdminWalletTab users={users} />
         )}
 
         {/* TAB 2: COMPANIONS */}

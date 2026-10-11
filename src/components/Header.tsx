@@ -3,8 +3,9 @@
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { Search, Smartphone, LogIn, LogOut, User, X, Crown, Globe, Bell } from "lucide-react";
+import { Search, Smartphone, LogIn, LogOut, User, X, Crown, Globe, Bell, Coins } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import { useWallet } from "@/hooks/useWallet";
 import { getCurrentLanguage, setLanguage, getT, LanguageCode } from "@/lib/translations";
 import { sendCompanionNotification } from "@/lib/notificationHelper";
 
@@ -30,6 +31,7 @@ export default function Header({
   openProfileModal,
 }: HeaderProps) {
   const { user: currentUser, userData, tier: currentTier, logout: onLogout, loading, isLocallyLoggedIn } = useAuth();
+  const { balance: walletBalance } = useWallet();
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
   const [currentLang, setCurrentLangState] = useState<LanguageCode>("en");
   const [isLangMenuOpen, setIsLangMenuOpen] = useState(false);
@@ -217,6 +219,20 @@ export default function Header({
           {/* User Auth: Login or Profile */}
           {(currentUser || isLocallyLoggedIn) ? (
             <div className="flex items-center space-x-2">
+              {/* Real-Time Live Coins Badge */}
+              <button
+                onClick={openPremiumModal}
+                className="flex items-center space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500/20 via-yellow-500/15 to-amber-500/10 hover:from-amber-500/30 hover:to-amber-500/20 border border-amber-500/40 hover:border-amber-400 text-amber-300 text-xs font-black transition-all active:scale-95 shadow-sm shadow-amber-500/10 group"
+                title="Coin Store • 1 PKR = 1 Coin (Click to Recharge)"
+              >
+                <Coins className="size-3.5 text-amber-400 group-hover:rotate-12 transition-transform" />
+                <span>{walletBalance.toLocaleString()}</span>
+                <span className="hidden sm:inline text-[10px] text-amber-400/80 font-normal">Coins</span>
+                <span className="size-3.5 sm:size-4 rounded-full bg-amber-400 text-black text-[10px] sm:text-[11px] font-black flex items-center justify-center ml-0.5 shadow-sm">
+                  +
+                </span>
+              </button>
+
               <button
                 onClick={openProfileModal}
                 className="flex items-center space-x-2 px-2.5 py-1.5 rounded-xl bg-[#1d1425] hover:bg-[#251930] border border-white/10 text-xs font-semibold text-white max-w-[170px] truncate transition-colors active:scale-95 shadow-sm group"

@@ -8,6 +8,7 @@ import {
   consumeQuotaOnSuccess,
   getAuthoritativeIdentifier,
 } from "@/lib/quotaManager";
+import { getUserWallet, ensureUserWelcomeBonus, deductChatCredits } from "@/lib/wallet/walletService";
 import { Character, Message } from "@/types";
 
 interface ChatRequestBody {
@@ -337,7 +338,7 @@ export async function POST(req: NextRequest) {
   let reqMessages: Message[] | null = null;
   let userTier: "free" | "plus" | "vip" = "free";
   let clientId = "";
-  let quotaInfo: { limit: number; remaining: number } | null = null;
+  let quotaInfo: { limit: number; remaining: number; coins?: number } | null = null;
 
   try {
     let body: ChatRequestBody;
@@ -367,26 +368,45 @@ export async function POST(req: NextRequest) {
     userTier = serverAuth.tier;
     clientId = getAuthoritativeIdentifier(req, serverAuth.userId);
 
-    // 1. Quota Check (Check only - does not deduct yet to avoid charging for failed calls)
-    const quotaCheck = checkQuotaAllowed("chat", clientId, userTier);
-    if (!quotaCheck.allowed) {
-      const isMale = character.gender === "male";
-      const hoursLeft = Math.ceil(quotaCheck.resetInMs / (1000 * 60 * 60));
-      const quotaReply = isMale
-        ? `Meri jaan, aapki aaj ki ${quotaCheck.limit} messages ki limit poori ho chuki hai! ${hoursLeft} ghante baad naya quota milega ya VIP upgrade kar ke 500 messages unlock karein 😉💕`
-        : `Meri jaan, aapki aaj ki ${quotaCheck.limit} messages ki limit poori ho chuki hai! ${hoursLeft} ghante baad naya quota milega ya VIP upgrade kar ke 500 messages unlock karein 🥰💕`;
+    // 1. Authoritative Coins Wallet Check for authenticated users
+    let authenticatedUserId: string | null = null;
+    let userCoinsRemaining: number | undefined = undefined;
 
-      return NextResponse.json(
-        {
-          error: "Daily message limit reached",
-          quotaExceeded: true,
-          limit: quotaCheck.limit,
-          remaining: 0,
-          resetInHours: hoursLeft,
-          reply: quotaReply,
-        },
-        { status: 429 }
-      );
+    if (serverAuth.authenticated && serverAuth.userId) {
+      authenticatedUserId = serverAuth.userId;
+      // Auto-credit 20 welcome bonus if first time
+      const wallet = await ensureUserWelcomeBonus(authenticatedUserId, 20);
+      userCoinsRemaining = wallet.balance;
+
+      if (wallet.balance < 1) {
+        return NextResponse.json(
+          {
+            error: "Coins limit reached",
+            quotaExceeded: true,
+            coinsExceeded: true,
+            remainingCoins: 0,
+            reply: "Meri jaan, aapke paas chat ke liye coins khatam ho chuke hain! Coin Store se sirf Rs. 50 mein recharge karein aur baat continue rakhein 💕",
+          },
+          { status: 402 }
+        );
+      }
+    } else {
+      // Unauthenticated / guest quota fallback
+      const quotaCheck = checkQuotaAllowed("chat", clientId, userTier);
+      if (!quotaCheck.allowed) {
+        const hoursLeft = Math.ceil(quotaCheck.resetInMs / (1000 * 60 * 60));
+        return NextResponse.json(
+          {
+            error: "Daily message limit reached",
+            quotaExceeded: true,
+            limit: quotaCheck.limit,
+            remaining: 0,
+            resetInHours: hoursLeft,
+            reply: `Meri jaan, aapki aaj ki free messages ki limit poori ho chuki hai! Coin Store se recharge karein ya login kar ke 20 free welcome coins hasil karein 🥰💕`,
+          },
+          { status: 429 }
+        );
+      }
     }
 
     // Context preparation
@@ -398,9 +418,15 @@ export async function POST(req: NextRequest) {
     if (!apiKey) {
       console.warn("Groq API key not configured on server. Falling back to intelligent in-character response.");
       const reply = generateIntelligentResponse(character, lastUserMsg);
+      if (authenticatedUserId) {
+        try {
+          const debitRes = await deductChatCredits(authenticatedUserId);
+          userCoinsRemaining = debitRes.wallet.balance;
+        } catch {}
+      }
       const quotaResult = consumeQuotaOnSuccess("chat", clientId, userTier);
       quotaInfo = { limit: quotaResult.limit, remaining: quotaResult.remaining };
-      return NextResponse.json({ reply, quota: quotaInfo });
+      return NextResponse.json({ reply, quota: quotaInfo, coins: userCoinsRemaining });
     }
 
     const isMale = character.gender === "male";
@@ -604,10 +630,18 @@ CRITICAL RULES (ABSOLUTE PRIORITY):
     reply = reply.replace(/\*[^*]*\*/g, "").replace(/\s{2,}/g, " ").trim();
 
     // Deduct on SUCCESS only
+    if (authenticatedUserId) {
+      try {
+        const debitRes = await deductChatCredits(authenticatedUserId);
+        userCoinsRemaining = debitRes.wallet.balance;
+      } catch (err) {
+        console.warn("[Chat] Deduct credits note:", err);
+      }
+    }
     const quotaResult = consumeQuotaOnSuccess("chat", clientId, userTier);
-    quotaInfo = { limit: quotaResult.limit, remaining: quotaResult.remaining };
+    quotaInfo = { limit: quotaResult.limit, remaining: quotaResult.remaining, coins: userCoinsRemaining };
 
-    return NextResponse.json({ reply, quota: quotaInfo });
+    return NextResponse.json({ reply, quota: quotaInfo, coins: userCoinsRemaining });
   } catch (error: unknown) {
     console.error("Chat API fatal error:", error);
     if (reqChar && clientId) {

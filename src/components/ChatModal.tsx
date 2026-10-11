@@ -22,12 +22,14 @@ import {
   Trash2,
   Copy,
   Check,
+  Coins,
 } from "lucide-react";
 import { Character, Message } from "@/types";
 import { getSafeStreamUrl, fetchVideoBlobUrl } from "@/lib/videoHelper";
 import { getSafeImageUrl } from "@/lib/imageHelper";
 import { auth } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
+import { useWallet, notifyWalletUpdated } from "@/hooks/useWallet";
 import { playVoice, stopVoice } from "@/lib/voicePlayer";
 
 interface ChatModalProps {
@@ -167,6 +169,7 @@ export default function ChatModal({
   const [inputText, setInputText] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [playingVoiceIdx, setPlayingVoiceIdx] = useState<number | null>(null);
+  const { balance: chatCoins } = useWallet();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const isMountedRef = useRef(true);
 
@@ -459,21 +462,19 @@ export default function ChatModal({
 
       const data = await res.json();
 
-      // Check if server rejected request due to daily quota limit
-      if (res.status === 429 || data.quotaExceeded) {
+      // Check if server rejected request due to daily quota limit or coins
+      if (res.status === 402 || res.status === 429 || data.quotaExceeded || data.coinsExceeded) {
         setMessagesRemaining(0);
         setIsTyping(false);
         setIsStreamingAiText(false);
         const limitNoticeMsg: Message = {
           sender: "ai",
-          text: data.reply || "Meri jaan, aapki aaj ki message limit poori ho chuki hai! VIP upgrade karein 💕",
+          text: data.reply || "Meri jaan, aapke paas chat ke liye coins khatam ho chuke hain! Coin Store se recharge karein 💕",
           time: "Just now",
           timestamp: Date.now(),
         };
         setMessages([...newMessages, limitNoticeMsg]);
-        if (!isVipUser) {
-          setTimeout(() => openPremiumModal(), 1500);
-        }
+        setTimeout(() => openPremiumModal(), 1500);
         return;
       }
 
@@ -545,6 +546,7 @@ export default function ChatModal({
         try {
           localStorage.setItem(`zovik_chat_${character.id}`, JSON.stringify(finalMessages));
           window.dispatchEvent(new CustomEvent("zovik_chat_updated", { detail: { characterId: character.id } }));
+          notifyWalletUpdated();
         } catch {}
       }
     } catch (err) {
@@ -572,8 +574,8 @@ export default function ChatModal({
     setHighlightPhotoBtn(false);
     if (isTyping) return;
 
-    // Free users or users blocked by VIP companion cannot request private selfies - guide them to upgrade
-    if (isVipBlocked || (userTier === "free" && !isVipUser)) {
+    // Check if user has sufficient coins (requires 5 coins)
+    if (chatCoins < 5 && !isVipUser) {
       openPremiumModal();
       return;
     }
@@ -617,17 +619,15 @@ export default function ChatModal({
       const data = await res.json();
       setIsTyping(false);
 
-      if (res.status === 403 || res.status === 429 || data.quotaExceeded) {
+      if (res.status === 402 || res.status === 403 || res.status === 429 || data.quotaExceeded || data.coinsExceeded) {
         const quotaNoticeMsg: Message = {
           sender: "ai",
-          text: data.reply || "Meri jaan, aapki aaj ki private photos ki daily limit poori ho chuki hai! 💕",
+          text: data.reply || "Meri jaan, private photo unlock karne ke liye 5 coins darkar hain! Coin Store se recharge karein 💕",
           time: "Just now",
           timestamp: Date.now(),
         };
         setMessages((prev) => [...prev, quotaNoticeMsg]);
-        if (userTier === "plus") {
-          setTimeout(() => openPremiumModal(), 1500);
-        }
+        setTimeout(() => openPremiumModal(), 1500);
         return;
       }
 
@@ -667,6 +667,7 @@ export default function ChatModal({
       } catch (err) {
         console.warn("Failed to persist to zovik_generated_photos:", err);
       }
+      notifyWalletUpdated();
     } catch (err) {
       const fallbackMsg: Message = {
         sender: "ai",
@@ -758,15 +759,16 @@ export default function ChatModal({
               </button>
             )}
 
-            {!isVipUser && (
-              <button
-                onClick={openPremiumModal}
-                className="hidden sm:flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-500/40 text-amber-300 text-xs font-bold hover:scale-105 transition-all"
-              >
-                <Crown className="size-3.5" />
-                <span>Get VIP</span>
-              </button>
-            )}
+            <button
+              onClick={openPremiumModal}
+              className="flex items-center space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500/20 to-yellow-500/10 border border-amber-500/40 text-amber-300 text-xs font-bold hover:scale-105 active:scale-95 transition-all shadow-sm"
+              title="Click to recharge Coins"
+            >
+              <span>🪙</span>
+              <span className="font-semibold">{chatCoins.toLocaleString()}</span>
+              <span className="text-[10px] text-amber-400/80 uppercase tracking-wider hidden sm:inline">Coins</span>
+              <span className="text-[10px] bg-amber-500/30 text-amber-300 px-1 py-0.2 rounded font-black">+</span>
+            </button>
 
             <button
               onClick={() => {

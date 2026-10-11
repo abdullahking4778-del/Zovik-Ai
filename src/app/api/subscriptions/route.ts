@@ -15,6 +15,7 @@ import {
 } from "@/lib/serverDb";
 import { getPersistentPlans } from "@/lib/plansStore";
 import { PaymentRequest } from "@/types";
+import { creditUserWallet } from "@/lib/wallet/walletService";
 
 interface PaymentSubmissionPayload {
   userEmail: string;
@@ -22,6 +23,7 @@ interface PaymentSubmissionPayload {
   planName?: string;
   currency?: string;
   amount?: number | string;
+  coins?: number;
   method: string;
   trxId: string;
   senderName?: string;
@@ -53,7 +55,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Invalid JSON body" }, { status: 400 });
     }
 
-    const { userEmail, plan, currency, amount, method, trxId, senderName, screenshot } = body;
+    const { userEmail, plan, planName, currency, amount, coins, method, trxId, senderName, screenshot } = body;
 
     if (!userEmail || !plan || !method || !trxId) {
       return NextResponse.json({ success: false, error: "Please fill all required payment fields." }, { status: 400 });
@@ -88,14 +90,23 @@ export async function POST(req: NextRequest) {
     }
 
     const selectedPlanId = String(plan || "vip").trim();
-    const cleanPlanName =
-      selectedPlanId === "vip"
-        ? "VIP Plan"
-        : selectedPlanId === "plus"
-        ? "Plus Plan"
-        : selectedPlanId === "vip_plus"
-        ? "VIP Plus Diamond"
-        : `${selectedPlanId.toUpperCase()} Plan`;
+    let cleanPlanName = planName;
+    if (!cleanPlanName) {
+      if (selectedPlanId.startsWith("pack_") || selectedPlanId === "coins") {
+        cleanPlanName = `${(coins || cleanAmount).toLocaleString()} Coins Pack`;
+      } else {
+        cleanPlanName =
+          selectedPlanId === "vip"
+            ? "VIP Plan"
+            : selectedPlanId === "plus"
+            ? "Plus Plan"
+            : selectedPlanId === "vip_plus"
+            ? "VIP Plus Diamond"
+            : `${selectedPlanId.toUpperCase()} Plan`;
+      }
+    }
+
+    const calculatedCoins = coins !== undefined && Number(coins) > 0 ? Number(coins) : (selectedPlanId.startsWith("pack_") || selectedPlanId === "coins" ? cleanAmount : undefined);
 
     const newRequest: PaymentRequest = {
       id: paymentId,
@@ -104,6 +115,7 @@ export async function POST(req: NextRequest) {
       planName: cleanPlanName,
       currency: currency || "PKR",
       amount: cleanAmount,
+      coins: calculatedCoins,
       method: String(method).trim(),
       trxId: String(trxId).trim(),
       senderName: senderName ? String(senderName).trim() : "Customer",
@@ -147,7 +159,23 @@ export async function PATCH(req: NextRequest) {
     }
 
     if (action === "approve") {
-      // Look up dynamic plan to check exact duration (e.g. 30 days, 60 days)
+      // 1. If payment is for coins, automatically credit user wallet with atomic ledger entry
+      if (updatedPayment.coins && updatedPayment.coins > 0) {
+        try {
+          await creditUserWallet({
+            userId: updatedPayment.userEmail,
+            amount: updatedPayment.coins,
+            reason: `Coin Purchase Approval (${updatedPayment.method} - Trx: ${updatedPayment.trxId})`,
+            referenceId: updatedPayment.id,
+            idempotencyKey: `pay_coins_${updatedPayment.id}`,
+            actorId: "admin_approval",
+          });
+        } catch (walletErr) {
+          console.error("[Subscriptions] Failed to credit wallet upon approval:", walletErr);
+        }
+      }
+
+      // 2. Legacy plan duration & tier handling (keeps backward compatibility intact)
       let planDays = 30;
       try {
         const allPlans = await getPersistentPlans();
@@ -165,7 +193,7 @@ export async function PATCH(req: NextRequest) {
         updatedPayment.plan === "vip_plus";
       const assignedTier: "free" | "plus" | "vip" = isVipTier ? "vip" : "plus";
 
-      // 1. Authoritative local store update
+      // Authoritative local store update
       try {
         upsertStoredUser(updatedPayment.userEmail, {
           email: updatedPayment.userEmail,
@@ -180,7 +208,7 @@ export async function PATCH(req: NextRequest) {
         console.warn("[Subscriptions] Authoritative user store update failed:", err);
       }
 
-      // 2. Also try to update user in Firestore
+      // Also try to update user in Firestore
       try {
         const usersRef = collection(db, "users");
         const snapshot = await getDocs(usersRef);

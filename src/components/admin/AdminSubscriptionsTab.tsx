@@ -48,8 +48,18 @@ export const AdminSubscriptionsTab: React.FC<AdminSubscriptionsTabProps> = ({
               <tr key={p.id} className="hover:bg-white/[0.02]">
                 <td className="p-4 font-bold text-white">{p.userEmail}</td>
                 <td className="p-4">
-                  <span className="font-bold text-[#f53b70]">{p.amount}</span>
-                  <span className="block text-[10px] text-[#888]">{p.planName}</span>
+                  {p.coins ? (
+                    <div className="flex items-center space-x-1.5">
+                      <span className="px-2 py-0.5 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-300 font-black text-xs">
+                        🪙 {p.coins.toLocaleString()} Coins
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="font-bold text-[#f53b70]">{p.amount}</span>
+                  )}
+                  <span className="block text-[10px] text-[#888] mt-0.5">
+                    {p.currency === "USDT" || p.currency === "USD" ? `$${p.amount}` : `Rs. ${p.amount}`} • {p.planName}
+                  </span>
                 </td>
                 <td className="p-4">
                   <span className="px-2 py-0.5 rounded-full bg-white/10 text-white font-medium">
