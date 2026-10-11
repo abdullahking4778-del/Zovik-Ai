@@ -41,7 +41,7 @@ export function useWallet() {
 
   const fetchWallet = useCallback(async () => {
     if (!user && !isLocallyLoggedIn) {
-      setWalletState((prev) => ({ ...prev, balance: 0, loading: false }));
+      setWalletState((prev) => ({ ...prev, balance: 0, history: [], loading: false, error: null }));
       return;
     }
 
@@ -60,7 +60,8 @@ export function useWallet() {
 
       if (!res.ok) {
         if (res.status === 401) {
-          setWalletState((prev) => ({ ...prev, loading: false }));
+          // Clear sensitive state on auth expiry or invalid session
+          setWalletState((prev) => ({ ...prev, balance: 0, history: [], loading: false, error: null }));
           return;
         }
         throw new Error("Failed to load wallet");

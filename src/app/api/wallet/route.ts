@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveServerUser } from "@/lib/authSession";
-import { getUserWallet, getUserLedgerHistory, ensureUserWelcomeBonus } from "@/lib/wallet/walletService";
+import { getUserWallet, getUserLedgerHistory } from "@/lib/wallet/walletService";
 import { getEconomyConfig } from "@/lib/wallet/economyConfigServer";
 
 export const dynamic = "force-dynamic";
@@ -10,6 +10,7 @@ export const revalidate = 0;
  * GET /api/wallet
  * Read-only endpoint for authenticated users to inspect their wallet balance & history.
  * Strictly prevents IDOR by binding strictly to the server-verified session user.
+ * Strictly read-only: does not perform any database state mutations on GET.
  */
 export async function GET(req: NextRequest) {
   try {
@@ -21,8 +22,8 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // Ensure one-time welcome bonus is credited if new user
-    const wallet = await ensureUserWelcomeBonus(sessionUser.userId, 20);
+    // Read-only retrieval (zero write mutations on GET)
+    const wallet = await getUserWallet(sessionUser.userId);
     const history = await getUserLedgerHistory(sessionUser.userId, 25);
     const economy = getEconomyConfig();
 

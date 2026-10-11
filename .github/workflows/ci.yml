@@ -40,5 +40,8 @@ jobs:
       - name: Run Isolated Unit Tests
         run: npm run test:unit
 
+      - name: Run Virtual Wallet Accounting Tests
+        run: npm run test:wallet
+
       - name: Build Application
         run: npm run build

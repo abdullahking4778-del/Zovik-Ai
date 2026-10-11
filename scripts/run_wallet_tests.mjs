@@ -138,8 +138,8 @@ async function runSuite() {
     `Balance: ${secondCall.wallet.balance}`
   );
 
-  // 9. Database / Storage outage resilience
-  console.log("\n--- 9. Error Isolation & Fault Tolerance ---");
+  // 9. Input validation fault tolerance
+  console.log("\n--- 9. Input Validation & Fault Tolerance ---");
   let caughtBlankUser = false;
   try {
     await executeCreditMutation({
@@ -154,22 +154,22 @@ async function runSuite() {
   } catch {
     caughtBlankUser = true;
   }
-  report("9. Database input fault tolerance: Fails closed on blank/corrupt parameters", caughtBlankUser);
+  report("9. Input validation fault tolerance: Fails closed on blank/corrupt parameters", caughtBlankUser);
 
-  // 10. Server interruption & atomic writes
-  console.log("\n--- 10. Atomic Ledger & State Durability ---");
+  // 10. Atomic Ledger & State Synchronization
+  console.log("\n--- 10. Atomic Ledger & State Synchronization ---");
   const walletPre = await findWalletByUserId(testUserId);
   const ledgerPreCount = (await getUserLedgerHistory(testUserId)).length;
   await creditUserWallet({
     userId: testUserId,
     amount: 50,
-    reason: "Durable write test",
+    reason: "Synchronous state write test",
     idempotencyKey: `durability_${Date.now()}`,
   });
   const walletPost = await findWalletByUserId(testUserId);
   const ledgerPostCount = (await getUserLedgerHistory(testUserId)).length;
   report(
-    "10. Server durability: Atomic commit synchronizes wallet balance and ledger entries",
+    "10. State synchronization: Commit synchronizes wallet balance and ledger entries",
     walletPost.balance === walletPre.balance + 50 && ledgerPostCount === ledgerPreCount + 1
   );
 
@@ -275,6 +275,28 @@ async function runSuite() {
   report(
     "18. Audited correction: Authorized adjustment correctly modifies balance and records audit reason",
     adminAdj.ledgerEntry.type === "ADJUSTMENT" && adminAdj.ledgerEntry.amount === 100
+  );
+
+  // 19. Existing Record Upsert & Conflict Safety (Zero-Overwrite Guarantee)
+  console.log("\n--- 19. Existing Record Initialization & Conflict Safety ---");
+  const conflictUid = `existing_test_conflict_${Date.now()}`;
+  await creditUserWallet({
+    userId: conflictUid,
+    amount: 750,
+    reason: "Initial funding to test conflict safety",
+    idempotencyKey: `init_conflict_${Date.now()}`,
+  });
+  let zeroOverwriteMaintained = true;
+  for (let i = 0; i < 5; i++) {
+    const reInit = await getOrCreateWallet(conflictUid);
+    if (reInit.balance !== 750) {
+      zeroOverwriteMaintained = false;
+      break;
+    }
+  }
+  report(
+    "19. Existing record safety: getOrCreateWallet never overwrites existing positive balance with 0 on re-initialization",
+    zeroOverwriteMaintained
   );
 
   console.log("\n=======================================================");

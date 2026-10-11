@@ -148,10 +148,10 @@ export async function getOrCreateWallet(userId: string): Promise<VirtualWallet> 
             created_at: newWallet.createdAt,
             updated_at: newWallet.updatedAt,
           },
-          { onConflict: "user_id" }
+          { onConflict: "user_id", ignoreDuplicates: true }
         )
         .select("*")
-        .single();
+        .maybeSingle();
 
       if (!insertErr && inserted) {
         return {
@@ -163,6 +163,26 @@ export async function getOrCreateWallet(userId: string): Promise<VirtualWallet> 
           version: Number(inserted.version) || 1,
           createdAt: inserted.created_at,
           updatedAt: inserted.updated_at,
+        };
+      }
+
+      // If existing wallet already existed, fetch without modifying
+      const { data: existingAfterConflict } = await supabaseAdmin
+        .from("credit_wallets")
+        .select("*")
+        .eq("user_id", cleanUid)
+        .maybeSingle();
+
+      if (existingAfterConflict) {
+        return {
+          id: existingAfterConflict.id,
+          userId: existingAfterConflict.user_id,
+          balance: Number(existingAfterConflict.balance) || 0,
+          currency: existingAfterConflict.currency || "CREDIT",
+          status: existingAfterConflict.status || "active",
+          version: Number(existingAfterConflict.version) || 1,
+          createdAt: existingAfterConflict.created_at,
+          updatedAt: existingAfterConflict.updated_at,
         };
       }
     } catch (err) {
@@ -351,8 +371,9 @@ export async function executeCreditMutation(params: CreditMutationParams): Promi
       updatedAt: now,
     };
 
-    // 3. Authoritative Supabase PostgreSQL Persistence
+    // 3. Authoritative Supabase PostgreSQL Persistence (when Cloud configured)
     if (isSupabaseConfigured()) {
+      let ledgerInserted = false;
       try {
         // 3A. Insert Ledger Entry
         const { error: ledgerErr } = await supabaseAdmin.from("credit_ledger").insert({
@@ -382,46 +403,82 @@ export async function executeCreditMutation(params: CreditMutationParams): Promi
           }
           throw new Error(`Database error writing ledger: ${ledgerErr.message}`);
         }
+        ledgerInserted = true;
 
-        // 3B. Update Wallet Balance
-        const { error: walletErr } = await supabaseAdmin
+        // 3B. Update Wallet Balance with Optimistic Concurrency Guard
+        const { data: updatedRow, error: walletErr } = await supabaseAdmin
           .from("credit_wallets")
           .update({
             balance: updatedWallet.balance,
             version: updatedWallet.version,
             updated_at: updatedWallet.updatedAt,
           })
-          .eq("id", updatedWallet.id);
+          .eq("id", updatedWallet.id)
+          .eq("version", wallet.version)
+          .select("*")
+          .maybeSingle();
 
         if (walletErr) {
           console.error("[WalletStore] Authoritative wallet balance update error:", walletErr);
+          // Rollback: Compensate by deleting the newly inserted ledger entry to prevent partial-write state
+          if (ledgerInserted) {
+            try {
+              await supabaseAdmin.from("credit_ledger").delete().eq("id", ledgerEntry.id);
+            } catch {}
+          }
           throw new Error(`Database error updating wallet balance: ${walletErr.message}`);
         }
+
+        // If no row was updated, another serverless instance updated the version concurrently
+        if (!updatedRow) {
+          if (ledgerInserted) {
+            try {
+              await supabaseAdmin.from("credit_ledger").delete().eq("id", ledgerEntry.id);
+            } catch {}
+          }
+          throw new Error("Concurrent mutation conflict: Wallet version mismatch. Transaction aborted.");
+        }
+
+        return {
+          wallet: {
+            id: updatedRow.id,
+            userId: updatedRow.user_id,
+            balance: Number(updatedRow.balance) || 0,
+            currency: updatedRow.currency || "CREDIT",
+            status: updatedRow.status || "active",
+            version: Number(updatedRow.version) || updatedWallet.version,
+            createdAt: updatedRow.created_at,
+            updatedAt: updatedRow.updated_at,
+          },
+          ledgerEntry,
+          deduplicated: false,
+        };
       } catch (err: unknown) {
         if (err instanceof InsufficientCreditsError || err instanceof WalletFrozenError) throw err;
-        console.warn("[WalletStore] Cloud mutation error, recording to local fallback:", err);
+        console.error("[WalletStore] Authoritative cloud mutation failure (failing closed):", err);
+        throw err;
       }
-    }
-
-    // 4. Local Fallback & Isolated Persistence
-    const wallets = safeReadJson<VirtualWallet[]>(getWalletsStoragePath(), []);
-    const wIdx = wallets.findIndex((w) => w.id === updatedWallet.id);
-    if (wIdx >= 0) {
-      wallets[wIdx] = updatedWallet;
     } else {
-      wallets.push(updatedWallet);
+      // 4. Local Fallback Persistence (Used in Local Dev, CI & Test environments when cloud DB is unconfigured)
+      const wallets = safeReadJson<VirtualWallet[]>(getWalletsStoragePath(), []);
+      const wIdx = wallets.findIndex((w) => w.id === updatedWallet.id);
+      if (wIdx >= 0) {
+        wallets[wIdx] = updatedWallet;
+      } else {
+        wallets.push(updatedWallet);
+      }
+      atomicWriteJson(getWalletsStoragePath(), wallets);
+
+      const ledger = safeReadJson<LedgerEntry[]>(getLedgerStoragePath(), []);
+      ledger.push(ledgerEntry);
+      atomicWriteJson(getLedgerStoragePath(), ledger);
+
+      return {
+        wallet: updatedWallet,
+        ledgerEntry,
+        deduplicated: false,
+      };
     }
-    atomicWriteJson(getWalletsStoragePath(), wallets);
-
-    const ledger = safeReadJson<LedgerEntry[]>(getLedgerStoragePath(), []);
-    ledger.push(ledgerEntry);
-    atomicWriteJson(getLedgerStoragePath(), ledger);
-
-    return {
-      wallet: updatedWallet,
-      ledgerEntry,
-      deduplicated: false,
-    };
   } finally {
     release();
   }
