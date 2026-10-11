@@ -217,8 +217,88 @@ try {
   report("Purge Completion Test Exception", false, err.message);
 }
 
+// 6. Companion Ownership & Authorization Rules
+console.log("\n--- 6. Companion Ownership & Authorization Guard ---");
+function verifyCompanionDeletionPermission({ isAdmin, sessionUser, target }) {
+  if (!target) return { allowed: false, status: 404, error: "Not found" };
+  if (isAdmin) return { allowed: true, status: 200 };
+
+  if (!sessionUser || !sessionUser.authenticated) {
+    return { allowed: false, status: 401, error: "Unauthorized: Sign-in required" };
+  }
+
+  const isOfficial = !target.id.startsWith("char_custom") && target.category !== "Custom";
+  if (isOfficial) {
+    return { allowed: false, status: 403, error: "Unauthorized: Cannot delete official companions" };
+  }
+
+  const isOwner = Boolean(
+    (target.creatorId && sessionUser.userId && target.creatorId === sessionUser.userId) ||
+    (target.creatorEmail && sessionUser.userEmail && target.creatorEmail.toLowerCase() === sessionUser.userEmail.toLowerCase())
+  );
+
+  const hasCreatorInfo = Boolean(target.creatorId || target.creatorEmail);
+  if (!isOwner && (hasCreatorInfo || !isAdmin)) {
+    return { allowed: false, status: 403, error: "Forbidden: Not owner" };
+  }
+
+  return { allowed: true, status: 200 };
+}
+
+try {
+  // Unauthenticated user -> 401
+  const unauth = verifyCompanionDeletionPermission({
+    isAdmin: false,
+    sessionUser: { authenticated: false },
+    target: { id: "char_custom_99", category: "Custom", creatorId: "user_1" },
+  });
+  report("Unauthenticated companion delete rejected (401)", !unauth.allowed && unauth.status === 401);
+
+  // Non-admin trying to delete official companion -> 403
+  const officialDelete = verifyCompanionDeletionPermission({
+    isAdmin: false,
+    sessionUser: { authenticated: true, userId: "user_1" },
+    target: { id: "char_official_1", category: "Anime" },
+  });
+  report("Non-admin cannot delete official companion (403)", !officialDelete.allowed && officialDelete.status === 403);
+
+  // Non-admin trying to delete someone else's custom companion -> 403
+  const mismatchOwner = verifyCompanionDeletionPermission({
+    isAdmin: false,
+    sessionUser: { authenticated: true, userId: "attacker_id" },
+    target: { id: "char_custom_99", category: "Custom", creatorId: "victim_id" },
+  });
+  report("Mismatched creator ID rejected (403 Forbidden)", !mismatchOwner.allowed && mismatchOwner.status === 403);
+
+  // Non-admin trying to delete orphaned custom companion -> 403
+  const orphanedDelete = verifyCompanionDeletionPermission({
+    isAdmin: false,
+    sessionUser: { authenticated: true, userId: "random_user" },
+    target: { id: "char_custom_legacy", category: "Custom" },
+  });
+  report("Orphaned custom companion cannot be deleted by non-admin (403)", !orphanedDelete.allowed && orphanedDelete.status === 403);
+
+  // Legitimate owner deletes their companion -> 200
+  const ownerDelete = verifyCompanionDeletionPermission({
+    isAdmin: false,
+    sessionUser: { authenticated: true, userId: "user_owner", userEmail: "owner@test.com" },
+    target: { id: "char_custom_mine", category: "Custom", creatorId: "user_owner" },
+  });
+  report("Legitimate creator can delete their custom companion (200 OK)", ownerDelete.allowed && ownerDelete.status === 200);
+
+  // Admin deletes any companion -> 200
+  const adminDelete = verifyCompanionDeletionPermission({
+    isAdmin: true,
+    sessionUser: { authenticated: false },
+    target: { id: "char_custom_99", category: "Custom", creatorId: "user_1" },
+  });
+  report("Admin can delete custom companion (200 OK)", adminDelete.allowed && adminDelete.status === 200);
+} catch (err) {
+  report("Companion Authorization Test Exception", false, err.message);
+}
+
 console.log("\n=======================================================");
 console.log(`📊 UNIT TEST REPORT: ${passedTests}/${totalTests} PASSED (${failedTests} FAILED)`);
-console.log("=======================================================\n");
+console.log("=======================================================");
 
 if (failedTests > 0) process.exit(1);

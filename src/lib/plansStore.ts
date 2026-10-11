@@ -106,7 +106,7 @@ export async function savePersistentPlan(plan: PricingPlan): Promise<PricingPlan
   // 1. Save to Supabase PostgreSQL
   if (isSupabaseConfigured()) {
     try {
-      await supabaseAdmin.from("pricing_plans").upsert({
+      const { error } = await supabaseAdmin.from("pricing_plans").upsert({
         id: planWithTimestamps.id,
         name: planWithTimestamps.name,
         badge: planWithTimestamps.badge || null,
@@ -121,6 +121,9 @@ export async function savePersistentPlan(plan: PricingPlan): Promise<PricingPlan
         is_active: planWithTimestamps.isActive !== false,
         updated_at: planWithTimestamps.updatedAt,
       });
+      if (error) {
+        console.warn("[PlansStore] Supabase save plan error:", error.message || error);
+      }
     } catch (err) {
       console.warn("[PlansStore] Supabase save plan note:", err);
     }
@@ -156,11 +159,18 @@ export async function savePersistentPlan(plan: PricingPlan): Promise<PricingPlan
  */
 export async function deletePersistentPlan(planId: string): Promise<boolean> {
   const cleanId = planId.trim();
+  let supabaseDeleted = false;
+  let localDeleted = false;
 
   // 1. Delete from Supabase
   if (isSupabaseConfigured()) {
     try {
-      await supabaseAdmin.from("pricing_plans").delete().eq("id", cleanId);
+      const { error } = await supabaseAdmin.from("pricing_plans").delete().eq("id", cleanId);
+      if (error) {
+        console.warn("[PlansStore] Supabase delete plan error:", error.message || error);
+      } else {
+        supabaseDeleted = true;
+      }
     } catch (err) {
       console.warn("[PlansStore] Supabase delete plan note:", err);
     }
@@ -173,6 +183,7 @@ export async function deletePersistentPlan(planId: string): Promise<boolean> {
     if (Array.isArray(list)) {
       const filtered = list.filter((p) => p.id !== cleanId);
       safeWriteJsonFile(filePath, filtered);
+      localDeleted = true;
     }
   } catch {}
 
@@ -183,8 +194,9 @@ export async function deletePersistentPlan(planId: string): Promise<boolean> {
     if (Array.isArray(list)) {
       const filtered = list.filter((p) => p.id !== cleanId);
       safeWriteJsonFile(rootPath, filtered);
+      localDeleted = true;
     }
   } catch {}
 
-  return true;
+  return supabaseDeleted || localDeleted;
 }

@@ -35,6 +35,8 @@ export interface Character {
   unreadCount?: number;
   accessTier?: "free" | "plus" | "vip";
   isVipOnly?: boolean;
+  creatorId?: string;
+  creatorEmail?: string;
 }
 
 export interface ShortReel {

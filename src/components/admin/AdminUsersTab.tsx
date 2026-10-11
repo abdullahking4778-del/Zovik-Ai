@@ -77,10 +77,6 @@ export const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
     )
       return;
 
-    if (setUsers) {
-      setUsers((prev) => prev.filter((u) => u.id !== userId && (!email || u.email !== email)));
-    }
-
     try {
       const headers = getAuthHeaders ? getAuthHeaders() : {};
       const params = new URLSearchParams({ userId });
@@ -91,13 +87,29 @@ export const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
         headers,
       });
 
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
+      const d = await res.json().catch(() => ({}));
+
+      if (res.status === 207) {
+        // Partial deletion (HTTP 207 Multi-Status)
+        const note = d.authNote ? `\n\nNotice: ${d.authNote}` : "";
+        alert(
+          `Partial Cleanup (207 Multi-Status):\n${d.message || "User deactivated and tombstoned, but some cloud providers had partial cleanup."}${note}`
+        );
+        if (setUsers) {
+          setUsers((prev) => prev.filter((u) => u.id !== userId && (!email || u.email !== email)));
+        }
+      } else if (res.ok) {
+        // Full purge (HTTP 200)
+        if (setUsers) {
+          setUsers((prev) => prev.filter((u) => u.id !== userId && (!email || u.email !== email)));
+        }
+      } else {
         alert(d.error || "Failed to delete user");
       }
       onRefreshUsers?.();
     } catch (err) {
       console.error("Failed to delete user:", err);
+      alert("Network error: Could not reach deletion server");
       onRefreshUsers?.();
     }
   };

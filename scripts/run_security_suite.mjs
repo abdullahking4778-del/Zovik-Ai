@@ -389,6 +389,43 @@ async function runHttpSecurityTests() {
     report("Database Validation Exception", false, err.message);
   }
 
+  console.log("\n--- 10. Companion Authorization Safeguards ---");
+  try {
+    // 1. Unauthenticated custom companion deletion attempt
+    const unauthCharDel = await fetch(`${BASE_URL}/api/characters?id=char_custom_random_id_test`, {
+      method: "DELETE",
+    });
+    report(
+      "Companion Authorization: Unauthenticated deletion rejected (401 Unauthorized)",
+      unauthCharDel.status === 401,
+      `Status: ${unauthCharDel.status}`
+    );
+
+    // 2. Non-admin unauthenticated official companion deletion attempt
+    const unauthOfficialDel = await fetch(`${BASE_URL}/api/characters?id=char_zovik_01`, {
+      method: "DELETE",
+    });
+    report(
+      "Companion Authorization: Non-admin deletion of official companion blocked (401/403)",
+      unauthOfficialDel.status === 401 || unauthOfficialDel.status === 403,
+      `Status: ${unauthOfficialDel.status}`
+    );
+
+    // 3. Companion creation without authentication
+    const unauthCharPost = await fetch(`${BASE_URL}/api/characters`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "Unauthenticated Custom Girl", isCustom: true }),
+    });
+    report(
+      "Companion Authorization: Unauthenticated companion creation rejected (401 Unauthorized)",
+      unauthCharPost.status === 401,
+      `Status: ${unauthCharPost.status}`
+    );
+  } catch (err) {
+    report("Companion Safeguards Exception", false, err.message);
+  }
+
   console.log("\n=======================================================");
   console.log(`📊 FINAL TEST REPORT: ${passedTests}/${totalTests} PASSED (${failedTests} FAILED, ${skippedTests} SKIPPED)`);
   console.log("=======================================================\n");

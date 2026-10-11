@@ -134,7 +134,7 @@ export async function savePersistentShort(short: ShortReel): Promise<void> {
   // 1. Primary: Save to Supabase PostgreSQL
   if (isSupabaseConfigured()) {
     try {
-      await supabaseAdmin.from("shorts_reels").upsert({
+      const { error } = await supabaseAdmin.from("shorts_reels").upsert({
         id: shortId,
         title: shortWithId.caption || shortWithId.characterName || "Reel",
         video_url: shortWithId.videoUrl,
@@ -142,6 +142,9 @@ export async function savePersistentShort(short: ShortReel): Promise<void> {
         likes: shortWithId.likes || 0,
         created_at: shortWithId.createdAt || new Date().toISOString(),
       });
+      if (error) {
+        console.warn("[ServerDb] Supabase save short error:", error.message || error);
+      }
     } catch (err: unknown) {
       console.warn("[ServerDb] Supabase save short note:", err);
     }
@@ -168,7 +171,10 @@ export async function deletePersistentShort(shortId: string): Promise<boolean> {
   // 1. Primary: Delete from Supabase PostgreSQL
   if (isSupabaseConfigured()) {
     try {
-      await supabaseAdmin.from("shorts_reels").delete().eq("id", shortId);
+      const { error } = await supabaseAdmin.from("shorts_reels").delete().eq("id", shortId);
+      if (error) {
+        console.warn("[ServerDb] Supabase delete short error:", error.message || error);
+      }
     } catch (err: unknown) {
       console.warn("[ServerDb] Supabase delete short note:", err);
     }
@@ -242,11 +248,19 @@ export async function recordPersistentDeletedCharacterId(id: string, slug?: stri
   // 1. Delete directly from Supabase companions table
   if (isSupabaseConfigured()) {
     try {
-      await supabaseAdmin.from("companions").delete().eq("id", cleanId);
-      if (cleanSlug && cleanSlug !== cleanId) {
-        await supabaseAdmin.from("companions").delete().eq("id", cleanSlug);
+      const { error: err1 } = await supabaseAdmin.from("companions").delete().eq("id", cleanId);
+      if (err1) {
+        console.warn("[ServerDb] Supabase companion delete error:", err1.message || err1);
       }
-    } catch {}
+      if (cleanSlug && cleanSlug !== cleanId) {
+        const { error: err2 } = await supabaseAdmin.from("companions").delete().eq("id", cleanSlug);
+        if (err2) {
+          console.warn("[ServerDb] Supabase companion slug delete error:", err2.message || err2);
+        }
+      }
+    } catch (err: unknown) {
+      console.warn("[ServerDb] Supabase companion delete note:", err);
+    }
   }
 
   // 2. Save to Firestore
@@ -407,8 +421,13 @@ export async function deletePersistentCharacter(characterId: string): Promise<bo
   // 1. Primary: Delete from Supabase PostgreSQL
   if (isSupabaseConfigured()) {
     try {
-      await supabaseAdmin.from("companions").delete().eq("id", cleanId);
-    } catch {}
+      const { error } = await supabaseAdmin.from("companions").delete().eq("id", cleanId);
+      if (error) {
+        console.warn("[ServerDb] Supabase delete companion error:", error.message || error);
+      }
+    } catch (err: unknown) {
+      console.warn("[ServerDb] Supabase delete companion note:", err);
+    }
   }
 
   // 2. Secondary: Delete from Firestore custom_characters

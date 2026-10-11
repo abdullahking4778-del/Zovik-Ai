@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdminRequest } from "@/lib/adminAuth";
+import { resolveServerUser } from "@/lib/authSession";
 import {
   getAllPersistentCharacters,
   savePersistentCustomCharacter,
@@ -31,16 +32,18 @@ export async function GET() {
     console.error("[Characters GET Error]:", err);
     return NextResponse.json(
       {
-        success: true,
+        success: false,
         characters: [],
+        error: "Failed to retrieve characters from database",
       },
-      { status: 200 }
+      { status: 500 }
     );
   }
 }
 
 export async function POST(req: NextRequest) {
   const isAdmin = verifyAdminRequest(req);
+  const sessionUser = await resolveServerUser(req);
 
   try {
     let newCharacter: Partial<Character> & { isCustom?: boolean };
@@ -54,8 +57,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Invalid character data: name is required" }, { status: 400 });
     }
 
-    // Non-admins can only create custom companions
+    // Non-admins must be authenticated and can only create custom companions
     if (!isAdmin) {
+      if (!sessionUser.authenticated) {
+        return NextResponse.json(
+          { success: false, error: "Unauthorized: Sign-in required to create custom companion" },
+          { status: 401 }
+        );
+      }
+
       const isCustomRequest = Boolean(
         newCharacter.isCustom ||
         newCharacter.category === "Custom" ||
@@ -99,6 +109,8 @@ export async function POST(req: NextRequest) {
       messages: newCharacter.messages || [],
       accessTier: isVipTier ? "vip" : "free",
       isVipOnly: isVipTier,
+      creatorId: sessionUser.userId || (isAdmin ? "admin" : undefined),
+      creatorEmail: sessionUser.userEmail || (isAdmin ? "admin@zovik.ai" : undefined),
     };
 
     const saved = await savePersistentCustomCharacter(formattedChar);
@@ -159,10 +171,37 @@ export async function DELETE(req: NextRequest) {
     }
 
     if (!isAdmin) {
+      const sessionUser = await resolveServerUser(req);
+      if (!sessionUser.authenticated) {
+        return NextResponse.json(
+          { success: false, error: "Unauthorized: Authentication required to delete companions" },
+          { status: 401 }
+        );
+      }
+
       const all = await getAllPersistentCharacters();
       const target = all.find((c) => c.id.toLowerCase() === id.toLowerCase() || c.slug.toLowerCase() === id.toLowerCase());
-      if (target && !target.id.startsWith("char_custom") && target.category !== "Custom") {
+      if (!target) {
+        return NextResponse.json({ success: false, error: "Companion not found" }, { status: 404 });
+      }
+
+      // Non-admins can NEVER delete official companions
+      if (!target.id.startsWith("char_custom") && target.category !== "Custom") {
         return NextResponse.json({ success: false, error: "Unauthorized: You cannot delete official companions" }, { status: 403 });
+      }
+
+      // Enforce ownership: If target has a creatorId or creatorEmail, verify caller owns it
+      const isOwner = Boolean(
+        (target.creatorId && sessionUser.userId && target.creatorId === sessionUser.userId) ||
+        (target.creatorEmail && sessionUser.userEmail && target.creatorEmail.toLowerCase() === sessionUser.userEmail.toLowerCase())
+      );
+
+      const hasCreatorInfo = Boolean(target.creatorId || target.creatorEmail);
+      if (!isOwner && (hasCreatorInfo || !isAdmin)) {
+        return NextResponse.json(
+          { success: false, error: "Forbidden: You do not have permission to delete this companion" },
+          { status: 403 }
+        );
       }
     }
 
