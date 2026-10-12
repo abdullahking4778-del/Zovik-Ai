@@ -200,16 +200,17 @@ export default function CharacterModal({
             </button>
 
             {/* If custom character, allow deleting */}
-            {(character.id.startsWith("custom-") || character.badge === "MY AI") && onDelete && (
+            {(character.id.startsWith("char_custom_") || character.id.startsWith("custom-") || character.badge === "MY AI" || character.category === "Custom" || Boolean(character.creatorId) || Boolean(character.creatorEmail)) && onDelete && (
               <button
                 onClick={() => {
+                  if (typeof window !== "undefined" && !window.confirm(`Kya aap "${character.name}" ko permanently delete karna chahte hain?`)) return;
                   onDelete(character.id, character.name);
                   onClose();
                 }}
-                className="flex items-center justify-center space-x-1.5 w-full py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 border border-red-500/25 text-xs font-bold text-red-400 hover:text-red-300 transition-colors"
+                className="flex items-center justify-center space-x-1.5 w-full py-2.5 rounded-xl bg-red-500/15 hover:bg-red-600/30 border border-red-500/30 text-xs font-black text-red-400 hover:text-red-200 transition-all active:scale-95 shadow-md shadow-red-950/20"
               >
                 <Trash2 className="size-3.5" />
-                <span>{t.deleteCustom}</span>
+                <span>Delete Companion 🗑️</span>
               </button>
             )}
           </div>

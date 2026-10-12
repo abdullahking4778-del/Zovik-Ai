@@ -942,14 +942,16 @@ export default function Home() {
                         isPaidUser={isPaidUser}
                       />
 
-                      {/* Delete Custom Companion Button */}
+                      {/* Quick Delete Custom Companion Button */}
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleDeleteCustomCompanion(character.id, character.name);
+                          if (window.confirm(`Kya aap "${character.name}" ko permanently delete karna chahte hain?`)) {
+                            handleDeleteCustomCompanion(character.id, character.name);
+                          }
                         }}
-                        title="Delete Companion"
-                        className="absolute top-2 right-2 z-20 size-8 rounded-full bg-black/70 hover:bg-red-600 border border-white/20 text-white flex items-center justify-center transition-all shadow-md active:scale-90"
+                        title={`Delete ${character.name}`}
+                        className="absolute top-2.5 right-11 z-20 size-7 md:size-8 rounded-full bg-black/70 hover:bg-red-600/90 border border-red-500/30 text-red-300 hover:text-white flex items-center justify-center transition-all shadow-md active:scale-90"
                       >
                         <Trash2 className="size-3.5" />
                       </button>

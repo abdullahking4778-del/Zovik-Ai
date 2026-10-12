@@ -68,8 +68,8 @@ export default function Header({
       <div className="flex items-center justify-between">
         {/* Mobile Brand Title — links back to Landing Page */}
         <Link href="/" className="flex lg:hidden items-center space-x-2 group" title="Back to Zovik AI Home">
-          <div className="size-8 rounded-lg overflow-hidden relative shadow-md shadow-pink-500/20 group-hover:scale-105 transition-transform flex-shrink-0">
-            <Image src="/favicon.svg" alt="Zovik AI" fill className="object-cover" priority />
+          <div className="w-8 h-8 min-w-[32px] min-h-[32px] max-w-[32px] max-h-[32px] rounded-lg overflow-hidden relative shadow-md shadow-pink-500/20 group-hover:scale-105 transition-transform flex-shrink-0 flex items-center justify-center bg-[#07040a]">
+            <Image src="/favicon.svg" alt="Zovik AI" width={32} height={32} className="w-full h-full object-contain" priority />
           </div>
           <span className="text-lg font-black text-white tracking-wide">
             ZOVIK<span className="text-[#f53b70]">.AI</span>

@@ -777,9 +777,35 @@ export default function ChatModal({
                       onExpand={() => setPreviewVideoUrl(msg.videoUrl || character.videoUrl || null)}
                     />
                     {msg.text && (
-                      <p className="text-xs text-[#e0d6dc] mt-2 mb-1 leading-relaxed">
-                        {msg.text.replace(/\*[^*]*\*/g, "").trim()}
-                      </p>
+                      <div className="mt-2 space-y-1.5">
+                        <p className="text-xs text-[#e0d6dc] leading-relaxed">
+                          {msg.text.replace(/\*[^*]*\*/g, "").trim()}
+                        </p>
+                        <button
+                          onClick={() => speakText(msg.text || "", idx)}
+                          className={`px-2.5 py-1 rounded-full text-[10px] font-bold flex items-center space-x-1.5 transition-all active:scale-95 ${
+                            playingVoiceIdx === idx
+                              ? "bg-gradient-to-r from-[#f53b70] to-[#ff457c] text-white shadow-md shadow-pink-600/40 ring-2 ring-pink-500/50"
+                              : "bg-white/5 hover:bg-white/10 text-[#cbb6bf] hover:text-white border border-white/10"
+                          }`}
+                        >
+                          {playingVoiceIdx === idx ? (
+                            <>
+                              <span className="flex items-center space-x-0.5">
+                                <span className="w-0.5 h-2.5 bg-white animate-pulse" />
+                                <span className="w-0.5 h-3.5 bg-white animate-pulse [animation-delay:0.15s]" />
+                                <span className="w-0.5 h-2 bg-white animate-pulse [animation-delay:0.3s]" />
+                              </span>
+                              <span>Playing Voice... ⏸️</span>
+                            </>
+                          ) : (
+                            <>
+                              <Volume2 className="size-3 text-[#f53b70]" />
+                              <span>Play Voice Note 🎧</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
                     )}
                     <span className="block text-[10px] text-[#aeaeae] text-right mt-1">{msg.time}</span>
                   </div>
@@ -814,9 +840,35 @@ export default function ChatModal({
                       </div>
                     </div>
                     {msg.text && (
-                      <p className="text-xs text-[#e0d6dc] mb-1">
-                        {msg.text.replace(/\*[^*]*\*/g, "").trim()}
-                      </p>
+                      <div className="space-y-1.5 mb-1">
+                        <p className="text-xs text-[#e0d6dc]">
+                          {msg.text.replace(/\*[^*]*\*/g, "").trim()}
+                        </p>
+                        <button
+                          onClick={() => speakText(msg.text || "", idx)}
+                          className={`px-2.5 py-1 rounded-full text-[10px] font-bold flex items-center space-x-1.5 transition-all active:scale-95 ${
+                            playingVoiceIdx === idx
+                              ? "bg-gradient-to-r from-[#f53b70] to-[#ff457c] text-white shadow-md shadow-pink-600/40 ring-2 ring-pink-500/50"
+                              : "bg-white/5 hover:bg-white/10 text-[#cbb6bf] hover:text-white border border-white/10"
+                          }`}
+                        >
+                          {playingVoiceIdx === idx ? (
+                            <>
+                              <span className="flex items-center space-x-0.5">
+                                <span className="w-0.5 h-2.5 bg-white animate-pulse" />
+                                <span className="w-0.5 h-3.5 bg-white animate-pulse [animation-delay:0.15s]" />
+                                <span className="w-0.5 h-2 bg-white animate-pulse [animation-delay:0.3s]" />
+                              </span>
+                              <span>Playing Voice... ⏸️</span>
+                            </>
+                          ) : (
+                            <>
+                              <Volume2 className="size-3 text-[#f53b70]" />
+                              <span>Play Voice Note 🎧</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
                     )}
                     <span className="block text-[10px] text-[#aeaeae] text-right">{msg.time}</span>
                   </div>
@@ -869,12 +921,12 @@ export default function ChatModal({
                                 <span className="w-0.5 h-3.5 bg-white animate-pulse [animation-delay:0.15s]" />
                                 <span className="w-0.5 h-2 bg-white animate-pulse [animation-delay:0.3s]" />
                               </span>
-                              <span>Playing Voice...</span>
+                              <span>Playing Voice... ⏸️</span>
                             </>
                           ) : (
                             <>
                               <Volume2 className="size-3 text-[#f53b70]" />
-                              <span>Voice Note</span>
+                              <span>Play Voice Note 🎧</span>
                             </>
                           )}
                         </button>

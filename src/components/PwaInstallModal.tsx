@@ -90,12 +90,13 @@ export default function PwaInstallModal({ isOpen, onClose }: PwaInstallModalProp
 
         {/* Brand Header */}
         <div className="flex items-center space-x-3.5">
-          <div className="relative size-14 rounded-2xl overflow-hidden border-2 border-[#f53b70] shadow-lg shadow-pink-600/30 shrink-0 bg-[#0d0a0f]">
+          <div className="relative w-14 h-14 min-w-[56px] min-h-[56px] max-w-[56px] max-h-[56px] rounded-2xl overflow-hidden border-2 border-[#f53b70] shadow-lg shadow-pink-600/30 shrink-0 bg-[#0d0a0f] flex items-center justify-center p-1.5">
             <Image
               src="/logos/zovik-squircle.svg"
               alt="Zovik AI"
-              fill
-              className="object-cover p-1.5"
+              width={48}
+              height={48}
+              className="w-full h-full object-contain"
               unoptimized
             />
           </div>

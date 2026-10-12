@@ -22,6 +22,7 @@ export const viewport: Viewport = {
 
 import PwaRegister from "@/components/PwaRegister";
 import { AnnouncementBar } from "@/components/AnnouncementBar";
+import CoinApprovalToast from "@/components/CoinApprovalToast";
 
 export default function RootLayout({
   children,
@@ -37,6 +38,7 @@ export default function RootLayout({
         <PwaRegister />
         <AuthProvider>
           <AnnouncementBar />
+          <CoinApprovalToast />
           {children}
         </AuthProvider>
       </body>

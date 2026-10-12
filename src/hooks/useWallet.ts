@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "@/context/AuthContext";
 
 export interface WalletState {
@@ -22,6 +22,7 @@ export interface WalletState {
 
 export function useWallet() {
   const { user, isLocallyLoggedIn } = useAuth();
+  const lastBalanceRef = useRef<number | null>(null);
   const [walletState, setWalletState] = useState<WalletState>({
     balance: 0,
     currency: "CREDIT",
@@ -41,6 +42,7 @@ export function useWallet() {
 
   const fetchWallet = useCallback(async () => {
     if (!user && !isLocallyLoggedIn) {
+      lastBalanceRef.current = null;
       setWalletState((prev) => ({ ...prev, balance: 0, history: [], loading: false, error: null }));
       return;
     }
@@ -61,6 +63,7 @@ export function useWallet() {
       if (!res.ok) {
         if (res.status === 401) {
           // Clear sensitive state on auth expiry or invalid session
+          lastBalanceRef.current = null;
           setWalletState((prev) => ({ ...prev, balance: 0, history: [], loading: false, error: null }));
           return;
         }
@@ -69,8 +72,26 @@ export function useWallet() {
 
       const data = await res.json();
       if (data.success && data.wallet) {
+        const newBalance = Number(data.wallet.balance) || 0;
+
+        // Detect real-time coin crediting from admin slip approval
+        if (lastBalanceRef.current !== null && newBalance > lastBalanceRef.current) {
+          const diff = newBalance - lastBalanceRef.current;
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(
+              new CustomEvent("zovik_coins_credited", {
+                detail: {
+                  amount: diff,
+                  newBalance,
+                },
+              })
+            );
+          }
+        }
+        lastBalanceRef.current = newBalance;
+
         setWalletState({
-          balance: Number(data.wallet.balance) || 0,
+          balance: newBalance,
           currency: data.wallet.currency || "CREDIT",
           status: data.wallet.status || "active",
           history: data.history || [],
@@ -112,8 +133,8 @@ export function useWallet() {
       document.addEventListener("visibilitychange", handleVisibility);
     }
 
-    // Dynamic background sync every 25 seconds
-    const intervalId = setInterval(fetchWallet, 25000);
+    // Dynamic background sync every 12 seconds for faster slip approvals
+    const intervalId = setInterval(fetchWallet, 12000);
 
     return () => {
       window.removeEventListener("zovik_wallet_updated", handleUpdate);

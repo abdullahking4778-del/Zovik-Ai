@@ -73,8 +73,8 @@ export default function Sidebar({
           className="flex items-center space-x-2.5 px-3 py-2 cursor-pointer group"
           title="Back to Zovik AI Home"
         >
-          <div className="size-9 rounded-xl overflow-hidden relative shadow-lg shadow-pink-500/20 group-hover:scale-105 transition-transform flex-shrink-0">
-            <Image src="/favicon.svg" alt="Zovik AI" fill className="object-cover" priority />
+          <div className="w-9 h-9 min-w-[36px] min-h-[36px] max-w-[36px] max-h-[36px] rounded-xl overflow-hidden relative shadow-lg shadow-pink-500/20 group-hover:scale-105 transition-transform flex-shrink-0 flex items-center justify-center bg-[#0d0a0f]">
+            <Image src="/favicon.svg" alt="Zovik AI" width={36} height={36} className="w-full h-full object-contain" priority />
           </div>
           <div>
             <span className="text-xl font-extrabold tracking-wide text-white">

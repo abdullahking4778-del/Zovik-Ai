@@ -35,12 +35,13 @@ export default function CompanionToast({ onOpenCompanion }: { onOpenCompanion?: 
     <div className="fixed top-4 right-4 z-50 max-w-sm w-full bg-[#180e22]/95 backdrop-blur-xl border border-pink-500/40 rounded-2xl p-3.5 shadow-2xl shadow-pink-950/50 animate-bounceIn select-none">
       <div className="flex items-start space-x-3">
         {/* Companion Avatar with Online Pulse */}
-        <div className="relative size-12 rounded-xl overflow-hidden shrink-0 border border-pink-500/50 shadow-md">
+        <div className="relative w-12 h-12 min-w-[48px] min-h-[48px] max-w-[48px] max-h-[48px] rounded-xl overflow-hidden shrink-0 border border-pink-500/50 shadow-md">
           <Image
             src={activeAlert.avatar || "/logos/zovik-squircle.svg"}
             alt={activeAlert.companionName}
-            fill
-            className="object-cover"
+            width={48}
+            height={48}
+            className="w-full h-full object-cover"
             unoptimized
           />
           <div className="absolute bottom-0 right-0 size-2.5 rounded-full bg-emerald-400 border border-black animate-pulse" />

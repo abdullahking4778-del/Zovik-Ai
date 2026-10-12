@@ -199,8 +199,8 @@ export default function LandingPage() {
             }}
             className="flex items-center space-x-2.5 group cursor-pointer"
           >
-            <div className="size-9 rounded-xl overflow-hidden relative shadow-lg shadow-pink-500/25 group-hover:scale-105 transition-transform flex-shrink-0">
-              <Image src="/favicon.svg" alt="Zovik AI" fill className="object-cover" priority />
+            <div className="w-9 h-9 min-w-[36px] min-h-[36px] max-w-[36px] max-h-[36px] rounded-xl overflow-hidden relative shadow-lg shadow-pink-500/25 group-hover:scale-105 transition-transform flex-shrink-0 flex items-center justify-center bg-[#07040a]">
+              <Image src="/favicon.svg" alt="Zovik AI" width={36} height={36} className="w-full h-full object-contain" priority />
             </div>
             <div>
               <span className="text-xl font-extrabold tracking-wide text-white">
@@ -887,8 +887,8 @@ export default function LandingPage() {
             }}
             className="flex items-center space-x-2 group cursor-pointer"
           >
-            <div className="size-7 rounded-lg overflow-hidden relative shadow-md shadow-pink-500/20">
-              <Image src="/favicon.svg" alt="Zovik AI" fill className="object-cover" />
+            <div className="w-7 h-7 min-w-[28px] min-h-[28px] max-w-[28px] max-h-[28px] rounded-lg overflow-hidden relative shadow-md shadow-pink-500/20 flex-shrink-0 flex items-center justify-center bg-[#050608]">
+              <Image src="/favicon.svg" alt="Zovik AI" width={28} height={28} className="w-full h-full object-contain" />
             </div>
             <div className="text-left">
               <span className="text-sm font-black text-white block leading-none">

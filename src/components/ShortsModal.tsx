@@ -412,12 +412,13 @@ export default function ShortsModal({
         {/* Bottom Official Brand Identity & Caption */}
         <div className="absolute inset-x-0 bottom-0 z-30 p-5 bg-gradient-to-t from-black via-black/70 to-transparent flex flex-col space-y-2 pointer-events-none">
           <div className="flex items-center space-x-3 pointer-events-auto">
-            <div className="relative size-12 rounded-2xl overflow-hidden border-2 border-[#f53b70] shadow-lg shadow-pink-600/40 shrink-0 bg-[#12081a]">
+            <div className="relative w-12 h-12 min-w-[48px] min-h-[48px] max-w-[48px] max-h-[48px] rounded-2xl overflow-hidden border-2 border-[#f53b70] shadow-lg shadow-pink-600/40 shrink-0 bg-[#12081a] flex items-center justify-center p-1">
               <Image
                 src="/logos/zovik-squircle.svg"
                 alt="Zovik AI"
-                fill
-                className="object-cover p-1"
+                width={40}
+                height={40}
+                className="w-full h-full object-contain"
                 unoptimized
               />
             </div>
