@@ -63,7 +63,7 @@ export async function GET(req: NextRequest) {
   const users = await Promise.all(
     rawUsers.map(async (u) => {
       try {
-        const wallet = await getUserWallet(u.id || u.email);
+        const wallet = await getUserWallet(u.id || u.email, u.email);
         return { ...u, coins: wallet.balance };
       } catch {
         return { ...u, coins: 0 };

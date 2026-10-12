@@ -161,15 +161,30 @@ export async function PATCH(req: NextRequest) {
     }
 
     if (action === "approve") {
-      // 1. If payment is for coins, automatically credit user wallet with atomic ledger entry
+      // 1. Link user UID & Email if available to ensure instant wallet resolution
+      const targetEmail = (updatedPayment.userEmail || "").trim().toLowerCase();
+      let targetUid = (updatedPayment.userId || "").trim();
+
+      const matchedUser = targetEmail ? findStoredUser(targetEmail) : null;
+      if (!targetUid && matchedUser?.id && matchedUser.id !== targetEmail) {
+        targetUid = matchedUser.id;
+      }
+
+      if (targetUid && targetEmail) {
+        try {
+          upsertStoredUser(targetUid, {
+            id: targetUid,
+            email: targetEmail,
+          });
+        } catch {}
+      }
+
+      // 2. If payment includes coins, automatically credit user wallet with atomic ledger entry
       if (updatedPayment.coins && updatedPayment.coins > 0) {
         try {
-          // Resolve target user UID (fallback to userEmail or userId)
-          const matchedUser = findStoredUser(updatedPayment.userId || updatedPayment.userEmail);
-          const targetUid = matchedUser?.id || updatedPayment.userId || updatedPayment.userEmail;
-
+          const recipientId = targetUid || targetEmail;
           await creditUserWallet({
-            userId: targetUid,
+            userId: recipientId,
             amount: updatedPayment.coins,
             reason: `Coin Purchase Approval (${updatedPayment.method} - Trx: ${updatedPayment.trxId})`,
             referenceId: updatedPayment.id,
@@ -181,57 +196,67 @@ export async function PATCH(req: NextRequest) {
         }
       }
 
-      // 2. Legacy plan duration & tier handling (keeps backward compatibility intact)
-      let planDays = 30;
-      try {
-        const allPlans = await getPersistentPlans();
-        const matched = allPlans.find((p) => p.id === updatedPayment.plan);
-        if (matched?.durationDays) {
-          planDays = matched.durationDays;
+      // 3. Plan duration & tier handling (only for VIP / Plus subscription purchases, not pure coin packs)
+      const isCoinsOnly = Boolean(
+        updatedPayment.plan?.startsWith("pack_") ||
+        updatedPayment.plan === "coins" ||
+        (updatedPayment.coins && !updatedPayment.plan.toLowerCase().includes("vip") && !updatedPayment.plan.toLowerCase().includes("plus"))
+      );
+
+      if (!isCoinsOnly) {
+        let planDays = 30;
+        try {
+          const allPlans = await getPersistentPlans();
+          const matched = allPlans.find((p) => p.id === updatedPayment.plan);
+          if (matched?.durationDays) {
+            planDays = matched.durationDays;
+          }
+        } catch (err) {
+          console.warn("[Subscriptions] Plan lookup note, using 30d default:", err);
         }
-      } catch (err) {
-        console.warn("[Subscriptions] Plan lookup note, using 30d default:", err);
-      }
 
-      const newExpiresAt = new Date(Date.now() + planDays * 24 * 60 * 60 * 1000);
-      const isVipTier =
-        updatedPayment.plan.toLowerCase().includes("vip") ||
-        updatedPayment.plan === "vip_plus";
-      const assignedTier: "free" | "plus" | "vip" = isVipTier ? "vip" : "plus";
+        const newExpiresAt = new Date(Date.now() + planDays * 24 * 60 * 60 * 1000);
+        const isVipTier =
+          updatedPayment.plan.toLowerCase().includes("vip") ||
+          updatedPayment.plan === "vip_plus";
+        const assignedTier: "free" | "plus" | "vip" = isVipTier ? "vip" : "plus";
 
-      // Authoritative local store update
-      try {
-        upsertStoredUser(updatedPayment.userEmail, {
-          email: updatedPayment.userEmail,
-          tier: assignedTier,
-          isVip: isVipTier,
-          subscriptionDays: planDays,
-          subscriptionStart: new Date().toISOString(),
-          subscriptionEndsAt: newExpiresAt.toISOString(),
-          storageRetentionDays: isVipTier ? 35 : 30,
-        });
-      } catch (err) {
-        console.warn("[Subscriptions] Authoritative user store update failed:", err);
-      }
-
-      // Also try to update user in Firestore
-      try {
-        const usersRef = collection(db, "users");
-        const snapshot = await getDocs(usersRef);
-        const userDoc = snapshot.docs.find(
-          (d) => d.data().email?.toLowerCase() === updatedPayment.userEmail.toLowerCase()
-        );
-
-        if (userDoc) {
-          await updateDoc(userDoc.ref, {
-            zovik_tier: updatedPayment.plan,
+        // Authoritative local store update
+        try {
+          const storeKey = targetUid || targetEmail;
+          upsertStoredUser(storeKey, {
+            id: targetUid || storeKey,
+            email: targetEmail,
+            tier: assignedTier,
+            isVip: isVipTier,
+            subscriptionDays: planDays,
             subscriptionStart: new Date().toISOString(),
             subscriptionEndsAt: newExpiresAt.toISOString(),
-            storageRetentionDays: updatedPayment.plan === "vip" ? 35 : 30,
+            storageRetentionDays: isVipTier ? 35 : 30,
           });
+        } catch (err) {
+          console.warn("[Subscriptions] Authoritative user store update failed:", err);
         }
-      } catch (err) {
-        console.warn("[Subscriptions] Firestore update note:", err);
+
+        // Also update user in Firestore
+        try {
+          const usersRef = collection(db, "users");
+          const snapshot = await getDocs(usersRef);
+          const userDoc = snapshot.docs.find(
+            (d) => d.data().email?.toLowerCase() === targetEmail || (targetUid && d.id === targetUid)
+          );
+
+          if (userDoc) {
+            await updateDoc(userDoc.ref, {
+              zovik_tier: updatedPayment.plan,
+              subscriptionStart: new Date().toISOString(),
+              subscriptionEndsAt: newExpiresAt.toISOString(),
+              storageRetentionDays: isVipTier ? 35 : 30,
+            });
+          }
+        } catch (err) {
+          console.warn("[Subscriptions] Firestore update note:", err);
+        }
       }
     }
 

@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
 
     if (serverAuth.authenticated && serverAuth.userId) {
       authenticatedUserId = serverAuth.userId;
-      const wallet = await ensureUserWelcomeBonus(authenticatedUserId, 20);
+      const wallet = await ensureUserWelcomeBonus(authenticatedUserId, 20, serverAuth.userEmail);
       userCoinsRemaining = wallet.balance;
 
       if (wallet.balance < 5) {

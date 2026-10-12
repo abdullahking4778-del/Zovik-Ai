@@ -99,8 +99,30 @@ export function useWallet() {
     fetchWallet();
 
     const handleUpdate = () => fetchWallet();
+    const handleFocus = () => fetchWallet();
+    const handleVisibility = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        fetchWallet();
+      }
+    };
+
     window.addEventListener("zovik_wallet_updated", handleUpdate);
-    return () => window.removeEventListener("zovik_wallet_updated", handleUpdate);
+    window.addEventListener("focus", handleFocus);
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", handleVisibility);
+    }
+
+    // Dynamic background sync every 25 seconds
+    const intervalId = setInterval(fetchWallet, 25000);
+
+    return () => {
+      window.removeEventListener("zovik_wallet_updated", handleUpdate);
+      window.removeEventListener("focus", handleFocus);
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", handleVisibility);
+      }
+      clearInterval(intervalId);
+    };
   }, [fetchWallet]);
 
   return {

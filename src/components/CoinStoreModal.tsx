@@ -418,8 +418,8 @@ export default function CoinStoreModal({ isOpen, onClose }: CoinStoreModalProps)
                   <span className="text-[10px] text-[#888]">1 HD Photo</span>
                 </div>
                 <div className="p-2 rounded-xl bg-black/40 border border-white/5">
-                  <span className="text-xs block font-black text-pink-400">🎙️ 2 Coins</span>
-                  <span className="text-[10px] text-[#888]">1 Voice Note</span>
+                  <span className="text-xs block font-black text-pink-400">🎨 100 Coins</span>
+                  <span className="text-[10px] text-[#888]">Custom Companion</span>
                 </div>
               </div>
             </div>

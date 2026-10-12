@@ -61,7 +61,7 @@ export function findStoredUser(identifier: string): StoredUser | null {
   if (!identifier) return null;
   const clean = identifier.trim().toLowerCase();
   const users = getAllStoredUsers();
-  return users.find((u) => u.id === identifier || u.email?.toLowerCase() === clean) || null;
+  return users.find((u) => u.id === identifier || u.id?.toLowerCase() === clean || u.email?.toLowerCase() === clean) || null;
 }
 
 export function upsertStoredUser(
@@ -70,8 +70,13 @@ export function upsertStoredUser(
 ): StoredUser {
   const users = getAllStoredUsers();
   const clean = identifier.trim().toLowerCase();
+  const updateEmailClean = updates.email ? updates.email.trim().toLowerCase() : "";
+
   const existingIdx = users.findIndex(
-    (u) => u.id === identifier || u.email?.toLowerCase() === clean
+    (u) =>
+      u.id === identifier ||
+      u.email?.toLowerCase() === clean ||
+      (updateEmailClean && (u.id === updateEmailClean || u.email?.toLowerCase() === updateEmailClean))
   );
 
   const now = new Date();
@@ -79,15 +84,37 @@ export function upsertStoredUser(
 
   if (existingIdx >= 0) {
     const existing = users[existingIdx];
+    const resolvedId = identifier && !identifier.includes("@") ? identifier : (existing.id || identifier);
+    const resolvedTier = (updates.tier || existing.tier || "free") as "free" | "plus" | "vip";
+    const resolvedIsVip = updates.tier ? updates.tier === "vip" : (existing.isVip || resolvedTier === "vip");
+
     resultUser = {
       ...existing,
       ...updates,
-      tier: (updates.tier || existing.tier || "free") as "free" | "plus" | "vip",
-      isVip: updates.tier ? updates.tier === "vip" : existing.isVip,
+      id: resolvedId,
+      email: updates.email || existing.email,
+      name: updates.name || existing.name || (updates.email ? updates.email.split("@")[0] : "User"),
+      photoURL: updates.photoURL !== undefined ? updates.photoURL : existing.photoURL,
+      tier: resolvedTier,
+      isVip: resolvedIsVip,
+      subscriptionDays: typeof updates.subscriptionDays === "number" ? updates.subscriptionDays : existing.subscriptionDays,
+      subscriptionStart: updates.subscriptionStart !== undefined ? updates.subscriptionStart : existing.subscriptionStart,
+      subscriptionEndsAt: updates.subscriptionEndsAt !== undefined ? updates.subscriptionEndsAt : existing.subscriptionEndsAt,
+      storageRetentionDays: typeof updates.storageRetentionDays === "number"
+        ? updates.storageRetentionDays
+        : (resolvedTier === "vip" ? 35 : resolvedTier === "plus" ? 30 : 7),
       lastLoginAt: updates.lastLoginAt || now.toISOString(),
     };
     users[existingIdx] = resultUser;
-    saveAllStoredUsers(users);
+
+    const dedupedUsers = users.filter((u, idx) => {
+      if (idx === existingIdx) return true;
+      const isDup = (resultUser.id && u.id === resultUser.id) ||
+                    (resultUser.email && u.email?.toLowerCase() === resultUser.email.toLowerCase());
+      return !isDup;
+    });
+
+    saveAllStoredUsers(dedupedUsers);
   } else {
     const assignedTier = updates.tier || "free";
     const days = typeof updates.subscriptionDays === "number" ? updates.subscriptionDays : (assignedTier === "vip" ? 30 : 0);

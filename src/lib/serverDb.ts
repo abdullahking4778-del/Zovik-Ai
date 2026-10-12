@@ -324,6 +324,8 @@ export async function getPersistentCustomCharacters(): Promise<Character[]> {
             messages: localMatch?.messages || [],
             accessTier: (d.tier === "vip" || d.tier === "plus" ? d.tier : d.is_vip ? "vip" : "free") as "free" | "plus" | "vip",
             isVipOnly: Boolean(d.is_vip || d.tier === "vip"),
+            creatorId: localMatch?.creatorId || d.creator_id || undefined,
+            creatorEmail: localMatch?.creatorEmail || d.creator_email || undefined,
           };
         });
       }
@@ -535,6 +537,8 @@ export async function getPersistentCharacters(): Promise<Character[]> {
             messages: localMatch?.messages || [],
             accessTier: tier,
             isVipOnly: Boolean(d.is_vip || d.tier === "vip" || localMatch?.isVipOnly),
+            creatorId: localMatch?.creatorId || d.creator_id || undefined,
+            creatorEmail: localMatch?.creatorEmail || d.creator_email || undefined,
           });
         }
 

@@ -235,8 +235,14 @@ export default function AdminPage() {
         body: JSON.stringify({ id: paymentId, action: "approve" }),
       });
       if (res.ok) {
+        const data = await res.json().catch(() => ({}));
         fetchAdminData();
-        alert("Payment Approved! User upgraded to VIP with 30 days active access.");
+        const p = data?.payment;
+        if (p?.coins) {
+          alert(`Payment Approved! ${p.coins.toLocaleString()} Coins credited to user wallet successfully.`);
+        } else {
+          alert("Payment Approved! User upgraded to VIP with 30 days active access.");
+        }
       }
     } catch {
       alert("Error approving payment");

@@ -76,9 +76,12 @@ export default function CreateCharacterModal({
       safeLocalStorage.getBoolean("zovik_is_vip") ||
       safeLocalStorage.getRawItem("zovik_tier") === "vip" ||
       safeLocalStorage.getRawItem("zovik_tier") === "plus";
-    if (!isPaid) {
-      alert("🔒 Create Companion is an exclusive Plus & VIP feature. Please upgrade to unlock!");
-      onClose();
+    if (!isPaid && balance < 100) {
+      if (openPremiumModal) {
+        openPremiumModal();
+      } else {
+        window.dispatchEvent(new CustomEvent("open-premium-modal"));
+      }
       return;
     }
 
@@ -148,6 +151,7 @@ export default function CreateCharacterModal({
     setIsCreating(true);
     try {
       await onCharacterCreated(pendingChar);
+      await refreshWallet();
       notifyWalletUpdated();
       setShowConfirmModal(false);
       onClose();

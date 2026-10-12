@@ -117,7 +117,7 @@ export async function POST(req: NextRequest) {
     // 100 Coins Wallet Check for Non-Admin Companion Creation
     let remainingCoins: number | undefined = undefined;
     if (!isAdmin && sessionUser.authenticated && sessionUser.userId) {
-      const wallet = await getUserWallet(sessionUser.userId);
+      const wallet = await getUserWallet(sessionUser.userId, sessionUser.userEmail);
       if (wallet.balance < 100) {
         return NextResponse.json(
           {

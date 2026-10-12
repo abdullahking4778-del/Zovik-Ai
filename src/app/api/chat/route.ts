@@ -374,8 +374,8 @@ export async function POST(req: NextRequest) {
 
     if (serverAuth.authenticated && serverAuth.userId) {
       authenticatedUserId = serverAuth.userId;
-      // Auto-credit 20 welcome bonus if first time
-      const wallet = await ensureUserWelcomeBonus(authenticatedUserId, 20);
+      // Auto-credit 20 welcome bonus if first time, and consolidate any email coins
+      const wallet = await ensureUserWelcomeBonus(authenticatedUserId, 20, serverAuth.userEmail);
       userCoinsRemaining = wallet.balance;
 
       if (wallet.balance < 1) {

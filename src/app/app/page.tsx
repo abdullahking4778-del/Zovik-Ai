@@ -313,10 +313,15 @@ export default function Home() {
   }, [filteredCharacters]);
 
   // My AI Characters (Custom created)
-  const myAiChars = useMemo(
-    () => characters.filter((c) => c.id.startsWith("custom-") || c.badge === "MY AI"),
-    [characters]
-  );
+  const myAiChars = useMemo(() => {
+    return characters.filter((c) => {
+      if (currentUser?.uid && c.creatorId === currentUser.uid) return true;
+      if (currentUser?.email && c.creatorEmail && c.creatorEmail.toLowerCase() === currentUser.email.toLowerCase()) return true;
+      if (c.id.startsWith("char_custom_") || c.id.startsWith("custom-")) return true;
+      if (c.badge === "MY AI" || c.category === "Custom") return true;
+      return false;
+    });
+  }, [characters, currentUser]);
 
   // Collection Characters (Liked)
   const collectionChars = useMemo(
@@ -426,11 +431,31 @@ export default function Home() {
     setSelectedCharacter(newChar);
 
     try {
-      await fetch("/api/characters", {
+      let token: string | null = null;
+      if (currentUser) {
+        token = await currentUser.getIdToken().catch(() => null);
+      }
+
+      const res = await fetch("/api/characters", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(newChar),
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          ...newChar,
+          creatorId: currentUser?.uid,
+          creatorEmail: currentUser?.email,
+          isCustom: true,
+        }),
       });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.character) {
+          setCharacters((prev) => [data.character, ...prev.filter((c) => c.id !== newChar.id)]);
+        }
+      }
     } catch (e) {
       console.warn("Failed to persist character to server:", e);
     }
@@ -458,7 +483,17 @@ export default function Home() {
 
       showNotice(`✓ ${charName} deleted permanently`);
 
-      await fetch(`/api/characters?id=${charId}`, { method: "DELETE" });
+      let token: string | null = null;
+      if (currentUser) {
+        token = await currentUser.getIdToken().catch(() => null);
+      }
+
+      await fetch(`/api/characters?id=${charId}`, {
+        method: "DELETE",
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
     } catch (e) {
       console.warn("Failed to delete companion:", e);
     }
@@ -1124,6 +1159,7 @@ export default function Home() {
         isOpen={isCreateOpen}
         onClose={() => setIsCreateOpen(false)}
         onCharacterCreated={handleCharacterCreated}
+        openPremiumModal={() => setIsPremiumOpen(true)}
       />
 
       <PremiumModal

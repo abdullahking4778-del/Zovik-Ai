@@ -24,43 +24,45 @@ export { InsufficientCreditsError, WalletFrozenError };
 
 /**
  * Retrieves the wallet for a user. Initializes on first access.
- * Automatically consolidates legacy balance if user was credited by email.
+ * Automatically consolidates legacy/purchased balance if user was credited by email.
  */
-export async function getUserWallet(userId: string): Promise<VirtualWallet> {
+export async function getUserWallet(userId: string, userEmail?: string): Promise<VirtualWallet> {
   const cleanId = (userId || "").trim();
-  const primaryWallet = await getOrCreateWallet(cleanId);
-
-  // If primary wallet has balance, return immediately
-  if (primaryWallet.balance > 0) {
-    return primaryWallet;
+  const userProfile = findStoredUser(cleanId);
+  
+  // If cleanId is an email and user has a linked UID, route to their primary UID wallet
+  if (cleanId.includes("@") && userProfile && userProfile.id && userProfile.id !== cleanId) {
+    return getUserWallet(userProfile.id, cleanId);
   }
 
-  // Check if this user has an associated email with a legacy wallet containing balance
+  const primaryWallet = await getOrCreateWallet(cleanId);
+
+  // Check if this user has an associated email with a separate wallet containing balance
   try {
-    const userProfile = findStoredUser(cleanId);
-    if (userProfile && userProfile.email && userProfile.email.toLowerCase() !== cleanId.toLowerCase()) {
-      const legacyEmailWallet = await findWalletByUserId(userProfile.email);
-      if (legacyEmailWallet && legacyEmailWallet.balance > 0) {
-        // Automatically transfer legacy email credits into primary UID wallet
-        const legacyAmount = legacyEmailWallet.balance;
+    const effectiveEmail = (userEmail || userProfile?.email || (cleanId.includes("@") ? cleanId : "")).trim().toLowerCase();
+    if (effectiveEmail && effectiveEmail !== primaryWallet.userId.toLowerCase()) {
+      const emailWallet = await findWalletByUserId(effectiveEmail);
+      if (emailWallet && emailWallet.balance > 0) {
+        // Automatically transfer email credits into primary UID wallet
+        const amountToTransfer = emailWallet.balance;
         await executeCreditMutation({
-          userId: userProfile.email,
-          amount: legacyAmount,
+          userId: effectiveEmail,
+          amount: amountToTransfer,
           type: "DEBIT",
-          idempotencyKey: `legacy_migrate_out_${legacyEmailWallet.id}_to_${primaryWallet.id}`,
+          idempotencyKey: `consolidate_out_${emailWallet.id}_to_${primaryWallet.id}_${Date.now()}`,
           actorType: "SYSTEM",
           actorId: "wallet_migrator",
-          reason: `Automatic Account Balance Consolidation to UID (${primaryWallet.userId})`,
+          reason: `Automatic Balance Consolidation to UID (${primaryWallet.userId})`,
         });
 
         const creditResult = await executeCreditMutation({
           userId: primaryWallet.userId,
-          amount: legacyAmount,
+          amount: amountToTransfer,
           type: "CREDIT",
-          idempotencyKey: `legacy_migrate_in_${primaryWallet.id}_from_${legacyEmailWallet.id}`,
+          idempotencyKey: `consolidate_in_${primaryWallet.id}_from_${emailWallet.id}_${Date.now()}`,
           actorType: "SYSTEM",
           actorId: "wallet_migrator",
-          reason: `Consolidated Coins from Account Email (${userProfile.email})`,
+          reason: `Consolidated Coins from Account Email (${effectiveEmail})`,
         });
 
         return creditResult.wallet;
@@ -148,8 +150,11 @@ export async function adminAwardBonusCredits(params: {
   }
   const idempotencyKey = params.idempotencyKey || `admin_bonus_${Date.now()}_${crypto.randomUUID()}`;
 
+  const resolvedProfile = findStoredUser(params.targetUserId);
+  const effectiveId = resolvedProfile?.id || params.targetUserId;
+
   return executeCreditMutation({
-    userId: params.targetUserId,
+    userId: effectiveId,
     amount: params.amount,
     type: "BONUS",
     idempotencyKey,
@@ -173,9 +178,11 @@ export async function adminAdjustCredits(params: {
     throw new Error("A comprehensive audit reason (min 6 characters) is strictly required for balance adjustments.");
   }
   const idempotencyKey = params.idempotencyKey || `admin_adj_${Date.now()}_${crypto.randomUUID()}`;
+  const resolvedProfile = findStoredUser(params.targetUserId);
+  const effectiveId = resolvedProfile?.id || params.targetUserId;
 
   return executeCreditMutation({
-    userId: params.targetUserId,
+    userId: effectiveId,
     amount: params.amount,
     type: "ADJUSTMENT",
     idempotencyKey,
@@ -202,16 +209,16 @@ export async function reconcileUserWallet(userId: string): Promise<Reconciliatio
 /**
  * Awards a one-time welcome bonus (e.g. 20 coins) safely using an idempotent key.
  */
-export async function ensureUserWelcomeBonus(userId: string, bonusAmount: number = 20): Promise<VirtualWallet> {
-  const wallet = await getOrCreateWallet(userId);
+export async function ensureUserWelcomeBonus(userId: string, bonusAmount: number = 20, userEmail?: string): Promise<VirtualWallet> {
+  const wallet = await getUserWallet(userId, userEmail);
   if (bonusAmount <= 0) return wallet;
 
   try {
     const res = await executeCreditMutation({
-      userId,
+      userId: wallet.userId,
       amount: bonusAmount,
       type: "BONUS",
-      idempotencyKey: `welcome_signup_${userId.toLowerCase()}`,
+      idempotencyKey: `welcome_signup_${wallet.userId.toLowerCase()}`,
       actorType: "SYSTEM",
       actorId: "system_welcome_grant",
       reason: "Welcome Signup Bonus 🎁 (20 Free Coins)",

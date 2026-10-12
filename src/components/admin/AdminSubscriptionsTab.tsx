@@ -115,7 +115,9 @@ export const AdminSubscriptionsTab: React.FC<AdminSubscriptionsTabProps> = ({
                     </>
                   )}
                   {p.status === "approved" && (
-                    <span className="text-[11px] text-emerald-400 font-bold mr-1">✓ Active VIP</span>
+                    <span className="text-[11px] text-emerald-400 font-bold mr-1">
+                      {p.coins ? `✓ Credited ${p.coins.toLocaleString()} Coins` : "✓ Active VIP"}
+                    </span>
                   )}
 
                   {/* Delete / Purge button */}

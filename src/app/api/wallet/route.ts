@@ -6,26 +6,57 @@ import { getEconomyConfig } from "@/lib/wallet/economyConfigServer";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+import { upsertStoredUser } from "@/lib/userStore";
+
 /**
  * GET /api/wallet
- * Read-only endpoint for authenticated users to inspect their wallet balance & history.
- * Strictly prevents IDOR by binding strictly to the server-verified session user.
- * Strictly read-only: does not perform any database state mutations on GET.
+ * Read-only endpoint for inspecting wallet balance & history.
+ * If unauthenticated: provides guest access to live economy configuration (packages & rates).
+ * If authenticated: retrieves user wallet with automatic email-to-UID balance consolidation.
  */
 export async function GET(req: NextRequest) {
   try {
     const sessionUser = await resolveServerUser(req);
+    const economy = getEconomyConfig();
+
     if (!sessionUser.authenticated || !sessionUser.userId) {
-      return NextResponse.json(
-        { success: false, error: "Unauthorized: Valid session required to view wallet." },
-        { status: 401 }
-      );
+      // Allow guest/unauthenticated access to live economy config so CoinStoreModal can display live packages & rates
+      return NextResponse.json({
+        success: true,
+        guest: true,
+        wallet: {
+          id: "guest",
+          balance: 0,
+          currency: "CREDIT",
+          status: "guest",
+          updatedAt: new Date().toISOString(),
+        },
+        history: [],
+        economy: {
+          usdtRate: economy.usdtRate,
+          minPurchaseCoins: economy.minPurchaseCoins,
+          costPerMessage: economy.costPerMessage,
+          costPerPhoto: economy.costPerPhoto,
+          costPerVoice: economy.costPerVoice,
+          packages: economy.packages,
+        },
+      });
     }
 
-    // Read-only retrieval (zero write mutations on GET)
-    const wallet = await getUserWallet(sessionUser.userId);
-    const history = await getUserLedgerHistory(sessionUser.userId, 25);
-    const economy = getEconomyConfig();
+    // Ensure session UID and email are linked in authoritative userStore
+    if (sessionUser.userId && sessionUser.userEmail) {
+      try {
+        upsertStoredUser(sessionUser.userId, {
+          id: sessionUser.userId,
+          email: sessionUser.userEmail,
+          tier: sessionUser.tier,
+        });
+      } catch {}
+    }
+
+    // Read-only retrieval with automatic email-to-UID balance consolidation
+    const wallet = await getUserWallet(sessionUser.userId, sessionUser.userEmail);
+    const history = await getUserLedgerHistory(wallet.userId, 25);
 
     return NextResponse.json({
       success: true,
@@ -76,7 +107,7 @@ export async function POST(req: NextRequest) {
     const minuteIndex = Number(body.minuteIndex) || 1;
 
     if (action === "voice_call_minute") {
-      const wallet = await getUserWallet(sessionUser.userId);
+      const wallet = await getUserWallet(sessionUser.userId, sessionUser.userEmail);
       if (wallet.balance < 2) {
         return NextResponse.json(
           {
