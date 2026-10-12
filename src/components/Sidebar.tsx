@@ -130,31 +130,59 @@ export default function Sidebar({
           })}
         </nav>
 
-        {/* Official Coins Economy Banner (Foldable & Sleek) */}
-        {isCoinsFolded ? (
-          /* Folded Minimal State */
-          <div className="flex items-center justify-between p-2.5 rounded-xl bg-gradient-to-r from-[#170e20] to-[#120a1a] border border-amber-500/30 hover:border-amber-400/50 transition-all shadow-md group">
+        {/* Official Coins Economy Banner */}
+        {walletBalance <= 0 ? (
+          /* Empty Wallet Alert State (Prominent when user has 0 coins) */
+          <div className="relative overflow-hidden p-3.5 rounded-2xl bg-gradient-to-br from-amber-950/70 via-[#1c0d18]/90 to-[#120716] border border-amber-500/40 backdrop-blur-md transition-all group shadow-xl shadow-amber-950/30 animate-fadeIn">
+            <div className="flex items-center justify-between mb-2">
+              <div
+                onClick={openPremiumModal}
+                className="flex items-center space-x-1.5 cursor-pointer"
+              >
+                <Coins className="size-4 text-amber-400 animate-pulse shrink-0" />
+                <span className="text-xs font-black tracking-wide text-amber-300 uppercase">Recharge Required</span>
+              </div>
+              <span className="px-1.5 py-0.5 rounded-full bg-red-500/20 border border-red-500/40 text-red-400 text-[9px] font-black tracking-wider">
+                0 COINS
+              </span>
+            </div>
+
+            <p className="text-[10px] text-amber-200/80 leading-tight mb-2.5">
+              Aapke paas coins khatam ho chuke hain. Chat aur private photos ke liye recharge karein.
+            </p>
+
+            <button
+              onClick={openPremiumModal}
+              className="w-full py-2 rounded-xl bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 text-black text-xs font-black hover:brightness-110 transition-all shadow-md shadow-amber-500/30 flex items-center justify-center space-x-1 active:scale-98"
+            >
+              <Coins className="size-3.5" />
+              <span>Recharge Coins 🪙</span>
+            </button>
+          </div>
+        ) : isCoinsFolded ? (
+          /* Minimal Clean Badge when user has active coins and prefers folded */
+          <div className="flex items-center justify-between p-2.5 rounded-xl bg-gradient-to-r from-[#170e20] to-[#120a1a] border border-amber-500/25 hover:border-amber-400/45 transition-all shadow-md group">
             <button
               onClick={openPremiumModal}
               className="flex items-center space-x-2 min-w-0 text-left hover:opacity-90 transition-opacity"
-              title="Click to recharge Coins"
+              title="Click to view Coins"
             >
               <Coins className="size-4 text-amber-400 shrink-0 group-hover:rotate-12 transition-transform" />
               <span className="text-xs font-black text-amber-300 truncate">
-                🪙 {walletBalance.toLocaleString()}
+                🪙 {walletBalance.toLocaleString()} <span className="text-[10px] font-medium text-amber-200/60">Coins</span>
               </span>
             </button>
             <div className="flex items-center space-x-1 shrink-0">
               <button
                 onClick={openPremiumModal}
-                title="Add Coins"
+                title="Add More Coins"
                 className="size-6 rounded-md bg-amber-500/20 hover:bg-amber-500/40 border border-amber-500/40 text-amber-300 flex items-center justify-center transition-all active:scale-95"
               >
                 <Plus className="size-3 font-bold" />
               </button>
               <button
                 onClick={() => setIsCoinsFolded(false)}
-                title="Expand Wallet"
+                title="Expand Wallet Card"
                 className="size-6 rounded-md bg-white/5 hover:bg-white/10 text-[#aeaeae] hover:text-white flex items-center justify-center transition-all"
               >
                 <ChevronDown className="size-3.5" />
@@ -162,23 +190,23 @@ export default function Sidebar({
             </div>
           </div>
         ) : (
-          /* Expanded Full State */
-          <div className="relative overflow-hidden p-3.5 rounded-2xl bg-gradient-to-br from-[#1a1024]/95 via-[#140b1c]/90 to-[#0d0714] border border-amber-500/35 hover:border-amber-400/60 backdrop-blur-md transition-all group shadow-xl shadow-amber-950/20">
-            <div className="flex items-center justify-between mb-2">
+          /* Sleek Active Wallet Card (Collapsible by user) */
+          <div className="relative overflow-hidden p-3 rounded-2xl bg-gradient-to-br from-[#1a1024]/90 via-[#140b1c]/85 to-[#0d0714] border border-amber-500/30 hover:border-amber-400/50 backdrop-blur-md transition-all group shadow-lg shadow-amber-950/20">
+            <div className="flex items-center justify-between mb-1.5">
               <div
                 onClick={openPremiumModal}
                 className="flex items-center space-x-1.5 cursor-pointer"
               >
                 <Coins className="size-4 text-amber-400 group-hover:rotate-12 transition-transform" />
-                <span className="text-xs font-black tracking-wide text-amber-300 uppercase">My Coins</span>
+                <span className="text-xs font-black tracking-wide text-amber-300 uppercase">My Wallet</span>
               </div>
               <div className="flex items-center space-x-1.5">
-                <span className="px-1.5 py-0.5 rounded-full bg-gradient-to-r from-amber-500 to-yellow-400 text-black text-[9px] font-black tracking-wider">
-                  1 PKR = 1 COIN
+                <span className="px-1.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 text-[9px] font-black tracking-wider">
+                  ACTIVE
                 </span>
                 <button
                   onClick={() => setIsCoinsFolded(true)}
-                  title="Fold Wallet Card"
+                  title="Minimize Wallet Card"
                   className="size-5 rounded-md bg-white/5 hover:bg-white/15 text-[#aeaeae] hover:text-white flex items-center justify-center transition-colors"
                 >
                   <ChevronUp className="size-3" />
@@ -196,15 +224,12 @@ export default function Sidebar({
               <span className="text-[11px] text-[#aeaeae] font-semibold">Coins</span>
             </div>
 
-            <p className="text-[10px] text-amber-200/70 leading-tight mb-2.5">
-              Pay as you go! Min Rs. 50. Unlimited chat & private HD photos.
-            </p>
-
             <button
               onClick={openPremiumModal}
-              className="w-full py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 text-black text-xs font-black hover:brightness-110 transition-all shadow-md shadow-amber-500/20 flex items-center justify-center space-x-1 active:scale-98"
+              className="w-full py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white/90 text-xs font-bold hover:border-amber-500/40 transition-all flex items-center justify-center space-x-1.5 active:scale-98"
             >
-              <span>Recharge Coins 🪙</span>
+              <Plus className="size-3 text-amber-400" />
+              <span>Add Coins</span>
             </button>
           </div>
         )}

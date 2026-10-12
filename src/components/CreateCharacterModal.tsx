@@ -18,10 +18,25 @@ import {
   AlertCircle,
   Loader2,
   ArrowRight,
+  Link,
+  ImageIcon,
 } from "lucide-react";
 import { Character } from "@/types";
 import { safeLocalStorage } from "@/lib/storage";
 import { useWallet, notifyWalletUpdated } from "@/hooks/useWallet";
+
+const PRESET_AVATARS = [
+  "/characters/zovik_01.jpg",
+  "/characters/zovik_02.jpg",
+  "/characters/zovik_03.jpg",
+  "/characters/zovik_04.jpg",
+  "/characters/zovik_05.jpg",
+  "/characters/zovik_06.jpg",
+  "/characters/zovik_07.jpg",
+  "/characters/zovik_08.jpg",
+  "/characters/zovik_31.jpg",
+  "/characters/zovik_32.jpg",
+];
 
 interface CreateCharacterModalProps {
   isOpen: boolean;
@@ -53,19 +68,57 @@ export default function CreateCharacterModal({
   const [voice, setVoice] = useState("Sultry Whisper");
   const [customGreeting, setCustomGreeting] = useState("");
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
+  const [avatarMode, setAvatarMode] = useState<"upload" | "url" | "preset">("upload");
+  const [avatarUrlInput, setAvatarUrlInput] = useState("");
+  const [selectedPreset, setSelectedPreset] = useState<string>("/characters/zovik_01.jpg");
 
   if (!isOpen) return null;
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 10 * 1024 * 1024) {
-        alert("Image file size should be under 10MB");
+      if (file.size > 15 * 1024 * 1024) {
+        alert("Image file size should be under 15MB");
         return;
       }
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setUploadedImage(reader.result as string);
+      reader.onload = (event) => {
+        const rawData = event.target?.result as string;
+        if (!rawData) return;
+
+        // Auto-optimize image size using canvas to ensure fast load & zero storage issues
+        try {
+          const img = new window.Image();
+          img.onload = () => {
+            const maxDim = 800;
+            let width = img.width;
+            let height = img.height;
+            if (width > maxDim || height > maxDim) {
+              if (width > height) {
+                height = Math.round((height * maxDim) / width);
+                width = maxDim;
+              } else {
+                width = Math.round((width * maxDim) / height);
+                height = maxDim;
+              }
+            }
+            const canvas = document.createElement("canvas");
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext("2d");
+            if (ctx) {
+              ctx.drawImage(img, 0, 0, width, height);
+              const optimized = canvas.toDataURL("image/jpeg", 0.85);
+              setUploadedImage(optimized);
+            } else {
+              setUploadedImage(rawData);
+            }
+          };
+          img.onerror = () => setUploadedImage(rawData);
+          img.src = rawData;
+        } catch {
+          setUploadedImage(rawData);
+        }
       };
       reader.readAsDataURL(file);
     }
@@ -92,9 +145,17 @@ export default function CreateCharacterModal({
         ? `Hey! You finally created me... I've been waiting for you! How do you like my look? 🥰`
         : `Hey... glad you brought me to life. Tell me what's on your mind today? 😉`);
 
-    // Determine avatar image: custom uploaded from device takes highest priority
+    // Determine avatar image: custom uploaded from device takes highest priority, then direct URL, then preset
     let avatarImage = uploadedImage;
-    if (!avatarImage) {
+    if (avatarMode === "url" && avatarUrlInput.trim()) {
+      avatarImage = avatarUrlInput.trim();
+    } else if (avatarMode === "preset" && selectedPreset) {
+      avatarImage = selectedPreset;
+    } else if (avatarMode === "upload" && uploadedImage) {
+      avatarImage = uploadedImage;
+    } else if (avatarUrlInput.trim()) {
+      avatarImage = avatarUrlInput.trim();
+    } else if (!avatarImage) {
       if (gender === "male") {
         avatarImage = "/characters/zovik_31.jpg";
       } else {
@@ -318,53 +379,175 @@ export default function CreateCharacterModal({
         {/* ================= STEP 2: PHOTO & APPEARANCE ================= */}
         {step === 2 && (
           <div className="space-y-4">
-            {/* Custom File Upload Box */}
+            {/* Avatar Selection Modes: Upload / URL / Presets */}
             <div>
-              <label className="block text-xs font-bold text-[#aeaeae] uppercase tracking-wider mb-1.5 flex items-center justify-between">
-                <span>Upload Companion Photo (Mobile / PC)</span>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs font-bold text-[#aeaeae] uppercase tracking-wider">
+                  Companion Avatar / Photo
+                </label>
                 <span className="text-[10px] text-pink-400 font-semibold">Supports Any Photo / 18+</span>
-              </label>
-
-              <div className="relative border-2 border-dashed border-white/20 hover:border-[#f53b70]/60 rounded-2xl p-4 bg-black/40 transition-colors text-center">
-                {uploadedImage ? (
-                  <div className="flex flex-col items-center">
-                    <div className="relative size-28 rounded-2xl overflow-hidden border-2 border-[#f53b70] shadow-lg mb-3">
-                      <Image src={uploadedImage} alt="Uploaded Avatar" fill className="object-cover object-top" unoptimized />
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <label
-                        htmlFor="companion-photo-upload"
-                        className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold cursor-pointer"
-                      >
-                        Change Photo
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => setUploadedImage(null)}
-                        className="px-3 py-1.5 rounded-xl bg-red-500/20 hover:bg-red-500/30 text-red-300 text-xs font-bold flex items-center space-x-1"
-                      >
-                        <Trash2 className="size-3.5" />
-                        <span>Remove</span>
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <label htmlFor="companion-photo-upload" className="flex flex-col items-center cursor-pointer py-3">
-                    <div className="size-12 rounded-full bg-[#f53b70]/20 flex items-center justify-center text-[#f53b70] mb-2">
-                      <UploadCloud className="size-6" />
-                    </div>
-                    <span className="text-xs font-bold text-white mb-0.5">Click to browse from your device</span>
-                    <span className="text-[10px] text-[#888]">JPG, PNG, WEBP from your phone or PC</span>
-                  </label>
-                )}
-                <input
-                  id="companion-photo-upload"
-                  type="file"
-                  accept="image/*"
-                  onChange={handleFileUpload}
-                  className="hidden"
-                />
               </div>
+
+              {/* Segmented Mode Selector */}
+              <div className="grid grid-cols-3 gap-1.5 p-1 bg-black/50 border border-white/10 rounded-xl mb-3">
+                <button
+                  type="button"
+                  onClick={() => setAvatarMode("upload")}
+                  className={`py-1.5 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center space-x-1.5 ${
+                    avatarMode === "upload"
+                      ? "bg-[#f53b70] text-white shadow-sm"
+                      : "text-[#aeaeae] hover:text-white"
+                  }`}
+                >
+                  <UploadCloud className="size-3.5" />
+                  <span>Upload File</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAvatarMode("url")}
+                  className={`py-1.5 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center space-x-1.5 ${
+                    avatarMode === "url"
+                      ? "bg-[#f53b70] text-white shadow-sm"
+                      : "text-[#aeaeae] hover:text-white"
+                  }`}
+                >
+                  <Link className="size-3.5" />
+                  <span>Image URL</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAvatarMode("preset")}
+                  className={`py-1.5 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center space-x-1.5 ${
+                    avatarMode === "preset"
+                      ? "bg-[#f53b70] text-white shadow-sm"
+                      : "text-[#aeaeae] hover:text-white"
+                  }`}
+                >
+                  <ImageIcon className="size-3.5" />
+                  <span>Presets</span>
+                </button>
+              </div>
+
+              {/* Mode 1: File Upload */}
+              {avatarMode === "upload" && (
+                <div className="relative border-2 border-dashed border-white/20 hover:border-[#f53b70]/60 rounded-2xl p-4 bg-black/40 transition-colors text-center animate-fadeIn">
+                  {uploadedImage ? (
+                    <div className="flex flex-col items-center">
+                      <div className="relative size-28 rounded-2xl overflow-hidden border-2 border-[#f53b70] shadow-lg mb-3">
+                        <Image src={uploadedImage} alt="Uploaded Avatar" fill className="object-cover object-top" unoptimized />
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <label
+                          htmlFor="companion-photo-upload"
+                          className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold cursor-pointer transition-colors"
+                        >
+                          Change Photo
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setUploadedImage(null)}
+                          className="px-3 py-1.5 rounded-xl bg-red-500/20 hover:bg-red-500/30 text-red-300 text-xs font-bold flex items-center space-x-1 transition-colors"
+                        >
+                          <Trash2 className="size-3.5" />
+                          <span>Remove</span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <label htmlFor="companion-photo-upload" className="flex flex-col items-center cursor-pointer py-3">
+                      <div className="size-12 rounded-full bg-[#f53b70]/20 flex items-center justify-center text-[#f53b70] mb-2">
+                        <UploadCloud className="size-6" />
+                      </div>
+                      <span className="text-xs font-bold text-white mb-0.5">Click to browse from your device</span>
+                      <span className="text-[10px] text-[#888]">JPG, PNG, WEBP from your phone or PC (Auto-optimized)</span>
+                    </label>
+                  )}
+                  <input
+                    id="companion-photo-upload"
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileUpload}
+                    className="hidden"
+                  />
+                </div>
+              )}
+
+              {/* Mode 2: Direct Image URL */}
+              {avatarMode === "url" && (
+                <div className="space-y-3 bg-black/40 border border-white/10 rounded-2xl p-3.5 animate-fadeIn">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-[#aeaeae] mb-1">
+                      Direct Image Web Link
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="url"
+                        placeholder="https://example.com/avatar.jpg"
+                        value={avatarUrlInput}
+                        onChange={(e) => setAvatarUrlInput(e.target.value)}
+                        className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-black/60 border border-white/15 text-white text-xs focus:outline-none focus:border-[#f53b70]"
+                      />
+                      <Link className="absolute left-3 top-3 size-4 text-[#aeaeae]" />
+                    </div>
+                    <span className="text-[10px] text-[#888] mt-1 block">
+                      Pinterest, Instagram, Imgur, Discord ya kisi bhi website ka direct photo link paste karein.
+                    </span>
+                  </div>
+
+                  {avatarUrlInput.trim() && (
+                    <div className="flex items-center space-x-3 p-2.5 rounded-xl bg-white/5 border border-white/10">
+                      <div className="relative size-16 rounded-xl overflow-hidden border border-[#f53b70]/60 shrink-0 bg-black/60">
+                        <Image
+                          src={avatarUrlInput.trim()}
+                          alt="URL Preview"
+                          fill
+                          className="object-cover object-top"
+                          unoptimized
+                        />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <span className="text-xs font-bold text-emerald-400 block mb-0.5 flex items-center space-x-1">
+                          <Check className="size-3" />
+                          <span>Photo URL Linked</span>
+                        </span>
+                        <p className="text-[10px] text-[#aeaeae] truncate">{avatarUrlInput}</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Mode 3: Presets Gallery */}
+              {avatarMode === "preset" && (
+                <div className="bg-black/40 border border-white/10 rounded-2xl p-3 animate-fadeIn">
+                  <span className="text-[11px] font-semibold text-[#aeaeae] block mb-2">
+                    Pick from Curated Models:
+                  </span>
+                  <div className="grid grid-cols-5 gap-2">
+                    {PRESET_AVATARS.map((preset) => {
+                      const isSelected = selectedPreset === preset;
+                      return (
+                        <div
+                          key={preset}
+                          onClick={() => setSelectedPreset(preset)}
+                          className={`relative aspect-[3/4] rounded-xl overflow-hidden cursor-pointer border-2 transition-all hover:scale-105 ${
+                            isSelected
+                              ? "border-[#f53b70] shadow-md shadow-pink-600/30 ring-2 ring-pink-500/40"
+                              : "border-transparent opacity-70 hover:opacity-100"
+                          }`}
+                        >
+                          <Image src={preset} alt="Preset avatar" fill className="object-cover object-top" unoptimized />
+                          {isSelected && (
+                            <div className="absolute top-1 right-1 size-4 rounded-full bg-[#f53b70] text-white flex items-center justify-center shadow">
+                              <Check className="size-2.5" />
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div>
