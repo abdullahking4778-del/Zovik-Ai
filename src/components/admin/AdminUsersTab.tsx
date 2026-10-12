@@ -2,7 +2,7 @@
 
 import React from "react";
 import Image from "next/image";
-import { Search, Crown, HardDrive, Edit3, Trash2, X, Calendar, Check, RefreshCw } from "lucide-react";
+import { Search, Crown, HardDrive, Edit3, Trash2, X, Calendar, Check, RefreshCw, Coins, Gift } from "lucide-react";
 import { UserAccount } from "@/types";
 
 interface AdminUsersTabProps {
@@ -24,6 +24,87 @@ export const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
   const [editUserDays, setEditUserDays] = React.useState<number>(30);
   const [editUserStorageDays, setEditUserStorageDays] = React.useState<number>(35);
   const [isSavingUser, setIsSavingUser] = React.useState<boolean>(false);
+
+  // Coins Control Modal State
+  const [coinTargetUser, setCoinTargetUser] = React.useState<UserAccount | null>(null);
+  const [coinAmount, setCoinAmount] = React.useState<number>(100);
+  const [coinActionType, setCoinActionType] = React.useState<"BONUS" | "ADJUSTMENT">("BONUS");
+  const [coinReason, setCoinReason] = React.useState<string>("Promotional Bonus 🎁");
+  const [isSavingCoins, setIsSavingCoins] = React.useState<boolean>(false);
+  const [coinStatusMsg, setCoinStatusMsg] = React.useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  const handleOpenCoinsModal = (user: UserAccount) => {
+    setCoinTargetUser(user);
+    setCoinAmount(100);
+    setCoinActionType("BONUS");
+    setCoinReason("Promotional Bonus 🎁");
+    setCoinStatusMsg(null);
+  };
+
+  const handleSaveUserCoins = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!coinTargetUser) return;
+    if (!coinAmount || coinAmount <= 0) {
+      alert("Amount must be at least 1 coin");
+      return;
+    }
+    if (!coinReason || coinReason.trim().length < 4) {
+      alert("Please provide an audit reason (min 4 characters)");
+      return;
+    }
+
+    setIsSavingCoins(true);
+    setCoinStatusMsg(null);
+    try {
+      const res = await fetch("/api/admin/wallet", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-zovik-admin-request": "1",
+        },
+        body: JSON.stringify({
+          targetUserId: coinTargetUser.id || coinTargetUser.email,
+          amount: Math.floor(coinAmount),
+          type: coinActionType,
+          reason: coinReason.trim(),
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        if (setUsers) {
+          setUsers((prev) =>
+            prev.map((u) =>
+              u.id === coinTargetUser.id
+                ? {
+                    ...u,
+                    coins:
+                      coinActionType === "BONUS"
+                        ? (u.coins || 0) + coinAmount
+                        : Math.max(0, (u.coins || 0) - coinAmount),
+                  }
+                : u
+            )
+          );
+        }
+        setCoinStatusMsg({
+          type: "success",
+          text: `✓ Successfully ${coinActionType === "BONUS" ? "gifted" : "adjusted"} ${coinAmount} coins for ${coinTargetUser.name || coinTargetUser.email}!`,
+        });
+        setTimeout(() => {
+          setCoinTargetUser(null);
+          setCoinStatusMsg(null);
+          onRefreshUsers?.();
+        }, 1200);
+      } else {
+        setCoinStatusMsg({ type: "error", text: data.error || "Failed to update coins." });
+      }
+    } catch {
+      setCoinStatusMsg({ type: "error", text: "Network error updating coins." });
+    } finally {
+      setIsSavingCoins(false);
+    }
+  };
 
   const handleOpenEditUser = (user: UserAccount) => {
     setEditingUser(user);
@@ -198,6 +279,7 @@ export const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
           <thead className="bg-[#1b1024] text-[#aeaeae] uppercase text-[10px] tracking-wider">
             <tr>
               <th className="p-4">User Details</th>
+              <th className="p-4">Coins Balance</th>
               <th className="p-4">Subscription Plan</th>
               <th className="p-4">Duration & Expiry</th>
               <th className="p-4">Storage Retention</th>
@@ -238,6 +320,15 @@ export const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                           <span className="text-[11px] text-[#aeaeae] block truncate">{u.email}</span>
                         </div>
                       </div>
+                    </td>
+
+                    {/* Coins Balance */}
+                    <td className="p-4">
+                      <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 font-black text-xs font-mono shadow-sm">
+                        <span>🪙</span>
+                        <span>{(u.coins ?? 0).toLocaleString()}</span>
+                        <span className="text-[9px] text-amber-400/70 font-sans uppercase">Coins</span>
+                      </span>
                     </td>
 
                     {/* Tier Badge */}
@@ -293,6 +384,16 @@ export const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
 
                     {/* Actions */}
                     <td className="p-4 text-right space-x-2">
+                      {/* Coins Gift / Deduct Action */}
+                      <button
+                        onClick={() => handleOpenCoinsModal(u)}
+                        className="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 font-bold text-xs inline-flex items-center space-x-1 transition-all"
+                        title="Gift Bonus Coins or Deduct"
+                      >
+                        <Coins className="size-3 text-amber-400" />
+                        <span>Coins</span>
+                      </button>
+
                       {/* Edit Subscription Modal Trigger */}
                       <button
                         onClick={() => handleOpenEditUser(u)}
@@ -329,7 +430,7 @@ export const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
               })}
             {users.length === 0 && (
               <tr>
-                <td colSpan={6} className="p-8 text-center text-[#aeaeae]">
+                <td colSpan={7} className="p-8 text-center text-[#aeaeae]">
                   No users registered yet.
                 </td>
               </tr>
@@ -497,6 +598,171 @@ export const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                 <button
                   type="button"
                   onClick={() => setEditingUser(null)}
+                  className="px-4 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-white font-bold text-xs transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MANAGE USER COINS MODAL ================= */}
+      {coinTargetUser && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fadeIn"
+          onClick={() => setCoinTargetUser(null)}
+        >
+          <div
+            className="relative max-w-md w-full bg-[#150d1d] border border-amber-500/30 rounded-3xl p-6 shadow-2xl space-y-4 text-left"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-white/10">
+              <div className="flex items-center space-x-2">
+                <div className="size-8 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-300">
+                  <Coins className="size-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-white">Manage User Coins</h3>
+                  <p className="text-[11px] text-[#aeaeae] truncate max-w-[240px]">
+                    {coinTargetUser.name} ({coinTargetUser.email})
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setCoinTargetUser(null)}
+                className="size-7 rounded-full bg-white/5 hover:bg-white/10 text-[#aeaeae] flex items-center justify-center"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
+
+            {/* Current Balance Card */}
+            <div className="flex items-center justify-between p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/25">
+              <span className="text-xs text-amber-300 font-bold">Current Account Balance</span>
+              <span className="text-base font-black text-amber-400 font-mono">
+                🪙 {(coinTargetUser.coins ?? 0).toLocaleString()} Coins
+              </span>
+            </div>
+
+            <form onSubmit={handleSaveUserCoins} className="space-y-4">
+              {/* Type Toggle: Gift vs Deduct */}
+              <div>
+                <label className="block text-[11px] font-bold text-white/80 mb-1.5">Action Type</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setCoinActionType("BONUS")}
+                    className={`py-2 px-3 rounded-xl text-xs font-bold transition-all border ${
+                      coinActionType === "BONUS"
+                        ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-300 shadow-sm"
+                        : "bg-white/5 border-white/5 text-[#aeaeae] hover:text-white"
+                    }`}
+                  >
+                    🎁 Gift / Bonus (+)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCoinActionType("ADJUSTMENT")}
+                    className={`py-2 px-3 rounded-xl text-xs font-bold transition-all border ${
+                      coinActionType === "ADJUSTMENT"
+                        ? "bg-red-500/20 border-red-500/50 text-red-300 shadow-sm"
+                        : "bg-white/5 border-white/5 text-[#aeaeae] hover:text-white"
+                    }`}
+                  >
+                    ⚖️ Deduct / Adjust (-)
+                  </button>
+                </div>
+              </div>
+
+              {/* Quick Amount Pills */}
+              <div>
+                <label className="block text-[11px] font-bold text-white/80 mb-1.5">Quick Preset Amount</label>
+                <div className="grid grid-cols-4 gap-2">
+                  {[50, 100, 200, 500].map((amt) => (
+                    <button
+                      key={amt}
+                      type="button"
+                      onClick={() => setCoinAmount(amt)}
+                      className={`py-1.5 rounded-xl text-xs font-bold transition-all border ${
+                        coinAmount === amt
+                          ? "bg-amber-500/30 border-amber-400 text-amber-300"
+                          : "bg-white/5 border-white/5 text-[#aeaeae] hover:text-white"
+                      }`}
+                    >
+                      +{amt}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Custom Coins Amount */}
+              <div>
+                <label className="block text-[11px] font-bold text-white/80 mb-1">Coins Amount</label>
+                <input
+                  type="number"
+                  min="1"
+                  value={coinAmount}
+                  onChange={(e) => setCoinAmount(Math.max(1, Number(e.target.value)))}
+                  className="w-full px-3 py-2.5 rounded-xl bg-black/50 border border-white/10 text-white font-mono font-bold text-sm focus:border-amber-400 outline-none"
+                  required
+                />
+              </div>
+
+              {/* Audit Reason */}
+              <div>
+                <label className="block text-[11px] font-bold text-white/80 mb-1">
+                  Reason for Audit Ledger (Min 4 chars)
+                </label>
+                <input
+                  type="text"
+                  value={coinReason}
+                  onChange={(e) => setCoinReason(e.target.value)}
+                  placeholder="e.g. Welcome Gift, Contest Winner, Support Refund..."
+                  className="w-full px-3 py-2.5 rounded-xl bg-black/50 border border-white/10 text-white text-xs focus:border-amber-400 outline-none"
+                  required
+                />
+              </div>
+
+              {coinStatusMsg && (
+                <div
+                  className={`p-3 rounded-xl text-xs font-bold ${
+                    coinStatusMsg.type === "success"
+                      ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                      : "bg-red-500/20 text-red-300 border border-red-500/30"
+                  }`}
+                >
+                  {coinStatusMsg.text}
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex items-center space-x-2 pt-2">
+                <button
+                  type="submit"
+                  disabled={isSavingCoins}
+                  className={`flex-1 py-3 rounded-xl text-black font-black text-xs shadow-lg hover:brightness-110 disabled:opacity-60 transition-all flex items-center justify-center space-x-2 ${
+                    coinActionType === "BONUS"
+                      ? "bg-gradient-to-r from-emerald-400 to-teal-400"
+                      : "bg-gradient-to-r from-amber-400 to-orange-400"
+                  }`}
+                >
+                  {isSavingCoins ? (
+                    <>
+                      <RefreshCw className="size-4 animate-spin text-black" />
+                      <span>Processing Ledger...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check className="size-4 text-black" />
+                      <span>{coinActionType === "BONUS" ? `Gift +${coinAmount} Coins` : `Deduct -${coinAmount} Coins`}</span>
+                    </>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCoinTargetUser(null)}
                   className="px-4 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-white font-bold text-xs transition-colors"
                 >
                   Cancel

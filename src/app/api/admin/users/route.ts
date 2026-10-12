@@ -8,6 +8,7 @@ import { supabaseAdmin, isSupabaseConfigured } from "@/lib/supabase";
 import { recordDeletedUser } from "@/lib/deletedUsers";
 import { resetQuota } from "@/lib/quotaManager";
 import { cleanAppCacheAndJunk } from "@/lib/maintenanceCleaner";
+import { getUserWallet } from "@/lib/wallet/walletService";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -58,7 +59,18 @@ export async function GET(req: NextRequest) {
     console.warn("Firestore fetch users failed:", err);
   }
 
-  const users = Array.from(usersMap.values());
+  const rawUsers = Array.from(usersMap.values());
+  const users = await Promise.all(
+    rawUsers.map(async (u) => {
+      try {
+        const wallet = await getUserWallet(u.id || u.email);
+        return { ...u, coins: wallet.balance };
+      } catch {
+        return { ...u, coins: 0 };
+      }
+    })
+  );
+
   return NextResponse.json({ users, total: users.length });
 }
 

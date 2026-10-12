@@ -18,14 +18,59 @@ import {
   LedgerEntry,
   ReconciliationResult,
 } from "./types";
+import { findStoredUser } from "@/lib/userStore";
 
 export { InsufficientCreditsError, WalletFrozenError };
 
 /**
  * Retrieves the wallet for a user. Initializes on first access.
+ * Automatically consolidates legacy balance if user was credited by email.
  */
 export async function getUserWallet(userId: string): Promise<VirtualWallet> {
-  return getOrCreateWallet(userId);
+  const cleanId = (userId || "").trim();
+  const primaryWallet = await getOrCreateWallet(cleanId);
+
+  // If primary wallet has balance, return immediately
+  if (primaryWallet.balance > 0) {
+    return primaryWallet;
+  }
+
+  // Check if this user has an associated email with a legacy wallet containing balance
+  try {
+    const userProfile = findStoredUser(cleanId);
+    if (userProfile && userProfile.email && userProfile.email.toLowerCase() !== cleanId.toLowerCase()) {
+      const legacyEmailWallet = await findWalletByUserId(userProfile.email);
+      if (legacyEmailWallet && legacyEmailWallet.balance > 0) {
+        // Automatically transfer legacy email credits into primary UID wallet
+        const legacyAmount = legacyEmailWallet.balance;
+        await executeCreditMutation({
+          userId: userProfile.email,
+          amount: legacyAmount,
+          type: "DEBIT",
+          idempotencyKey: `legacy_migrate_out_${legacyEmailWallet.id}_to_${primaryWallet.id}`,
+          actorType: "SYSTEM",
+          actorId: "wallet_migrator",
+          reason: `Automatic Account Balance Consolidation to UID (${primaryWallet.userId})`,
+        });
+
+        const creditResult = await executeCreditMutation({
+          userId: primaryWallet.userId,
+          amount: legacyAmount,
+          type: "CREDIT",
+          idempotencyKey: `legacy_migrate_in_${primaryWallet.id}_from_${legacyEmailWallet.id}`,
+          actorType: "SYSTEM",
+          actorId: "wallet_migrator",
+          reason: `Consolidated Coins from Account Email (${userProfile.email})`,
+        });
+
+        return creditResult.wallet;
+      }
+    }
+  } catch (migErr) {
+    console.warn("[WalletService] Auto-migration note:", migErr);
+  }
+
+  return primaryWallet;
 }
 
 /**
@@ -46,15 +91,17 @@ export async function creditUserWallet(params: {
   idempotencyKey?: string;
   actorId?: string;
 }): Promise<{ wallet: VirtualWallet; ledgerEntry: LedgerEntry; deduplicated: boolean }> {
+  const resolvedProfile = findStoredUser(params.userId);
+  const targetId = resolvedProfile?.id || params.userId;
   const idempotencyKey = params.idempotencyKey || `credit_${Date.now()}_${crypto.randomUUID()}`;
 
   return executeCreditMutation({
-    userId: params.userId,
+    userId: targetId,
     amount: params.amount,
     type: "CREDIT",
     idempotencyKey,
     actorType: "USER",
-    actorId: params.actorId || params.userId,
+    actorId: params.actorId || targetId,
     reason: params.reason,
     referenceId: params.referenceId,
   });
@@ -225,6 +272,19 @@ export async function deductCompanionCreationCredits(userId: string, characterId
     reason: "Custom AI Companion Creation 🎨",
     referenceId: characterId,
     idempotencyKey: characterId ? `char_create_${characterId}` : undefined,
+  });
+}
+
+/**
+ * Deduct credits for live companion voice calling (2 coins per minute).
+ */
+export async function deductVoiceCallCredits(userId: string, minuteIndex: number = 1, callId?: string) {
+  return debitUserWallet({
+    userId,
+    amount: 2,
+    reason: `Live Voice Call 📞 (Minute ${minuteIndex})`,
+    referenceId: callId,
+    idempotencyKey: callId ? `voice_call_${callId}_min_${minuteIndex}` : undefined,
   });
 }
 

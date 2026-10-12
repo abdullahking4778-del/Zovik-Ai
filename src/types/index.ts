@@ -54,6 +54,7 @@ export interface ShortReel {
 
 export interface PaymentRequest {
   id: string;
+  userId?: string;
   userEmail: string;
   plan: "plus" | "vip" | string;
   planName: string;
@@ -84,6 +85,7 @@ export interface UserAccount {
   storageRetentionDays: number;
   createdAt: string;
   lastLoginAt?: string | null;
+  coins?: number;
 }
 
 export interface ApiResponse<T = unknown> {

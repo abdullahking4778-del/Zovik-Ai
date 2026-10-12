@@ -4,7 +4,7 @@ export const revalidate = 0;
 import { verifyAdminRequest } from "@/lib/adminAuth";
 import { db } from "@/lib/firebase";
 import { collection, getDocs, updateDoc } from "firebase/firestore";
-import { upsertStoredUser } from "@/lib/userStore";
+import { upsertStoredUser, findStoredUser } from "@/lib/userStore";
 import { uploadToCloudStorage } from "@/lib/cloudStorage";
 import {
   getPersistentPayments,
@@ -18,6 +18,7 @@ import { PaymentRequest } from "@/types";
 import { creditUserWallet } from "@/lib/wallet/walletService";
 
 interface PaymentSubmissionPayload {
+  userId?: string;
   userEmail: string;
   plan: string;
   planName?: string;
@@ -55,7 +56,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Invalid JSON body" }, { status: 400 });
     }
 
-    const { userEmail, plan, planName, currency, amount, coins, method, trxId, senderName, screenshot } = body;
+    const { userId, userEmail, plan, planName, currency, amount, coins, method, trxId, senderName, screenshot } = body;
 
     if (!userEmail || !plan || !method || !trxId) {
       return NextResponse.json({ success: false, error: "Please fill all required payment fields." }, { status: 400 });
@@ -110,6 +111,7 @@ export async function POST(req: NextRequest) {
 
     const newRequest: PaymentRequest = {
       id: paymentId,
+      userId: userId ? String(userId).trim() : undefined,
       userEmail: String(userEmail).trim().toLowerCase(),
       plan: selectedPlanId,
       planName: cleanPlanName,
@@ -162,8 +164,12 @@ export async function PATCH(req: NextRequest) {
       // 1. If payment is for coins, automatically credit user wallet with atomic ledger entry
       if (updatedPayment.coins && updatedPayment.coins > 0) {
         try {
+          // Resolve target user UID (fallback to userEmail or userId)
+          const matchedUser = findStoredUser(updatedPayment.userId || updatedPayment.userEmail);
+          const targetUid = matchedUser?.id || updatedPayment.userId || updatedPayment.userEmail;
+
           await creditUserWallet({
-            userId: updatedPayment.userEmail,
+            userId: targetUid,
             amount: updatedPayment.coins,
             reason: `Coin Purchase Approval (${updatedPayment.method} - Trx: ${updatedPayment.trxId})`,
             referenceId: updatedPayment.id,

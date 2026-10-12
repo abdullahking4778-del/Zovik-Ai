@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { CreditCard, Cpu, Activity, Users, MessageSquare, PhoneCall, Eye, Sparkles } from "lucide-react";
+import { CreditCard, Cpu, Activity, Users, MessageSquare, PhoneCall, Eye, Sparkles, Coins, Clock } from "lucide-react";
 import { UserAccount, PaymentRequest } from "@/types";
 
 interface AdminOverviewTabProps {
@@ -20,6 +20,7 @@ export function AdminOverviewTab({
 }: AdminOverviewTabProps) {
   const approveAction = handleApprovePayment || onApprovePayment || (() => {});
   const pendingPayments = payments.filter((p) => p.status === "pending");
+  const totalCirculatingCoins = users.reduce((acc, u) => acc + (u.coins || 0), 0);
 
   const [isCleaningCache, setIsCleaningCache] = useState(false);
   const [cleanMessage, setCleanMessage] = useState<string | null>(null);
@@ -108,45 +109,68 @@ export function AdminOverviewTab({
       )}
 
       {/* Stat Cards Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+        {/* CARD 1: DAU */}
         <div className="p-5 rounded-3xl bg-[#140b1c] border border-white/5 relative overflow-hidden group hover:border-[#f53b70]/50 transition-colors">
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
             <Users className="size-12 text-[#f53b70]" />
           </div>
-          <span className="text-xs text-[#aeaeae] relative z-10">Total Active Users (DAU)</span>
-          <div className="text-3xl font-black text-white mt-1 relative z-10">{users.length}</div>
-          <span className="text-[10px] text-emerald-400 font-bold relative z-10">Live Count</span>
+          <span className="text-xs text-[#aeaeae] relative z-10">Active Users</span>
+          <div className="text-2xl sm:text-3xl font-black text-white mt-1 relative z-10">{users.length}</div>
+          <span className="text-[10px] text-emerald-400 font-bold relative z-10">Registered Accounts</span>
         </div>
 
-        <div className="p-5 rounded-3xl bg-[#140b1c] border border-white/5 relative overflow-hidden group hover:border-amber-400/50 transition-colors">
+        {/* CARD 2: CIRCULATING COINS */}
+        <div className="p-5 rounded-3xl bg-[#140b1c] border border-amber-500/20 relative overflow-hidden group hover:border-amber-400/50 transition-colors shadow-lg shadow-amber-500/5">
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-            <CreditCard className="size-12 text-amber-400" />
+            <Coins className="size-12 text-amber-400" />
           </div>
-          <span className="text-xs text-[#aeaeae] relative z-10">Verified VIP Members</span>
-          <div className="text-3xl font-black text-amber-400 mt-1 relative z-10">
-            {users.filter((u) => u.isVip || u.tier === "vip" || u.tier === "plus").length}
+          <span className="text-xs text-amber-300 font-bold relative z-10">Circulating Coins</span>
+          <div className="text-2xl sm:text-3xl font-black text-amber-400 mt-1 relative z-10">
+            🪙 {totalCirculatingCoins.toLocaleString()}
           </div>
-          <span className="text-[10px] text-amber-300 font-bold relative z-10">Paid Subscriptions</span>
+          <span className="text-[10px] text-amber-300/80 font-bold relative z-10">User Wallet Balances</span>
         </div>
 
+        {/* CARD 3: ESTIMATED REVENUE */}
         <div className="p-5 rounded-3xl bg-[#140b1c] border border-white/5 relative overflow-hidden group hover:border-emerald-400/50 transition-colors">
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
             <Activity className="size-12 text-emerald-400" />
           </div>
-          <span className="text-xs text-[#aeaeae] relative z-10">Estimated Revenue</span>
-          <div className="text-3xl font-black text-emerald-400 mt-1 relative z-10">
+          <span className="text-xs text-[#aeaeae] relative z-10">Total Revenue</span>
+          <div className="text-2xl sm:text-3xl font-black text-emerald-400 mt-1 relative z-10">
             Rs. {totalRevenuePKR.toLocaleString()}
           </div>
-          <span className="text-[10px] text-emerald-400 font-bold relative z-10">From EasyPaisa/Jazz/Crypto</span>
+          <span className="text-[10px] text-emerald-400 font-bold relative z-10">EasyPaisa / Jazz / Crypto</span>
         </div>
 
+        {/* CARD 4: PENDING PAYMENT SLIPS */}
+        <div className={`p-5 rounded-3xl bg-[#140b1c] border transition-colors relative overflow-hidden group ${
+          pendingPayments.length > 0 ? "border-yellow-500/50 shadow-lg shadow-yellow-500/10" : "border-white/5"
+        }`}>
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <Clock className="size-12 text-yellow-400" />
+          </div>
+          <span className="text-xs text-[#aeaeae] relative z-10">Pending Slips</span>
+          <div className="text-2xl sm:text-3xl font-black text-yellow-400 mt-1 relative z-10 flex items-center space-x-2">
+            <span>{pendingPayments.length}</span>
+            {pendingPayments.length > 0 && (
+              <span className="size-2.5 rounded-full bg-yellow-400 animate-ping inline-block" />
+            )}
+          </div>
+          <span className="text-[10px] text-yellow-300 font-bold relative z-10">
+            {pendingPayments.length > 0 ? "Action Required ⏳" : "All Approved ✓"}
+          </span>
+        </div>
+
+        {/* CARD 5: CHATS EXCHANGED */}
         <div className="p-5 rounded-3xl bg-[#140b1c] border border-white/5 relative overflow-hidden group hover:border-blue-400/50 transition-colors">
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
             <MessageSquare className="size-12 text-blue-400" />
           </div>
           <span className="text-xs text-[#aeaeae] relative z-10">Total Chats Exchanged</span>
-          <div className="text-3xl font-black text-white mt-1 relative z-10">{users.length * 15 + 142}</div>
-          <span className="text-[10px] text-blue-400 font-bold relative z-10">High engagement today</span>
+          <div className="text-2xl sm:text-3xl font-black text-white mt-1 relative z-10">{users.length * 15 + 142}</div>
+          <span className="text-[10px] text-blue-400 font-bold relative z-10">Active Intimate Messages</span>
         </div>
       </div>
 

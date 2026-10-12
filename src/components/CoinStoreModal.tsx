@@ -33,6 +33,7 @@ interface PaymentAccount {
   title: string;
   notes: string;
   badge?: string;
+  isActive?: boolean;
 }
 
 const DEFAULT_ACCOUNTS: Record<string, PaymentAccount> = {
@@ -42,6 +43,7 @@ const DEFAULT_ACCOUNTS: Record<string, PaymentAccount> = {
     title: "AMINA AKRAM",
     notes: "EasyPaisa App se Send Money karein. 11-digit Trx ID copy kar ke paste karein.",
     badge: "INSTANT 🇵🇰",
+    isActive: true,
   },
   jazzcash: {
     name: "JazzCash",
@@ -49,6 +51,7 @@ const DEFAULT_ACCOUNTS: Record<string, PaymentAccount> = {
     title: "AMINA AKRAM",
     notes: "JazzCash App ya *786# se transfer karein. Transaction ID (TID) copy karein.",
     badge: "FAST 🇵🇰",
+    isActive: true,
   },
   nayapay: {
     name: "NayaPay",
@@ -56,6 +59,7 @@ const DEFAULT_ACCOUNTS: Record<string, PaymentAccount> = {
     title: "ABDULLAH MAHMOOD",
     notes: "NayaPay mobile number ya NayaPay ID par transfer karein.",
     badge: "0% FEE 🇵🇰",
+    isActive: true,
   },
   binance: {
     name: "Binance Pay (USDT)",
@@ -63,6 +67,7 @@ const DEFAULT_ACCOUNTS: Record<string, PaymentAccount> = {
     title: "IQ-MALIK",
     notes: "Binance App → Pay → Send to Pay ID: 1204011189 (Name: IQ-MALIK). Paste Order / Pay ID below.",
     badge: "CRYPTO 🌐",
+    isActive: true,
   },
 };
 
@@ -70,6 +75,7 @@ export default function CoinStoreModal({ isOpen, onClose }: CoinStoreModalProps)
   const { user, isLocallyLoggedIn } = useAuth();
   const { balance, economy, refreshWallet } = useWallet();
 
+  const [accounts, setAccounts] = useState<Record<string, PaymentAccount>>(DEFAULT_ACCOUNTS);
   const [currency, setCurrency] = useState<"PKR" | "USDT">("PKR");
   const [selectedPackId, setSelectedPackId] = useState<string>("pack_1000");
   const [customAmount, setCustomAmount] = useState<string>("500");
@@ -85,9 +91,29 @@ export default function CoinStoreModal({ isOpen, onClose }: CoinStoreModalProps)
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
 
-  // Allow custom recipient email - not forcing admin/personal email
+  // Live fetch payment receiving accounts from server
   useEffect(() => {
-    // Keep empty by default so user can specify where they want coins delivered
+    fetch("/api/payment-accounts")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && data.accounts) {
+          const merged: Record<string, PaymentAccount> = { ...DEFAULT_ACCOUNTS };
+          for (const [key, val] of Object.entries(data.accounts as Record<string, any>)) {
+            if (val && typeof val === "object") {
+              merged[key] = {
+                name: val.name || merged[key]?.name || key,
+                account: val.number || val.account || merged[key]?.account || "",
+                title: val.title || merged[key]?.title || "",
+                notes: val.instructions || val.notes || merged[key]?.notes || "",
+                badge: val.badge || merged[key]?.badge || "LIVE 🇵🇰",
+                isActive: val.isActive !== false,
+              };
+            }
+          }
+          setAccounts(merged);
+        }
+      })
+      .catch((err) => console.warn("[CoinStoreModal] Live accounts fetch note:", err));
   }, []);
 
   // Packages from economy config or sensible defaults
@@ -171,13 +197,19 @@ export default function CoinStoreModal({ isOpen, onClose }: CoinStoreModalProps)
 
     setIsSubmitting(true);
     try {
-      const activeMethod = DEFAULT_ACCOUNTS[paymentMethod];
+      const activeMethod = accounts[paymentMethod] || DEFAULT_ACCOUNTS[paymentMethod] || {
+        name: paymentMethod,
+        account: "",
+        title: "",
+        notes: "",
+      };
       const amountStr = currency === "PKR" ? `Rs. ${activePricePKR.toLocaleString()}` : `$${activePriceUSDT}`;
 
       const res = await fetch("/api/subscriptions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          userId: user?.uid || "",
           userEmail: emailToUse,
           plan: selectedPackId,
           planName: `${activeTotal.toLocaleString()} Coins Pack`,
@@ -467,62 +499,71 @@ export default function CoinStoreModal({ isOpen, onClose }: CoinStoreModalProps)
                 <div>
                   <label className="block text-xs font-bold text-white mb-2">Select Payment Method</label>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                    {Object.entries(DEFAULT_ACCOUNTS).map(([key, acc]) => {
-                      const isSelected = paymentMethod === key;
-                      return (
-                        <button
-                          key={key}
-                          type="button"
-                          onClick={() => setPaymentMethod(key as any)}
-                          className={`p-2.5 rounded-xl text-xs font-bold text-left transition-all border ${
-                            isSelected
-                              ? "bg-white/15 border-amber-400 text-white shadow-md shadow-amber-500/10"
-                              : "bg-white/5 border-white/5 text-[#aeaeae] hover:text-white"
-                          }`}
-                        >
-                          <span className="text-[9px] text-amber-400 block font-mono">{acc.badge}</span>
-                          <span className="block mt-0.5">{acc.name}</span>
-                        </button>
-                      );
-                    })}
+                    {Object.entries(accounts)
+                      .filter(([_, acc]) => acc.isActive !== false)
+                      .map(([key, acc]) => {
+                        const isSelected = paymentMethod === key;
+                        return (
+                          <button
+                            key={key}
+                            type="button"
+                            onClick={() => setPaymentMethod(key as any)}
+                            className={`p-2.5 rounded-xl text-xs font-bold text-left transition-all border ${
+                              isSelected
+                                ? "bg-white/15 border-amber-400 text-white shadow-md shadow-amber-500/10"
+                                : "bg-white/5 border-white/5 text-[#aeaeae] hover:text-white"
+                            }`}
+                          >
+                            <span className="text-[9px] text-amber-400 block font-mono">{acc.badge || "ACTIVE"}</span>
+                            <span className="block mt-0.5">{acc.name}</span>
+                          </button>
+                        );
+                      })}
                   </div>
                 </div>
 
                 {/* Account Details Box */}
-                <div className="p-4 rounded-2xl bg-black/50 border border-white/10 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span className="text-[10px] text-white/40 uppercase font-mono block">Account / Wallet Number</span>
-                      <p className="text-base font-black text-white font-mono select-all">
-                        {DEFAULT_ACCOUNTS[paymentMethod].account}
+                {(() => {
+                  const currentAccount = accounts[paymentMethod] || DEFAULT_ACCOUNTS[paymentMethod];
+                  return (
+                    <div className="p-4 rounded-2xl bg-black/50 border border-white/10 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <span className="text-[10px] text-white/40 uppercase font-mono block">
+                            {paymentMethod === "binance" ? "Binance Pay ID / Account" : "Account / Wallet Number"}
+                          </span>
+                          <p className="text-base font-black text-white font-mono select-all">
+                            {currentAccount?.account || "N/A"}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => copyToClipboard(currentAccount?.account || "")}
+                          className="flex items-center space-x-1 px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 text-xs font-bold transition-all"
+                        >
+                          {copiedAccount ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+                          <span>{copiedAccount ? "Copied!" : "Copy"}</span>
+                        </button>
+                      </div>
+
+                      <div className="pt-2 border-t border-white/5 text-xs text-[#aeaeae] flex flex-wrap items-center justify-between gap-1">
+                        <div>
+                          <span className="text-white/60 font-semibold">Account Title / Name: </span>
+                          <span className="text-amber-400 font-black">{currentAccount?.title || "N/A"}</span>
+                        </div>
+                        {paymentMethod === "binance" && currentAccount?.account && (
+                          <span className="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 font-mono text-[10px] font-black border border-amber-500/30">
+                            ID: {currentAccount.account} ({currentAccount.title || "Binance"})
+                          </span>
+                        )}
+                      </div>
+
+                      <p className="text-[11px] text-white/50 italic pt-1">
+                        {currentAccount?.notes || ""}
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => copyToClipboard(DEFAULT_ACCOUNTS[paymentMethod].account)}
-                      className="flex items-center space-x-1 px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 text-xs font-bold transition-all"
-                    >
-                      {copiedAccount ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-                      <span>{copiedAccount ? "Copied!" : "Copy"}</span>
-                    </button>
-                  </div>
-
-                  <div className="pt-2 border-t border-white/5 text-xs text-[#aeaeae] flex flex-wrap items-center justify-between gap-1">
-                    <div>
-                      <span className="text-white/60 font-semibold">Account Title / Name: </span>
-                      <span className="text-amber-400 font-black">{DEFAULT_ACCOUNTS[paymentMethod].title}</span>
-                    </div>
-                    {paymentMethod === "binance" && (
-                      <span className="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 font-mono text-[10px] font-black border border-amber-500/30">
-                        ID: 1204011189 (IQ-MALIK)
-                      </span>
-                    )}
-                  </div>
-
-                  <p className="text-[11px] text-white/50 italic pt-1">
-                    {DEFAULT_ACCOUNTS[paymentMethod].notes}
-                  </p>
-                </div>
+                  );
+                })()}
 
                 {/* Form Fields: Email & Trx ID */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

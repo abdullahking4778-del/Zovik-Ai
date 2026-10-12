@@ -24,6 +24,8 @@ import { Character, Message } from "@/types";
 import { safeLocalStorage } from "@/lib/storage";
 import { playVoice, stopVoice } from "@/lib/voicePlayer";
 import { getSafeStreamUrl } from "@/lib/videoHelper";
+import { useWallet, notifyWalletUpdated } from "@/hooks/useWallet";
+import { useAuth } from "@/context/AuthContext";
 
 interface VoiceCallModalProps {
   character: Character | null;
@@ -158,6 +160,18 @@ export default function VoiceCallModal({
   // Defaults to "en-US" so subtitles are written in clean English/Roman letters
   const [micLang, setMicLang] = useState<"en-US" | "ur-PK">("en-US");
 
+  // Wallet & Authoritative Metering State
+  const { balance: walletBalance, refreshWallet } = useWallet();
+  const { user } = useAuth();
+  const [callCoins, setCallCoins] = useState<number>(walletBalance);
+  const [isOutofCoinsWarning, setIsOutofCoinsWarning] = useState<string | null>(null);
+  const callIdRef = useRef<string>(`call_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`);
+  const lastBilledMinuteRef = useRef<number>(0);
+
+  useEffect(() => {
+    setCallCoins(walletBalance);
+  }, [walletBalance]);
+
   useEffect(() => {
     const saved = safeLocalStorage.getRawItem("zovik_call_mic_lang");
     if (saved === "ur-PK" || saved === "en-US") {
@@ -187,14 +201,70 @@ export default function VoiceCallModal({
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animFrameRef = useRef<number | null>(null);
 
-  // Timer: Runs only when call is connected
+  // Authoritative per-minute deduction (2 Coins / min)
+  const billCallMinute = useCallback(async (minuteIndex: number) => {
+    try {
+      let token: string | null = null;
+      if (user) {
+        token = await user.getIdToken().catch(() => null);
+      }
+      const res = await fetch("/api/wallet", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          action: "voice_call_minute",
+          callId: callIdRef.current,
+          minuteIndex,
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (res.status === 402 || !data.success) {
+        setIsOutofCoinsWarning("Aapke paas coins khatam ho chuke hain! Call disconnect ho rahi hai...");
+        setTimeout(() => {
+          handleEndCall();
+        }, 3000);
+        return false;
+      }
+
+      if (typeof data.balance === "number") {
+        setCallCoins(data.balance);
+      }
+      notifyWalletUpdated();
+      return true;
+    } catch (err) {
+      console.warn("[VoiceCall] Meter deduction note:", err);
+      return true;
+    }
+  }, [user]);
+
+  // Timer: Runs only when call is connected and meters per-minute usage
   useEffect(() => {
     if (callStatus !== "connected") return;
+
+    // Deduct initial minute upon connection
+    if (lastBilledMinuteRef.current === 0) {
+      lastBilledMinuteRef.current = 1;
+      billCallMinute(1);
+    }
+
     const timer = setInterval(() => {
-      setSeconds((prev) => prev + 1);
+      setSeconds((prev) => {
+        const nextSec = prev + 1;
+        const currentMinute = Math.floor(nextSec / 60) + 1;
+        if (currentMinute > lastBilledMinuteRef.current) {
+          lastBilledMinuteRef.current = currentMinute;
+          billCallMinute(currentMinute);
+        }
+        return nextSec;
+      });
     }, 1000);
+
     return () => clearInterval(timer);
-  }, [callStatus]);
+  }, [callStatus, billCallMinute]);
 
   // Request Mic Permission and Setup Live Audio Analyser
   useEffect(() => {
@@ -665,6 +735,8 @@ export default function VoiceCallModal({
       }
     }
 
+    notifyWalletUpdated();
+    refreshWallet();
     onClose();
   };
 
@@ -735,6 +807,13 @@ export default function VoiceCallModal({
           </div>
         )}
 
+        {/* Out of Coins Warning Banner */}
+        {isOutofCoinsWarning && (
+          <div className="absolute top-16 z-50 px-4 py-2 rounded-2xl bg-red-600/95 text-white font-bold text-xs shadow-2xl animate-bounce border border-red-400/50">
+            {isOutofCoinsWarning}
+          </div>
+        )}
+
         {/* Top Header Controls: Mode Toggle & Mute */}
         <div className="relative z-30 flex items-center justify-between w-full p-4 sm:p-5">
           <div className="flex items-center space-x-1.5 px-3 py-1 rounded-full bg-black/60 backdrop-blur-md border border-white/15 text-xs font-bold">
@@ -745,6 +824,13 @@ export default function VoiceCallModal({
           </div>
 
           <div className="flex items-center space-x-2">
+            {/* Live Wallet Coins Counter */}
+            <div className="flex items-center space-x-1 px-2.5 py-1 rounded-full bg-amber-500/20 backdrop-blur-md border border-amber-500/40 text-[11px] font-bold text-amber-300 shadow-sm" title="2 Coins per minute">
+              <Coins className="size-3 text-amber-400" />
+              <span>{(callCoins ?? walletBalance).toLocaleString()}</span>
+              <span className="text-[9px] text-amber-400/70 uppercase">Coins</span>
+            </div>
+
             {/* Mode Switcher: Video vs Voice */}
             {character.videoUrl && (
               <button

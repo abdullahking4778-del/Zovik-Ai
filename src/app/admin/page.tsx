@@ -478,9 +478,9 @@ export default function AdminPage() {
             { id: "galleries", label: "Photo Sequence & Re-Order 📸", icon: Camera },
             { id: "shorts", label: `Shorts Reels (${shorts.length})`, icon: Film },
             { id: "subscriptions", label: `Payments (${payments.filter((p) => p.status === "pending").length})`, icon: CreditCard },
-            { id: "plans", label: `Plans & Offers 🏷️ (${plans.length})`, icon: Tag },
+            { id: "plans", label: "Coin Packages & Rates 🪙", icon: Tag },
             { id: "users", label: `Users (${users.length})`, icon: Users },
-            { id: "settings", label: "AI Engine", icon: Cpu },
+            { id: "settings", label: "Settings & Payment Accounts ⚙️", icon: Cpu },
           ].map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
