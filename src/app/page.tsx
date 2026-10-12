@@ -62,7 +62,7 @@ export default function LandingPage() {
       title: "On-Demand Private Selfies & Dynamic Poses",
       desc: "Companions generate exclusive candid photography directly within your conversation. Unlock high-resolution unblurred albums in your personal gallery.",
       cta: "Unlock Photos",
-      href: "/app?chat=chloe-vance",
+      href: "/app",
       badge: "HD GENERATIVE",
       size: "large",
       accent: "from-purple-500/20 via-violet-500/10 to-transparent",
@@ -460,11 +460,11 @@ export default function LandingPage() {
                 {/* Instant Action Button */}
                 <div className="pt-2">
                   <Link
-                    href="/app?chat=genevieve-claire"
+                    href="/app"
                     className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-[#f53b70] to-[#ff457c] text-white text-xs font-black flex items-center justify-center space-x-2 shadow-md shadow-pink-600/30 group-hover:brightness-110 transition-all"
                   >
                     <MessageCircleHeart className="size-3.5" />
-                    <span>Open Private Chat</span>
+                    <span>Explore Companions</span>
                   </Link>
                 </div>
               </div>

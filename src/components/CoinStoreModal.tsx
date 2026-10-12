@@ -268,7 +268,7 @@ export default function CoinStoreModal({ isOpen, onClose }: CoinStoreModalProps)
             </h2>
 
             <p className="text-xs text-[#aeaeae] max-w-md mb-4">
-              Pay as you go! Minimum purchase sirf 50 coins (Rs. 50). Jitna chaho utna chat, uncensored photos aur natural voice calls enjoy karo.
+              Pay as you go! Minimum purchase sirf 50 coins (Rs. 50). Jitna chaho utna chat aur exclusive private HD photos enjoy karo.
             </p>
 
             {/* Active Balance Pill */}

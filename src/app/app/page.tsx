@@ -11,7 +11,6 @@ import FilterBar from "@/components/FilterBar";
 import CharacterCard from "@/components/CharacterCard";
 import CharacterModal from "@/components/CharacterModal";
 import ChatModal from "@/components/ChatModal";
-import VoiceCallModal from "@/components/VoiceCallModal";
 import CreateCharacterModal from "@/components/CreateCharacterModal";
 import PremiumModal from "@/components/PremiumModal";
 import LoginModal from "@/components/LoginModal";
@@ -38,7 +37,6 @@ import {
   FolderHeart,
   UserCheck,
   Trash2,
-  Phone,
   Search,
   X,
   Eye,
@@ -93,7 +91,6 @@ export default function Home() {
   // Modals state
   const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(null);
   const [activeChatCharacter, setActiveChatCharacter] = useState<Character | null>(null);
-  const [activeCallCharacter, setActiveCallCharacter] = useState<Character | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isPremiumOpen, setIsPremiumOpen] = useState(false);
   const [isLoginOpen, setIsLoginOpen] = useState(false);
@@ -113,12 +110,6 @@ export default function Home() {
     requireAuth(() => {
       setActiveChatCharacter(char);
     }, `${char.name} ke sath chat shuru karne ke liye pehle sign in karein.`);
-  };
-
-  const handleStartCallWithAuth = (char: Character) => {
-    requireAuth(() => {
-      setActiveCallCharacter(char);
-    }, `${char.name} ke sath live voice call ke liye pehle sign in karein.`);
   };
   const [isShortsOpen, setIsShortsOpen] = useState(false);
   const [initialReelId, setInitialReelId] = useState<string | null>(null);
@@ -171,11 +162,10 @@ export default function Home() {
       })
       .catch((err) => console.warn("Failed to load characters:", err));
 
-    // Deep linking from Landing Page URL parameters (?chat=..., ?login=true, ?call=..., ?create=true, ?shorts=true)
+    // Deep linking from Landing Page URL parameters (?chat=..., ?login=true, ?create=true, ?shorts=true)
     try {
       const params = new URLSearchParams(window.location.search);
       const chatParam = params.get("chat");
-      const callParam = params.get("call");
       const loginParam = params.get("login");
       const createParam = params.get("create");
       const shortsParam = params.get("shorts");
@@ -185,8 +175,6 @@ export default function Home() {
       if (loginParam === "true") {
         if (!currentUser && !isLocallyLoggedIn) {
           setIsLoginOpen(true);
-        } else {
-          window.history.replaceState(null, "", window.location.pathname);
         }
       }
       if (createParam === "true") setIsCreateOpen(true);
@@ -199,11 +187,9 @@ export default function Home() {
         if (match) setActiveChatCharacter(match);
       }
 
-      if (callParam) {
-        const match = (rawCharacters as Character[]).find(
-          (c) => c.id.toLowerCase() === callParam.toLowerCase() || c.name.toLowerCase().includes(callParam.toLowerCase())
-        );
-        if (match) setActiveCallCharacter(match);
+      // Immediately clean URL so parameters are never sticky across tab reloads/refreshes
+      if (chatParam || loginParam || createParam || shortsParam || premiumParam) {
+        window.history.replaceState(null, "", window.location.pathname);
       }
     } catch {}
 
@@ -644,7 +630,6 @@ export default function Home() {
                       characters={rowTrending}
                       onSelect={(char) => setSelectedCharacter(char)}
                       onStartChat={handleStartChatWithAuth}
-                      onStartCall={handleStartCallWithAuth}
                       likedIds={likedIds}
                       onToggleLike={handleToggleLike}
                       isPaidUser={isPaidUser}
@@ -659,7 +644,6 @@ export default function Home() {
                       characters={rowHot}
                       onSelect={(char) => setSelectedCharacter(char)}
                       onStartChat={handleStartChatWithAuth}
-                      onStartCall={handleStartCallWithAuth}
                       likedIds={likedIds}
                       onToggleLike={handleToggleLike}
                       isPaidUser={isPaidUser}
@@ -674,7 +658,6 @@ export default function Home() {
                       characters={rowPopular}
                       onSelect={(char) => setSelectedCharacter(char)}
                       onStartChat={handleStartChatWithAuth}
-                      onStartCall={handleStartCallWithAuth}
                       likedIds={likedIds}
                       onToggleLike={handleToggleLike}
                       isPaidUser={isPaidUser}
@@ -689,7 +672,6 @@ export default function Home() {
                       characters={rowRoleplay}
                       onSelect={(char) => setSelectedCharacter(char)}
                       onStartChat={handleStartChatWithAuth}
-                      onStartCall={handleStartCallWithAuth}
                       likedIds={likedIds}
                       onToggleLike={handleToggleLike}
                       isPaidUser={isPaidUser}
@@ -704,7 +686,6 @@ export default function Home() {
                       characters={rowAnime}
                       onSelect={(char) => setSelectedCharacter(char)}
                       onStartChat={handleStartChatWithAuth}
-                      onStartCall={handleStartCallWithAuth}
                       likedIds={likedIds}
                       onToggleLike={handleToggleLike}
                       isPaidUser={isPaidUser}
@@ -722,7 +703,6 @@ export default function Home() {
                           character={character}
                           onSelect={(char) => setSelectedCharacter(char)}
                           onStartChat={handleStartChatWithAuth}
-                          onStartCall={handleStartCallWithAuth}
                           isLiked={likedIds.includes(character.id)}
                           onToggleLike={handleToggleLike}
                           isPaidUser={isPaidUser}
@@ -774,7 +754,6 @@ export default function Home() {
                     character={character}
                     onSelect={(char) => setSelectedCharacter(char)}
                     onStartChat={handleStartChatWithAuth}
-                    onStartCall={handleStartCallWithAuth}
                     isLiked={likedIds.includes(character.id)}
                     onToggleLike={handleToggleLike}
                   />
@@ -923,7 +902,6 @@ export default function Home() {
                         character={character}
                         onSelect={(char) => setSelectedCharacter(char)}
                         onStartChat={handleStartChatWithAuth}
-                        onStartCall={handleStartCallWithAuth}
                         isLiked={likedIds.includes(character.id)}
                         onToggleLike={handleToggleLike}
                         isPaidUser={isPaidUser}
@@ -980,7 +958,6 @@ export default function Home() {
                       character={character}
                       onSelect={(char) => setSelectedCharacter(char)}
                       onStartChat={handleStartChatWithAuth}
-                      onStartCall={handleStartCallWithAuth}
                       isLiked={true}
                       onToggleLike={handleToggleLike}
                       isPaidUser={isPaidUser}
@@ -1123,10 +1100,6 @@ export default function Home() {
             setSelectedCharacter(null);
             handleStartChatWithAuth(char);
           }}
-          onStartCall={(char) => {
-            setSelectedCharacter(null);
-            handleStartCallWithAuth(char);
-          }}
           onDelete={handleDeleteCustomCompanion}
           isLiked={likedIds.includes(selectedCharacter.id)}
           onToggleLike={handleToggleLike}
@@ -1139,18 +1112,11 @@ export default function Home() {
           onClose={() => {
             setActiveChatCharacter(null);
             setChatRefreshTick((t) => t + 1);
-          }}
-          onStartCall={(char) => {
-            setActiveCallCharacter(char);
+            if (typeof window !== "undefined") {
+              window.history.replaceState(null, "", window.location.pathname);
+            }
           }}
           openPremiumModal={() => setIsPremiumOpen(true)}
-        />
-      )}
-
-      {activeCallCharacter && (
-        <VoiceCallModal
-          character={activeCallCharacter}
-          onClose={() => setActiveCallCharacter(null)}
         />
       )}
 

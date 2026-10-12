@@ -11,7 +11,6 @@ interface CharacterRowProps {
   characters: Character[];
   onSelect: (char: Character) => void;
   onStartChat: (char: Character) => void;
-  onStartCall: (char: Character) => void;
   likedIds?: string[];
   onToggleLike?: (char: Character, e: React.MouseEvent) => void;
   isPaidUser?: boolean;
@@ -23,7 +22,6 @@ export default function CharacterRow({
   characters,
   onSelect,
   onStartChat,
-  onStartCall,
   likedIds = [],
   onToggleLike,
   isPaidUser = false,
@@ -92,7 +90,6 @@ export default function CharacterRow({
                 character={char}
                 onSelect={onSelect}
                 onStartChat={onStartChat}
-                onStartCall={onStartCall}
                 isLiked={likedIds.includes(char.id)}
                 onToggleLike={onToggleLike}
                 isPaidUser={isPaidUser}

@@ -3,7 +3,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import Image from "next/image";
 import {
-  Phone,
   Send,
   Image as ImageIcon,
   Volume2,
@@ -23,6 +22,7 @@ import {
   Copy,
   Check,
   Coins,
+  X,
 } from "lucide-react";
 import { Character, Message } from "@/types";
 import { getSafeStreamUrl, fetchVideoBlobUrl } from "@/lib/videoHelper";
@@ -35,7 +35,6 @@ import { playVoice, stopVoice } from "@/lib/voicePlayer";
 interface ChatModalProps {
   character: Character | null;
   onClose: () => void;
-  onStartCall: (character: Character) => void;
   openPremiumModal: () => void;
 }
 
@@ -161,7 +160,6 @@ function ChatVideoPlayer({
 export default function ChatModal({
   character,
   onClose,
-  onStartCall,
   openPremiumModal,
 }: ChatModalProps) {
   const { tier: authTier } = useAuth();
@@ -170,8 +168,15 @@ export default function ChatModal({
   const [isTyping, setIsTyping] = useState(false);
   const [playingVoiceIdx, setPlayingVoiceIdx] = useState<number | null>(null);
   const { balance: chatCoins } = useWallet();
+  const [isCoinsWarningDismissed, setIsCoinsWarningDismissed] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    if (chatCoins > 0) {
+      setIsCoinsWarningDismissed(false);
+    }
+  }, [chatCoins]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -710,21 +715,6 @@ export default function ChatModal({
             </button>
 
             <button
-              onClick={() => {
-                stopVoice();
-                if (chatCoins < 2) {
-                  openPremiumModal();
-                } else {
-                  onStartCall(character);
-                }
-              }}
-              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-[#f53b70] to-[#ff5b8c] text-white text-xs font-bold shadow-md shadow-pink-600/30 hover:brightness-110 transition-all"
-            >
-              <Phone className="size-3.5 fill-white" />
-              <span>Voice Call</span>
-            </button>
-
-            <button
               onClick={handleClearHistory}
               title="Clear Chat History"
               className="relative size-8 rounded-full bg-white/5 hover:bg-red-500/20 text-[#aeaeae] hover:text-red-400 flex items-center justify-center transition-colors"
@@ -948,19 +938,30 @@ export default function ChatModal({
           ))}
         </div>
 
-        {/* Insufficient Coins Warning Banner */}
-        {chatCoins < 1 ? (
-          <div className="p-3 bg-gradient-to-r from-amber-950/90 via-[#260a18] to-red-950/90 border-t border-amber-500/30 flex items-center justify-between">
-            <div className="flex items-center space-x-2 text-xs text-amber-200">
+        {/* Insufficient Coins Warning Banner - Only shows when coins are strictly 0 and not dismissed */}
+        {chatCoins <= 0 && !isCoinsWarningDismissed ? (
+          <div className="px-3.5 py-2.5 bg-gradient-to-r from-amber-950/95 via-[#230d1c] to-amber-950/95 border-t border-amber-500/40 flex items-center justify-between gap-3 text-xs shadow-lg animate-in fade-in duration-200">
+            <div className="flex items-center space-x-2 text-amber-200 min-w-0">
               <Coins className="size-4 text-amber-400 shrink-0" />
-              <span>Coins balance kam hai (1 Coin/msg required). Recharge karein aur be-fakar chat karein!</span>
+              <span className="truncate text-[11px] sm:text-xs font-medium">
+                Coins balance 0 hai (1 Coin/msg). Recharge karein aur be-fakar chat karein!
+              </span>
             </div>
-            <button
-              onClick={openPremiumModal}
-              className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 text-black text-xs font-black hover:brightness-110 shadow-md shadow-amber-500/20 shrink-0"
-            >
-              Recharge Coins 🪙
-            </button>
+            <div className="flex items-center space-x-1.5 shrink-0">
+              <button
+                onClick={openPremiumModal}
+                className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 text-black text-[11px] sm:text-xs font-black hover:brightness-110 shadow-md shadow-amber-500/30 transition-all active:scale-95"
+              >
+                Recharge Coins 🪙
+              </button>
+              <button
+                onClick={() => setIsCoinsWarningDismissed(true)}
+                title="Dismiss banner"
+                className="size-6 rounded-md bg-white/5 hover:bg-white/10 text-[#aeaeae] hover:text-white flex items-center justify-center transition-colors"
+              >
+                <X className="size-3.5" />
+              </button>
+            </div>
           </div>
         ) : null}
 

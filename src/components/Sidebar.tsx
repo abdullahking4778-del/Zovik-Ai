@@ -17,6 +17,9 @@ import {
   HelpCircle,
   Globe,
   Coins,
+  ChevronDown,
+  ChevronUp,
+  Plus,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useWallet } from "@/hooks/useWallet";
@@ -40,6 +43,7 @@ export default function Sidebar({
   const { tier: authTier } = useAuth();
   const { balance: walletBalance } = useWallet();
   const [currentLang, setCurrentLang] = useLocalStorage<string>("zovik_lang", "ur");
+  const [isCoinsFolded, setIsCoinsFolded] = useLocalStorage<boolean>("zovik_sidebar_coins_folded", false);
 
   const isVip = authTier === "vip";
   const isPlus = authTier === "plus";
@@ -103,21 +107,21 @@ export default function Sidebar({
                     : "text-[#aeaeae] hover:text-white hover:bg-white/5"
                 }`}
               >
-                <div className="flex items-center space-x-3">
+                <div className="flex items-center space-x-2.5 min-w-0">
                   <Icon
-                    className={`size-5 transition-colors ${
+                    className={`size-4.5 shrink-0 transition-colors ${
                       isActive ? "text-[#f53b70]" : "text-[#aeaeae] group-hover:text-white"
                     }`}
                   />
-                  <span>{item.label}</span>
+                  <span className="truncate">{item.label}</span>
                 </div>
 
                 {item.id === "create" ? (
-                  <span className="px-1.5 py-0.5 rounded-md bg-gradient-to-r from-amber-500 to-yellow-400 text-black text-[9px] font-black uppercase tracking-wider shadow-sm">
+                  <span className="shrink-0 ml-1.5 px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-500/20 to-yellow-500/20 border border-amber-400/40 text-amber-300 text-[10px] font-black tracking-tight shadow-sm">
                     🪙 100
                   </span>
                 ) : item.badge && item.badge > 0 ? (
-                  <span className="size-5 rounded-full bg-[#f53b70] text-white text-[11px] font-bold flex items-center justify-center shadow-sm">
+                  <span className="shrink-0 ml-1.5 size-5 rounded-full bg-[#f53b70] text-white text-[11px] font-bold flex items-center justify-center shadow-sm">
                     {item.badge}
                   </span>
                 ) : null}
@@ -126,36 +130,84 @@ export default function Sidebar({
           })}
         </nav>
 
-        {/* Official Coins Economy Banner */}
-        <div
-          onClick={openPremiumModal}
-          className="relative overflow-hidden p-3.5 rounded-2xl bg-gradient-to-br from-[#1a1024]/95 via-[#140b1c]/90 to-[#0d0714] border border-amber-500/35 hover:border-amber-400/60 backdrop-blur-md transition-all cursor-pointer group shadow-xl shadow-amber-950/20"
-        >
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center space-x-1.5">
-              <Coins className="size-4 text-amber-400 group-hover:rotate-12 transition-transform" />
-              <span className="text-xs font-black tracking-wide text-amber-300 uppercase">My Coins</span>
+        {/* Official Coins Economy Banner (Foldable & Sleek) */}
+        {isCoinsFolded ? (
+          /* Folded Minimal State */
+          <div className="flex items-center justify-between p-2.5 rounded-xl bg-gradient-to-r from-[#170e20] to-[#120a1a] border border-amber-500/30 hover:border-amber-400/50 transition-all shadow-md group">
+            <button
+              onClick={openPremiumModal}
+              className="flex items-center space-x-2 min-w-0 text-left hover:opacity-90 transition-opacity"
+              title="Click to recharge Coins"
+            >
+              <Coins className="size-4 text-amber-400 shrink-0 group-hover:rotate-12 transition-transform" />
+              <span className="text-xs font-black text-amber-300 truncate">
+                🪙 {walletBalance.toLocaleString()}
+              </span>
+            </button>
+            <div className="flex items-center space-x-1 shrink-0">
+              <button
+                onClick={openPremiumModal}
+                title="Add Coins"
+                className="size-6 rounded-md bg-amber-500/20 hover:bg-amber-500/40 border border-amber-500/40 text-amber-300 flex items-center justify-center transition-all active:scale-95"
+              >
+                <Plus className="size-3 font-bold" />
+              </button>
+              <button
+                onClick={() => setIsCoinsFolded(false)}
+                title="Expand Wallet"
+                className="size-6 rounded-md bg-white/5 hover:bg-white/10 text-[#aeaeae] hover:text-white flex items-center justify-center transition-all"
+              >
+                <ChevronDown className="size-3.5" />
+              </button>
             </div>
-            <span className="px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-500 to-yellow-400 text-black text-[10px] font-black tracking-wider">
-              1 PKR = 1 COIN
-            </span>
           </div>
+        ) : (
+          /* Expanded Full State */
+          <div className="relative overflow-hidden p-3.5 rounded-2xl bg-gradient-to-br from-[#1a1024]/95 via-[#140b1c]/90 to-[#0d0714] border border-amber-500/35 hover:border-amber-400/60 backdrop-blur-md transition-all group shadow-xl shadow-amber-950/20">
+            <div className="flex items-center justify-between mb-2">
+              <div
+                onClick={openPremiumModal}
+                className="flex items-center space-x-1.5 cursor-pointer"
+              >
+                <Coins className="size-4 text-amber-400 group-hover:rotate-12 transition-transform" />
+                <span className="text-xs font-black tracking-wide text-amber-300 uppercase">My Coins</span>
+              </div>
+              <div className="flex items-center space-x-1.5">
+                <span className="px-1.5 py-0.5 rounded-full bg-gradient-to-r from-amber-500 to-yellow-400 text-black text-[9px] font-black tracking-wider">
+                  1 PKR = 1 COIN
+                </span>
+                <button
+                  onClick={() => setIsCoinsFolded(true)}
+                  title="Fold Wallet Card"
+                  className="size-5 rounded-md bg-white/5 hover:bg-white/15 text-[#aeaeae] hover:text-white flex items-center justify-center transition-colors"
+                >
+                  <ChevronUp className="size-3" />
+                </button>
+              </div>
+            </div>
 
-          <div className="flex items-baseline space-x-1.5 mb-2">
-            <span className="text-xl font-black text-amber-400">
-              🪙 {walletBalance.toLocaleString()}
-            </span>
-            <span className="text-[11px] text-[#aeaeae] font-semibold">Coins</span>
+            <div
+              onClick={openPremiumModal}
+              className="flex items-baseline space-x-1.5 mb-2 cursor-pointer"
+            >
+              <span className="text-xl font-black text-amber-400">
+                🪙 {walletBalance.toLocaleString()}
+              </span>
+              <span className="text-[11px] text-[#aeaeae] font-semibold">Coins</span>
+            </div>
+
+            <p className="text-[10px] text-amber-200/70 leading-tight mb-2.5">
+              Pay as you go! Min Rs. 50. Unlimited chat & private HD photos.
+            </p>
+
+            <button
+              onClick={openPremiumModal}
+              className="w-full py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 text-black text-xs font-black hover:brightness-110 transition-all shadow-md shadow-amber-500/20 flex items-center justify-center space-x-1 active:scale-98"
+            >
+              <span>Recharge Coins 🪙</span>
+            </button>
           </div>
-
-          <p className="text-[10px] text-amber-200/70 leading-tight mb-2.5">
-            Pay as you go! Min Rs. 50. Unlimited chat, photos & voice calls.
-          </p>
-
-          <button className="w-full py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 text-black text-xs font-black hover:brightness-110 transition-all shadow-md shadow-amber-500/20 flex items-center justify-center space-x-1">
-            <span>Recharge Coins 🪙</span>
-          </button>
-        </div>
+        )}
       </div>
 
       {/* Footer / Meta */}

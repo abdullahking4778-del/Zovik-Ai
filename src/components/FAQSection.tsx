@@ -9,7 +9,7 @@ export default function FAQSection() {
   const faqs = [
     {
       q: "What is Zovik AI and how does it work?",
-      a: "Zovik AI is an ultra-realistic next-generation AI companion platform. Powered by high-speed large language models, each companion has their own unique personality, memories, voice, and background. You can chat freely, listen to authentic voice notes, engage in live voice calls, and unlock exclusive generated photos.",
+      a: "Zovik AI is an ultra-realistic next-generation AI companion platform. Powered by high-speed large language models, each companion has their own unique personality, memories, voice, and background. You can chat freely, listen to authentic voice notes, and unlock exclusive generated private photos.",
     },
     {
       q: "Can I choose from different AI companion styles and personalities?",
@@ -34,7 +34,7 @@ export default function FAQSection() {
       name: "Marcus R.",
       rating: 5,
       date: "2 days ago",
-      text: "Zovik AI's voice calls and realistic replies blew my mind. Bonnie Blue talks exactly like a real person. 10/10 experience!",
+      text: "Zovik AI's authentic voice notes and realistic replies blew my mind. Bonnie Blue talks exactly like a real person. 10/10 experience!",
     },
     {
       name: "Lucas T.",

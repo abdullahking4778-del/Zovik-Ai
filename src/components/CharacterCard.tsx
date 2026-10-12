@@ -2,7 +2,7 @@
 
 import React from "react";
 import Image from "next/image";
-import { MessageCircle, Film, Sparkles, CheckCircle2, Phone, Heart, Crown, Lock } from "lucide-react";
+import { MessageCircle, Film, Sparkles, CheckCircle2, Heart, Crown, Lock } from "lucide-react";
 import { Character } from "@/types";
 import { getSafeImageUrl } from "@/lib/imageHelper";
 
@@ -10,7 +10,6 @@ interface CharacterCardProps {
   character: Character;
   onSelect: (character: Character) => void;
   onStartChat: (character: Character) => void;
-  onStartCall: (character: Character) => void;
   isLiked?: boolean;
   onToggleLike?: (character: Character, e: React.MouseEvent) => void;
   isPaidUser?: boolean;
@@ -20,7 +19,6 @@ export default function CharacterCard({
   character,
   onSelect,
   onStartChat,
-  onStartCall,
   isLiked = false,
   onToggleLike,
   isPaidUser = false,
@@ -112,28 +110,17 @@ export default function CharacterCard({
           {character.desc}
         </p>
 
-        {/* Quick Action Buttons */}
-        <div className="grid grid-cols-2 gap-2 pt-1">
+        {/* Quick Action Button */}
+        <div className="pt-1">
           <button
             onClick={(e) => {
               e.stopPropagation();
               onStartChat(character);
             }}
-            className="flex items-center justify-center space-x-1.5 py-2 rounded-xl text-xs font-bold transition-all shadow-md active:scale-95 bg-gradient-to-r from-[#f53b70] to-[#ff457c] text-white shadow-pink-600/20 hover:brightness-110"
+            className="w-full flex items-center justify-center space-x-2 py-2.5 rounded-xl text-xs font-bold transition-all shadow-md active:scale-95 bg-gradient-to-r from-[#f53b70] to-[#ff457c] text-white shadow-pink-600/25 hover:brightness-110"
           >
             <MessageCircle className="size-3.5" />
             <span>Chat</span>
-          </button>
-
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onStartCall(character);
-            }}
-            className="flex items-center justify-center space-x-1.5 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 bg-[#23172e] border border-white/10 hover:bg-[#2d1e3a] text-white"
-          >
-            <Phone className="size-3.5 text-[#f53b70]" />
-            <span>Call</span>
           </button>
         </div>
       </div>

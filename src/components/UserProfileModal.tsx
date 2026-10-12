@@ -16,7 +16,6 @@ import {
   Loader2, 
   HardDrive,
   Coins,
-  Phone,
   Zap,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
@@ -248,16 +247,6 @@ export default function UserProfileModal({
               </span>
               <span className="font-extrabold text-white">
                 5 Coins (Permanent HD)
-              </span>
-            </div>
-
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-[#aeaeae] flex items-center space-x-1.5">
-                <Phone className="size-3.5 text-purple-400" />
-                <span>Voice Call:</span>
-              </span>
-              <span className="font-extrabold text-white">
-                2 Coins / min
               </span>
             </div>
 

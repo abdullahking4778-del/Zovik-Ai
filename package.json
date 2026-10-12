@@ -10,7 +10,7 @@
     "type-check": "tsc --noEmit",
     "test": "node scripts/run_security_suite.mjs",
     "test:unit": "node scripts/run_unit_tests.mjs",
-    "test:wallet": "npx tsx scripts/run_wallet_tests.mjs",
+    "test:wallet": "tsx scripts/run_wallet_tests.mjs",
     "test:integration": "node scripts/run_security_suite.mjs"
   },
   "dependencies": {
@@ -36,6 +36,7 @@
     "postcss": "^8.4.38",
     "puppeteer-core": "^25.13.0",
     "tailwindcss": "^4",
+    "tsx": "^4.23.15",
     "typescript": "^5"
   }
 }

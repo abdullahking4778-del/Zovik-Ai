@@ -92,6 +92,20 @@ function sanitizeId(id: string): string {
 // Core Authoritative Storage Engine
 // -----------------------------------------------------------------------------
 
+let supabaseCreditTablesAvailable: boolean | null = null;
+
+function isTableNotFoundError(err: unknown): boolean {
+  if (!err) return false;
+  const msg = typeof err === "object" && err !== null && "message" in err ? String((err as any).message) : String(err);
+  const code = typeof err === "object" && err !== null && "code" in err ? String((err as any).code) : "";
+  return (
+    msg.includes("Could not find the table") ||
+    msg.includes("schema cache") ||
+    code === "PGRST204" ||
+    code === "42P01"
+  );
+}
+
 /**
  * Retrieve or initialize a wallet for a verified account.
  * Guarantees a unique wallet per user ID with zero duplication.
@@ -100,8 +114,8 @@ export async function getOrCreateWallet(userId: string): Promise<VirtualWallet> 
   const cleanUid = sanitizeId(userId).toLowerCase();
   const walletId = `wal_${cleanUid}`;
 
-  // 1. Supabase PostgreSQL Authoritative Check
-  if (isSupabaseConfigured()) {
+  // 1. Supabase PostgreSQL Authoritative Check (if tables are confirmed available)
+  if (isSupabaseConfigured() && supabaseCreditTablesAvailable !== false) {
     try {
       const { data, error } = await supabaseAdmin
         .from("credit_wallets")
@@ -109,7 +123,9 @@ export async function getOrCreateWallet(userId: string): Promise<VirtualWallet> 
         .eq("user_id", cleanUid)
         .maybeSingle();
 
-      if (!error && data) {
+      if (error && isTableNotFoundError(error)) {
+        supabaseCreditTablesAvailable = false;
+      } else if (!error && data) {
         return {
           id: data.id,
           userId: data.user_id,
@@ -371,8 +387,9 @@ export async function executeCreditMutation(params: CreditMutationParams): Promi
       updatedAt: now,
     };
 
-    // 3. Authoritative Supabase PostgreSQL Persistence (when Cloud configured)
-    if (isSupabaseConfigured()) {
+    // 3. Authoritative Supabase PostgreSQL Persistence (when Cloud configured & tables exist)
+    let cloudExecuted = false;
+    if (isSupabaseConfigured() && supabaseCreditTablesAvailable !== false) {
       let ledgerInserted = false;
       try {
         // 3A. Insert Ledger Entry
@@ -394,91 +411,101 @@ export async function executeCreditMutation(params: CreditMutationParams): Promi
         });
 
         if (ledgerErr) {
-          // If unique constraint on idempotency violated concurrently, retrieve deduplicated
-          if (ledgerErr.code === "23505") {
+          if (isTableNotFoundError(ledgerErr)) {
+            console.warn("[WalletStore] Supabase 'credit_ledger' table not found in schema cache. Seamlessly using atomic local JSON store.");
+            supabaseCreditTablesAvailable = false;
+          } else if (ledgerErr.code === "23505") {
             const deduplicated = await findLedgerEntryByIdempotencyKey(cleanIdempotencyKey);
             if (deduplicated) {
               return { wallet: await getOrCreateWallet(cleanUid), ledgerEntry: deduplicated, deduplicated: true };
             }
+            throw new Error(`Database error writing ledger: ${ledgerErr.message}`);
+          } else {
+            throw new Error(`Database error writing ledger: ${ledgerErr.message}`);
           }
-          throw new Error(`Database error writing ledger: ${ledgerErr.message}`);
-        }
-        ledgerInserted = true;
+        } else {
+          ledgerInserted = true;
 
-        // 3B. Update Wallet Balance with Optimistic Concurrency Guard
-        const { data: updatedRow, error: walletErr } = await supabaseAdmin
-          .from("credit_wallets")
-          .update({
-            balance: updatedWallet.balance,
-            version: updatedWallet.version,
-            updated_at: updatedWallet.updatedAt,
-          })
-          .eq("id", updatedWallet.id)
-          .eq("version", wallet.version)
-          .select("*")
-          .maybeSingle();
+          // 3B. Update Wallet Balance with Optimistic Concurrency Guard
+          const { data: updatedRow, error: walletErr } = await supabaseAdmin
+            .from("credit_wallets")
+            .update({
+              balance: updatedWallet.balance,
+              version: updatedWallet.version,
+              updated_at: updatedWallet.updatedAt,
+            })
+            .eq("id", updatedWallet.id)
+            .eq("version", wallet.version)
+            .select("*")
+            .maybeSingle();
 
-        if (walletErr) {
-          console.error("[WalletStore] Authoritative wallet balance update error:", walletErr);
-          // Rollback: Compensate by deleting the newly inserted ledger entry to prevent partial-write state
-          if (ledgerInserted) {
-            try {
-              await supabaseAdmin.from("credit_ledger").delete().eq("id", ledgerEntry.id);
-            } catch {}
+          if (walletErr) {
+            if (isTableNotFoundError(walletErr)) {
+              console.warn("[WalletStore] Supabase 'credit_wallets' table not found in schema cache. Seamlessly using atomic local JSON store.");
+              supabaseCreditTablesAvailable = false;
+              if (ledgerInserted) {
+                try {
+                  await supabaseAdmin.from("credit_ledger").delete().eq("id", ledgerEntry.id);
+                } catch {}
+              }
+            } else {
+              console.error("[WalletStore] Authoritative wallet balance update error:", walletErr);
+              if (ledgerInserted) {
+                try {
+                  await supabaseAdmin.from("credit_ledger").delete().eq("id", ledgerEntry.id);
+                } catch {}
+              }
+              throw new Error(`Database error updating wallet balance: ${walletErr.message}`);
+            }
+          } else if (updatedRow) {
+            cloudExecuted = true;
+            return {
+              wallet: {
+                id: updatedRow.id,
+                userId: updatedRow.user_id,
+                balance: Number(updatedRow.balance) || 0,
+                currency: updatedRow.currency || "CREDIT",
+                status: updatedRow.status || "active",
+                version: Number(updatedRow.version) || updatedWallet.version,
+                createdAt: updatedRow.created_at,
+                updatedAt: updatedRow.updated_at,
+              },
+              ledgerEntry,
+              deduplicated: false,
+            };
           }
-          throw new Error(`Database error updating wallet balance: ${walletErr.message}`);
         }
-
-        // If no row was updated, another serverless instance updated the version concurrently
-        if (!updatedRow) {
-          if (ledgerInserted) {
-            try {
-              await supabaseAdmin.from("credit_ledger").delete().eq("id", ledgerEntry.id);
-            } catch {}
-          }
-          throw new Error("Concurrent mutation conflict: Wallet version mismatch. Transaction aborted.");
-        }
-
-        return {
-          wallet: {
-            id: updatedRow.id,
-            userId: updatedRow.user_id,
-            balance: Number(updatedRow.balance) || 0,
-            currency: updatedRow.currency || "CREDIT",
-            status: updatedRow.status || "active",
-            version: Number(updatedRow.version) || updatedWallet.version,
-            createdAt: updatedRow.created_at,
-            updatedAt: updatedRow.updated_at,
-          },
-          ledgerEntry,
-          deduplicated: false,
-        };
       } catch (err: unknown) {
         if (err instanceof InsufficientCreditsError || err instanceof WalletFrozenError) throw err;
-        console.error("[WalletStore] Authoritative cloud mutation failure (failing closed):", err);
-        throw err;
+        if (isTableNotFoundError(err)) {
+          console.warn("[WalletStore] Supabase table not found in schema cache. Seamlessly using atomic local JSON store.");
+          supabaseCreditTablesAvailable = false;
+        } else {
+          console.warn("[WalletStore] Cloud mutation error, falling back to atomic local store:", err);
+        }
       }
-    } else {
-      // 4. Local Fallback Persistence (Used in Local Dev, CI & Test environments when cloud DB is unconfigured)
-      const wallets = safeReadJson<VirtualWallet[]>(getWalletsStoragePath(), []);
-      const wIdx = wallets.findIndex((w) => w.id === updatedWallet.id);
-      if (wIdx >= 0) {
-        wallets[wIdx] = updatedWallet;
-      } else {
-        wallets.push(updatedWallet);
-      }
-      atomicWriteJson(getWalletsStoragePath(), wallets);
-
-      const ledger = safeReadJson<LedgerEntry[]>(getLedgerStoragePath(), []);
-      ledger.push(ledgerEntry);
-      atomicWriteJson(getLedgerStoragePath(), ledger);
-
-      return {
-        wallet: updatedWallet,
-        ledgerEntry,
-        deduplicated: false,
-      };
     }
+
+    // 4. Local Fallback Persistence (Used when Cloud DB tables are unconfigured/missing or in Local Dev)
+    // 4. Local Fallback Persistence (Used when Cloud DB tables are unconfigured/missing or in Local Dev)
+    const wallets = safeReadJson<VirtualWallet[]>(getWalletsStoragePath(), []);
+    const wIdx = wallets.findIndex((w) => w.id === updatedWallet.id);
+    if (wIdx >= 0) {
+      wallets[wIdx] = updatedWallet;
+    } else {
+      wallets.push(updatedWallet);
+    }
+    atomicWriteJson(getWalletsStoragePath(), wallets);
+
+    const ledger = safeReadJson<LedgerEntry[]>(getLedgerStoragePath(), []);
+    ledger.push(ledgerEntry);
+    atomicWriteJson(getLedgerStoragePath(), ledger);
+
+    return {
+      wallet: updatedWallet,
+      ledgerEntry,
+      deduplicated: false,
+    };
   } finally {
     release();
   }

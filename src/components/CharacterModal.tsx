@@ -12,7 +12,6 @@ interface CharacterModalProps {
   character: Character | null;
   onClose: () => void;
   onStartChat: (character: Character) => void;
-  onStartCall?: (character: Character) => void;
   onDelete?: (charId: string, charName: string) => void;
   isLiked?: boolean;
   onToggleLike?: (character: Character) => void;
