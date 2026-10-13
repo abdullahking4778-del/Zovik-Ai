@@ -10,6 +10,7 @@ import {
   executeCreditMutation,
   getWalletLedgerHistory,
   reconcileWallet,
+  recordWalletIncident,
   InsufficientCreditsError,
   WalletFrozenError,
 } from "./walletStore";
@@ -85,6 +86,17 @@ export async function getUserWallet(userId: string, userEmail?: string, allowCon
               });
             } catch (revErr) {
               console.error("[WalletService] CRITICAL: Compensatory reversal of consolidation debit failed:", revErr);
+              recordWalletIncident({
+                id: `inc_${Date.now()}_${crypto.randomUUID().slice(0, 8)}`,
+                type: "FAILED_CONSOLIDATION_REVERSAL",
+                userId: primaryWallet.userId,
+                amount: amountToTransfer,
+                outIdempotency,
+                inIdempotency,
+                errorMessage: revErr instanceof Error ? revErr.message : String(revErr),
+                status: "OPEN",
+                createdAt: new Date().toISOString(),
+              });
             }
             throw creditErr;
           }

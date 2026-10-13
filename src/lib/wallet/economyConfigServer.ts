@@ -145,22 +145,7 @@ export async function saveEconomyConfig(updates: Partial<EconomyConfig>): Promis
     fs.mkdirSync(dir, { recursive: true });
   }
 
-  // 1. Atomic local write
-  const tmpPath = `${targetPath}.${Date.now()}.${crypto.randomUUID()}.tmp`;
-  try {
-    fs.writeFileSync(tmpPath, JSON.stringify(nextConfig, null, 2), "utf-8");
-    fs.renameSync(tmpPath, targetPath);
-  } catch (writeErr) {
-    try {
-      if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
-    } catch {}
-    console.error("[EconomyConfig] Failed to persist economy configuration to disk:", writeErr);
-    throw new Error(
-      `Failed to persist economy configuration: ${writeErr instanceof Error ? writeErr.message : String(writeErr)}`
-    );
-  }
-
-  // 2. Cross-instance Cloud Persistence: Supabase PostgreSQL app_settings
+  // 1. Authoritative Cloud Persistence: Supabase PostgreSQL app_settings
   let supabaseSaved = false;
   let cloudError: string | null = null;
 
@@ -186,7 +171,7 @@ export async function saveEconomyConfig(updates: Partial<EconomyConfig>): Promis
     }
   }
 
-  // 3. Dual-sync to Firestore (if configured)
+  // 2. Dual-sync to Firestore (secondary mirror)
   let firestoreSaved = false;
   try {
     if (adminDb && typeof adminDb.collection === "function") {
@@ -207,6 +192,21 @@ export async function saveEconomyConfig(updates: Partial<EconomyConfig>): Promis
     } else {
       console.warn("[EconomyConfig] Notice: Running in local environment; cloud write failed but local disk write succeeded:", cloudError);
     }
+  }
+
+  // 3. Atomic local write (executed once authoritative cloud checks have passed)
+  const tmpPath = `${targetPath}.${Date.now()}.${crypto.randomUUID()}.tmp`;
+  try {
+    fs.writeFileSync(tmpPath, JSON.stringify(nextConfig, null, 2), "utf-8");
+    fs.renameSync(tmpPath, targetPath);
+  } catch (writeErr) {
+    try {
+      if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
+    } catch {}
+    console.error("[EconomyConfig] Failed to persist economy configuration to disk:", writeErr);
+    throw new Error(
+      `Failed to persist economy configuration: ${writeErr instanceof Error ? writeErr.message : String(writeErr)}`
+    );
   }
 
   cachedEconomyConfig = nextConfig;

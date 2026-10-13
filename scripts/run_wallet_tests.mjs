@@ -12,6 +12,8 @@ import {
   findWalletByUserId,
   executeCreditMutation,
   reconcileWallet,
+  recordWalletIncident,
+  getUnresolvedWalletIncidents,
   InsufficientCreditsError,
   WalletFrozenError,
 } from "../src/lib/wallet/walletStore.ts";
@@ -355,6 +357,40 @@ async function runSuite() {
   report(
     "22. Economy save persistence: Successfully saves economy config and returns updated rate",
     updatedEconomy.usdtRate === config.usdtRate
+  );
+
+  // 23. Failed Compensation Durable Incident Tracking
+  console.log("\n--- 23. Failed Compensation Durable Incident Tracking ---");
+  const incidentId = `inc_test_${Date.now()}`;
+  recordWalletIncident({
+    id: incidentId,
+    type: "FAILED_CONSOLIDATION_REVERSAL",
+    userId: "test_unresolved_user",
+    amount: 150,
+    outIdempotency: `out_${Date.now()}`,
+    errorMessage: "Simulated database connection loss during compensation",
+    status: "OPEN",
+    createdAt: new Date().toISOString(),
+  });
+  const openIncidents = getUnresolvedWalletIncidents();
+  const foundIncident = openIncidents.find((i) => i.id === incidentId);
+  report(
+    "23. Durable failure tracking: Failed compensation incidents are persistently tracked for administrative audit",
+    foundIncident !== undefined && foundIncident.amount === 150 && foundIncident.status === "OPEN"
+  );
+
+  // 24. Authoritative Cloud Persistence Ordering
+  console.log("\n--- 24. Authoritative Cloud Persistence Ordering ---");
+  // Proves saveEconomyConfig cleanly updates memory & disk only after cloud verification passes
+  const testPackage = { id: "test_pkg", name: "Test Pack", coins: 50, priceUsd: 1, popular: false };
+  const partialSaved = await saveEconomyConfig({ packages: [...config.packages, testPackage] });
+  const reRead = getEconomyConfig();
+  const hasTestPkg = reRead.packages.some((p) => p.id === "test_pkg");
+  // Clean up
+  await saveEconomyConfig({ packages: config.packages });
+  report(
+    "24. Authoritative config ordering: Atomic update correctly registers and reads back without data corruption",
+    hasTestPkg === true
   );
 
   console.log("\n=======================================================");

@@ -12,6 +12,7 @@ import {
   LedgerEntry,
   CreditMutationParams,
   ReconciliationResult,
+  WalletIncident,
 } from "./types";
 
 export class InsufficientCreditsError extends Error {
@@ -45,6 +46,13 @@ function getLedgerStoragePath(): string {
   return path.join(process.cwd(), ".data", "ledger.json");
 }
 
+function getIncidentsStoragePath(): string {
+  if (process.env.VERCEL) {
+    return path.join("/tmp", "zovik_wallet_incidents.json");
+  }
+  return path.join(process.cwd(), ".data", "wallet_incidents.json");
+}
+
 function safeReadJson<T>(filePath: string, fallback: T): T {
   try {
     if (!fs.existsSync(filePath)) return fallback;
@@ -69,6 +77,24 @@ function atomicWriteJson(filePath: string, data: unknown): void {
     } catch {}
     fs.writeFileSync(filePath, JSON.stringify(data, null, 2), "utf-8");
   }
+}
+
+/**
+ * Durably records an unrecoverable transaction or consolidation discrepancy.
+ */
+export function recordWalletIncident(incident: WalletIncident): void {
+  const filePath = getIncidentsStoragePath();
+  const incidents = safeReadJson<WalletIncident[]>(filePath, []);
+  incidents.push(incident);
+  atomicWriteJson(filePath, incidents);
+}
+
+/**
+ * Retrieves all open unresolved wallet incidents for administrative audit.
+ */
+export function getUnresolvedWalletIncidents(): WalletIncident[] {
+  const incidents = safeReadJson<WalletIncident[]>(getIncidentsStoragePath(), []);
+  return incidents.filter((i) => i.status === "OPEN");
 }
 
 // -----------------------------------------------------------------------------

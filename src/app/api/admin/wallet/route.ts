@@ -7,6 +7,7 @@ import {
   adminAdjustCredits,
   reconcileUserWallet,
 } from "@/lib/wallet/walletService";
+import { getUnresolvedWalletIncidents } from "@/lib/wallet/walletStore";
 import { getEconomyConfig, saveEconomyConfig } from "@/lib/wallet/economyConfigServer";
 
 export const dynamic = "force-dynamic";
@@ -30,9 +31,11 @@ export async function GET(req: NextRequest) {
 
     if (!targetUserId) {
       const economy = getEconomyConfig();
+      const unresolvedIncidents = getUnresolvedWalletIncidents();
       return NextResponse.json({
         success: true,
         economy,
+        unresolvedIncidents,
       });
     }
 

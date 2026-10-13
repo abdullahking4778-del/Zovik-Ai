@@ -66,3 +66,15 @@ export interface ReconciliationResult {
   discrepancy: number;
   totalTransactions: number;
 }
+
+export interface WalletIncident {
+  id: string;
+  type: "FAILED_CONSOLIDATION_REVERSAL" | "ORPHAN_LEDGER" | "CORRUPT_MUTATION";
+  userId: string;
+  amount: number;
+  outIdempotency: string;
+  inIdempotency?: string;
+  errorMessage: string;
+  status: "OPEN" | "RESOLVED";
+  createdAt: string;
+}
