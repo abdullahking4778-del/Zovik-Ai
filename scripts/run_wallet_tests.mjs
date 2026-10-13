@@ -336,7 +336,7 @@ async function runSuite() {
     actorId: "admin_approval",
   });
   report(
-    "20. Multi-step recovery: Retrying payment approval deduplicates cleanly and avoids double-crediting",
+    "20. Idempotent payment retry: Re-submitting approval credit mutation with identical idempotency key avoids double-crediting",
     step3Retry.deduplicated === true && step3Retry.wallet.balance === 500
   );
 
@@ -375,7 +375,7 @@ async function runSuite() {
   const openIncidents = getUnresolvedWalletIncidents();
   const foundIncident = openIncidents.find((i) => i.id === incidentId);
   report(
-    "23. Durable failure tracking: Failed compensation incidents are persistently tracked for administrative audit",
+    "23. Local incident tracking: Failed compensation incidents are persistently recorded for administrative audit",
     foundIncident !== undefined && foundIncident.amount === 150 && foundIncident.status === "OPEN"
   );
 
@@ -400,6 +400,7 @@ async function runSuite() {
   if (failedTests > 0) {
     process.exit(1);
   }
+  process.exit(0);
 }
 
 runSuite().catch((err) => {

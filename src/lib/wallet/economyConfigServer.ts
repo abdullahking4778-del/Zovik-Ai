@@ -7,7 +7,7 @@ import {
   DEFAULT_PACKAGES,
 } from "./economyConfig";
 import { supabaseAdmin, isSupabaseConfigured } from "@/lib/supabase";
-import { adminDb } from "@/lib/firebaseAdmin";
+import { adminDb, isFirestoreConfigured } from "@/lib/firebaseAdmin";
 
 export * from "./economyConfig";
 
@@ -90,25 +90,27 @@ async function syncEconomyFromCloud(): Promise<EconomyConfig> {
     } catch {}
   }
 
-  // 2. Fetch from Firestore via Firebase Admin SDK
-  try {
-    if (adminDb && typeof adminDb.collection === "function") {
-      const docSnap = await adminDb.collection("config").doc("economy").get();
-      if (docSnap.exists) {
-        const data = docSnap.data() as Partial<EconomyConfig>;
-        if (data && typeof data === "object") {
-          cachedEconomyConfig = {
-            ...DEFAULT_ECONOMY_CONFIG,
-            ...data,
-            packages: Array.isArray(data.packages) && data.packages.length > 0 ? data.packages : DEFAULT_PACKAGES,
-          };
-          lastLoadedTime = now;
-          // Genuinely read-only: Do NOT write to disk during read synchronization
-          return cachedEconomyConfig;
+  // 2. Fetch from Firestore via Firebase Admin SDK (strictly requires configured credentials)
+  if (isFirestoreConfigured()) {
+    try {
+      if (adminDb && typeof adminDb.collection === "function") {
+        const docSnap = await adminDb.collection("config").doc("economy").get();
+        if (docSnap.exists) {
+          const data = docSnap.data() as Partial<EconomyConfig>;
+          if (data && typeof data === "object") {
+            cachedEconomyConfig = {
+              ...DEFAULT_ECONOMY_CONFIG,
+              ...data,
+              packages: Array.isArray(data.packages) && data.packages.length > 0 ? data.packages : DEFAULT_PACKAGES,
+            };
+            lastLoadedTime = now;
+            // Genuinely read-only: Do NOT write to disk during read synchronization
+            return cachedEconomyConfig;
+          }
         }
       }
-    }
-  } catch {}
+    } catch {}
+  }
 
   lastLoadedTime = now;
   return cachedEconomyConfig;
@@ -171,16 +173,18 @@ export async function saveEconomyConfig(updates: Partial<EconomyConfig>): Promis
     }
   }
 
-  // 2. Dual-sync to Firestore (secondary mirror)
+  // 2. Dual-sync to Firestore (secondary mirror, strictly requires configured credentials)
   let firestoreSaved = false;
-  try {
-    if (adminDb && typeof adminDb.collection === "function") {
-      await adminDb.collection("config").doc("economy").set(nextConfig, { merge: true });
-      firestoreSaved = true;
-    }
-  } catch (err) {
-    if (!cloudError) {
-      cloudError = err instanceof Error ? err.message : String(err);
+  if (isFirestoreConfigured()) {
+    try {
+      if (adminDb && typeof adminDb.collection === "function") {
+        await adminDb.collection("config").doc("economy").set(nextConfig, { merge: true });
+        firestoreSaved = true;
+      }
+    } catch (err) {
+      if (!cloudError) {
+        cloudError = err instanceof Error ? err.message : String(err);
+      }
     }
   }
 

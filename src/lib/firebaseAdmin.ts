@@ -12,10 +12,17 @@ function initializeFirebaseAdmin(): void {
   if (adminApp || getApps().length > 0) {
     adminApp = getApps()[0];
     adminAuthInstance = getAuth(adminApp);
-    try {
-      adminDbInstance = getFirestore(adminApp);
-    } catch (fsErr) {
-      console.warn("[FirebaseAdmin] Firestore instance creation notice:", fsErr);
+    const hasCredentials = Boolean(
+      process.env.FIREBASE_SERVICE_ACCOUNT_KEY ||
+        (process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY) ||
+        process.env.GOOGLE_APPLICATION_CREDENTIALS
+    );
+    if (hasCredentials) {
+      try {
+        adminDbInstance = getFirestore(adminApp);
+      } catch (fsErr) {
+        console.warn("[FirebaseAdmin] Firestore instance creation notice:", fsErr);
+      }
     }
     return;
   }
@@ -60,10 +67,17 @@ function initializeFirebaseAdmin(): void {
     }
 
     adminAuthInstance = getAuth(adminApp);
-    try {
-      adminDbInstance = getFirestore(adminApp);
-    } catch (fsErr) {
-      console.warn("[FirebaseAdmin] Firestore instance creation notice:", fsErr);
+    const hasCredentials = Boolean(
+      serviceAccountJson ||
+        (clientEmail && privateKey) ||
+        process.env.GOOGLE_APPLICATION_CREDENTIALS
+    );
+    if (hasCredentials) {
+      try {
+        adminDbInstance = getFirestore(adminApp);
+      } catch (fsErr) {
+        console.warn("[FirebaseAdmin] Firestore instance creation notice:", fsErr);
+      }
     }
   } catch (err: unknown) {
     initError = err instanceof Error ? err.message : String(err);
@@ -72,9 +86,6 @@ function initializeFirebaseAdmin(): void {
       if (!adminApp && getApps().length > 0) {
         adminApp = getApps()[0];
         adminAuthInstance = getAuth(adminApp);
-        try {
-          adminDbInstance = getFirestore(adminApp);
-        } catch {}
       }
     } catch {}
   }
@@ -84,6 +95,12 @@ initializeFirebaseAdmin();
 
 function getSafeAdminDb(): Firestore {
   if (adminDbInstance) return adminDbInstance;
+  const hasCredentials = Boolean(
+    process.env.FIREBASE_SERVICE_ACCOUNT_KEY ||
+      (process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY) ||
+      process.env.GOOGLE_APPLICATION_CREDENTIALS
+  );
+  if (!hasCredentials) return {} as Firestore;
   try {
     if (getApps().length > 0) {
       adminDbInstance = getFirestore(getApps()[0]);
@@ -99,6 +116,23 @@ export const adminAuth = (adminAuthInstance || (getApps().length > 0 ? getAuth(g
 export const adminDb = (adminDbInstance || getSafeAdminDb());
 export const adminFieldValue = FieldValue;
 
+/**
+ * Returns true only if Firebase Admin has verified credentials configured to make remote calls.
+ * Prevents unhandled 'Could not load default credentials' errors in isolated test/CI environments.
+ */
+export function isFirestoreConfigured(): boolean {
+  if (!adminApp || initError) return false;
+  return Boolean(
+    process.env.FIREBASE_SERVICE_ACCOUNT_KEY ||
+      (process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY) ||
+      process.env.GOOGLE_APPLICATION_CREDENTIALS
+  );
+}
+
+export function isFirebaseAdminConfigured(): boolean {
+  return isFirestoreConfigured();
+}
+
 export function getFirebaseAdminStatus(): {
   configured: boolean;
   hasServiceAccount: boolean;
@@ -106,10 +140,7 @@ export function getFirebaseAdminStatus(): {
   projectId: string;
   error?: string | null;
 } {
-  const hasServiceAccount = Boolean(
-    process.env.FIREBASE_SERVICE_ACCOUNT_KEY ||
-      (process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY)
-  );
+  const hasServiceAccount = isFirestoreConfigured();
 
   return {
     configured: Boolean(adminApp && !initError),
