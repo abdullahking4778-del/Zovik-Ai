@@ -155,15 +155,18 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Valid payment ID and action ('approve' | 'reject') required" }, { status: 400 });
     }
 
-    const updatedPayment = await updatePersistentPaymentStatus(targetId, action);
-    if (!updatedPayment) {
+    const allPayments = await getPersistentPayments();
+    const targetPayment = allPayments.find((p) => p.id === targetId);
+    if (!targetPayment) {
       return NextResponse.json({ success: false, error: "Payment request not found" }, { status: 404 });
     }
 
+    let updatedPayment = targetPayment;
+
     if (action === "approve") {
       // 1. Link user UID & Email if available to ensure instant wallet resolution
-      const targetEmail = (updatedPayment.userEmail || "").trim().toLowerCase();
-      let targetUid = (updatedPayment.userId || "").trim();
+      const targetEmail = (targetPayment.userEmail || "").trim().toLowerCase();
+      let targetUid = (targetPayment.userId || "").trim();
 
       const matchedUser = targetEmail ? findStoredUser(targetEmail) : null;
       if (!targetUid && matchedUser?.id && matchedUser.id !== targetEmail) {
@@ -179,24 +182,35 @@ export async function PATCH(req: NextRequest) {
         } catch {}
       }
 
-      // 2. If payment includes coins, automatically credit user wallet with atomic ledger entry
-      if (updatedPayment.coins && updatedPayment.coins > 0) {
+      // 2. If payment includes coins, credit user wallet FIRST before mutating payment status
+      if (targetPayment.coins && targetPayment.coins > 0) {
         try {
           const recipientId = targetUid || targetEmail;
           await creditUserWallet({
             userId: recipientId,
-            amount: updatedPayment.coins,
-            reason: `Coin Purchase Approval (${updatedPayment.method} - Trx: ${updatedPayment.trxId})`,
-            referenceId: updatedPayment.id,
-            idempotencyKey: `pay_coins_${updatedPayment.id}`,
+            amount: targetPayment.coins,
+            reason: `Coin Purchase Approval (${targetPayment.method} - Trx: ${targetPayment.trxId})`,
+            referenceId: targetPayment.id,
+            idempotencyKey: `pay_coins_${targetPayment.id}`,
             actorId: "admin_approval",
           });
         } catch (walletErr) {
           console.error("[Subscriptions] Failed to credit wallet upon approval:", walletErr);
+          return NextResponse.json(
+            {
+              success: false,
+              error: `Failed to credit user coins: ${walletErr instanceof Error ? walletErr.message : "Database error"}. Payment status remains pending.`,
+            },
+            { status: 500 }
+          );
         }
       }
 
-      // 3. Plan duration & tier handling (only for VIP / Plus subscription purchases, not pure coin packs)
+      // 3. Mark payment status as approved after wallet credit has succeeded
+      const marked = await updatePersistentPaymentStatus(targetId, "approve");
+      if (marked) updatedPayment = marked;
+
+      // 4. Plan duration & tier handling (only for VIP / Plus subscription purchases, not pure coin packs)
       const isCoinsOnly = Boolean(
         updatedPayment.plan?.startsWith("pack_") ||
         updatedPayment.plan === "coins" ||
@@ -258,6 +272,9 @@ export async function PATCH(req: NextRequest) {
           console.warn("[Subscriptions] Firestore update note:", err);
         }
       }
+    } else if (action === "reject") {
+      const rejected = await updatePersistentPaymentStatus(targetId, "reject");
+      if (rejected) updatedPayment = rejected;
     }
 
     return NextResponse.json({ success: true, payment: updatedPayment });

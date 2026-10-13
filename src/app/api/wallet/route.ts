@@ -43,19 +43,8 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // Ensure session UID and email are linked in authoritative userStore
-    if (sessionUser.userId && sessionUser.userEmail) {
-      try {
-        upsertStoredUser(sessionUser.userId, {
-          id: sessionUser.userId,
-          email: sessionUser.userEmail,
-          tier: sessionUser.tier,
-        });
-      } catch {}
-    }
-
-    // Read-only retrieval with automatic email-to-UID balance consolidation
-    const wallet = await getUserWallet(sessionUser.userId, sessionUser.userEmail);
+    // Read-only retrieval of user wallet & ledger history
+    const wallet = await getUserWallet(sessionUser.userId, sessionUser.userEmail, true);
     const history = await getUserLedgerHistory(wallet.userId, 25);
 
     return NextResponse.json({

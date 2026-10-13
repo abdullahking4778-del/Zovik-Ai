@@ -26,50 +26,75 @@ export { InsufficientCreditsError, WalletFrozenError };
  * Retrieves the wallet for a user. Initializes on first access.
  * Automatically consolidates legacy/purchased balance if user was credited by email.
  */
-export async function getUserWallet(userId: string, userEmail?: string): Promise<VirtualWallet> {
+export async function getUserWallet(userId: string, userEmail?: string, allowConsolidation: boolean = true): Promise<VirtualWallet> {
   const cleanId = (userId || "").trim();
   const userProfile = findStoredUser(cleanId);
   
   // If cleanId is an email and user has a linked UID, route to their primary UID wallet
   if (cleanId.includes("@") && userProfile && userProfile.id && userProfile.id !== cleanId) {
-    return getUserWallet(userProfile.id, cleanId);
+    return getUserWallet(userProfile.id, cleanId, allowConsolidation);
   }
 
   const primaryWallet = await getOrCreateWallet(cleanId);
 
   // Check if this user has an associated email with a separate wallet containing balance
-  try {
-    const effectiveEmail = (userEmail || userProfile?.email || (cleanId.includes("@") ? cleanId : "")).trim().toLowerCase();
-    if (effectiveEmail && effectiveEmail !== primaryWallet.userId.toLowerCase()) {
-      const emailWallet = await findWalletByUserId(effectiveEmail);
-      if (emailWallet && emailWallet.balance > 0) {
-        // Automatically transfer email credits into primary UID wallet
-        const amountToTransfer = emailWallet.balance;
-        await executeCreditMutation({
-          userId: effectiveEmail,
-          amount: amountToTransfer,
-          type: "DEBIT",
-          idempotencyKey: `consolidate_out_${emailWallet.id}_to_${primaryWallet.id}_${Date.now()}`,
-          actorType: "SYSTEM",
-          actorId: "wallet_migrator",
-          reason: `Automatic Balance Consolidation to UID (${primaryWallet.userId})`,
-        });
+  if (allowConsolidation) {
+    try {
+      const effectiveEmail = (userEmail || userProfile?.email || (cleanId.includes("@") ? cleanId : "")).trim().toLowerCase();
+      if (effectiveEmail && effectiveEmail !== primaryWallet.userId.toLowerCase()) {
+        const emailWallet = await findWalletByUserId(effectiveEmail);
+        if (emailWallet && emailWallet.balance > 0) {
+          // Automatically transfer email credits into primary UID wallet with atomic reversal guarantee
+          const amountToTransfer = emailWallet.balance;
+          const outIdempotency = `consolidate_out_${emailWallet.id}_to_${primaryWallet.id}_${Date.now()}`;
+          const inIdempotency = `consolidate_in_${primaryWallet.id}_from_${emailWallet.id}_${Date.now()}`;
 
-        const creditResult = await executeCreditMutation({
-          userId: primaryWallet.userId,
-          amount: amountToTransfer,
-          type: "CREDIT",
-          idempotencyKey: `consolidate_in_${primaryWallet.id}_from_${emailWallet.id}_${Date.now()}`,
-          actorType: "SYSTEM",
-          actorId: "wallet_migrator",
-          reason: `Consolidated Coins from Account Email (${effectiveEmail})`,
-        });
+          await executeCreditMutation({
+            userId: effectiveEmail,
+            amount: amountToTransfer,
+            type: "DEBIT",
+            idempotencyKey: outIdempotency,
+            actorType: "SYSTEM",
+            actorId: "wallet_migrator",
+            reason: `Automatic Balance Consolidation to UID (${primaryWallet.userId})`,
+          });
 
-        return creditResult.wallet;
+          let creditResult;
+          try {
+            creditResult = await executeCreditMutation({
+              userId: primaryWallet.userId,
+              amount: amountToTransfer,
+              type: "CREDIT",
+              idempotencyKey: inIdempotency,
+              actorType: "SYSTEM",
+              actorId: "wallet_migrator",
+              reason: `Consolidated Coins from Account Email (${effectiveEmail})`,
+            });
+          } catch (creditErr) {
+            // Compensatory Reversal: if credit to primary wallet fails, rollback the debit immediately
+            console.error("[WalletService] Consolidation credit failed. Reversing initial debit immediately:", creditErr);
+            try {
+              await executeCreditMutation({
+                userId: effectiveEmail,
+                amount: amountToTransfer,
+                type: "REVERSAL",
+                idempotencyKey: `reversal_${outIdempotency}`,
+                actorType: "SYSTEM",
+                actorId: "wallet_migrator",
+                reason: `Compensatory Reversal: Failed consolidation transfer to ${primaryWallet.userId}`,
+              });
+            } catch (revErr) {
+              console.error("[WalletService] CRITICAL: Compensatory reversal failed:", revErr);
+            }
+            throw creditErr;
+          }
+
+          return creditResult.wallet;
+        }
       }
+    } catch (migErr) {
+      console.warn("[WalletService] Auto-migration note:", migErr);
     }
-  } catch (migErr) {
-    console.warn("[WalletService] Auto-migration note:", migErr);
   }
 
   return primaryWallet;

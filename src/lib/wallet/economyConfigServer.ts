@@ -47,14 +47,24 @@ export function saveEconomyConfig(updates: Partial<EconomyConfig>): EconomyConfi
     ...updates,
   };
 
+  const dir = path.dirname(CONFIG_FILE_PATH);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+
+  // Atomic write to prevent partial corruption & guarantee durable persistence
+  const tmpPath = `${CONFIG_FILE_PATH}.${Date.now()}.${Math.random().toString(36).substring(2)}.tmp`;
   try {
-    const dir = path.dirname(CONFIG_FILE_PATH);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-    fs.writeFileSync(CONFIG_FILE_PATH, JSON.stringify(nextConfig, null, 2), "utf-8");
-  } catch (err) {
-    console.error("[EconomyConfig] Failed to save economy config:", err);
+    fs.writeFileSync(tmpPath, JSON.stringify(nextConfig, null, 2), "utf-8");
+    fs.renameSync(tmpPath, CONFIG_FILE_PATH);
+  } catch (writeErr) {
+    try {
+      if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
+    } catch {}
+    console.error("[EconomyConfig] Failed to persist economy configuration to disk:", writeErr);
+    throw new Error(
+      `Failed to persist economy configuration: ${writeErr instanceof Error ? writeErr.message : String(writeErr)}`
+    );
   }
 
   cachedEconomyConfig = nextConfig;

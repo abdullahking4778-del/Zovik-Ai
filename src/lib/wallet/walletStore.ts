@@ -93,6 +93,22 @@ function sanitizeId(id: string): string {
 // -----------------------------------------------------------------------------
 
 let supabaseCreditTablesAvailable: boolean | null = null;
+let lastTableCheckTime = 0;
+const TABLE_CHECK_INTERVAL = 60000; // 60 seconds periodic re-check if tables became available
+
+function shouldCheckSupabase(): boolean {
+  if (!isSupabaseConfigured()) return false;
+  if (supabaseCreditTablesAvailable === false) {
+    // If previously marked unavailable, retry after 60s in case tables were added
+    if (Date.now() - lastTableCheckTime > TABLE_CHECK_INTERVAL) {
+      supabaseCreditTablesAvailable = null;
+      lastTableCheckTime = Date.now();
+      return true;
+    }
+    return false;
+  }
+  return true;
+}
 
 function isTableNotFoundError(err: unknown): boolean {
   if (!err) return false;
@@ -114,8 +130,8 @@ export async function getOrCreateWallet(userId: string): Promise<VirtualWallet> 
   const cleanUid = sanitizeId(userId).toLowerCase();
   const walletId = `wal_${cleanUid}`;
 
-  // 1. Supabase PostgreSQL Authoritative Check (if tables are confirmed available)
-  if (isSupabaseConfigured() && supabaseCreditTablesAvailable !== false) {
+  // 1. Supabase PostgreSQL Authoritative Check (if configured and tables are available)
+  if (shouldCheckSupabase()) {
     try {
       const { data, error } = await supabaseAdmin
         .from("credit_wallets")
@@ -125,6 +141,7 @@ export async function getOrCreateWallet(userId: string): Promise<VirtualWallet> 
 
       if (error && isTableNotFoundError(error)) {
         supabaseCreditTablesAvailable = false;
+        lastTableCheckTime = Date.now();
       } else if (!error && data) {
         return {
           id: data.id,
@@ -236,7 +253,7 @@ export async function getOrCreateWallet(userId: string): Promise<VirtualWallet> 
 export async function findWalletByUserId(userId: string): Promise<VirtualWallet | null> {
   const cleanUid = sanitizeId(userId).toLowerCase();
 
-  if (isSupabaseConfigured()) {
+  if (shouldCheckSupabase()) {
     try {
       const { data, error } = await supabaseAdmin
         .from("credit_wallets")
@@ -244,7 +261,10 @@ export async function findWalletByUserId(userId: string): Promise<VirtualWallet 
         .eq("user_id", cleanUid)
         .maybeSingle();
 
-      if (!error && data) {
+      if (error && isTableNotFoundError(error)) {
+        supabaseCreditTablesAvailable = false;
+        lastTableCheckTime = Date.now();
+      } else if (!error && data) {
         return {
           id: data.id,
           userId: data.user_id,
@@ -389,7 +409,7 @@ export async function executeCreditMutation(params: CreditMutationParams): Promi
 
     // 3. Authoritative Supabase PostgreSQL Persistence (when Cloud configured & tables exist)
     let cloudExecuted = false;
-    if (isSupabaseConfigured() && supabaseCreditTablesAvailable !== false) {
+    if (shouldCheckSupabase()) {
       let ledgerInserted = false;
       try {
         // 3A. Insert Ledger Entry
@@ -414,6 +434,7 @@ export async function executeCreditMutation(params: CreditMutationParams): Promi
           if (isTableNotFoundError(ledgerErr)) {
             console.warn("[WalletStore] Supabase 'credit_ledger' table not found in schema cache. Seamlessly using atomic local JSON store.");
             supabaseCreditTablesAvailable = false;
+            lastTableCheckTime = Date.now();
           } else if (ledgerErr.code === "23505") {
             const deduplicated = await findLedgerEntryByIdempotencyKey(cleanIdempotencyKey);
             if (deduplicated) {
@@ -443,18 +464,31 @@ export async function executeCreditMutation(params: CreditMutationParams): Promi
             if (isTableNotFoundError(walletErr)) {
               console.warn("[WalletStore] Supabase 'credit_wallets' table not found in schema cache. Seamlessly using atomic local JSON store.");
               supabaseCreditTablesAvailable = false;
+              lastTableCheckTime = Date.now();
               if (ledgerInserted) {
                 try {
-                  await supabaseAdmin.from("credit_ledger").delete().eq("id", ledgerEntry.id);
-                } catch {}
+                  const { error: delErr } = await supabaseAdmin.from("credit_ledger").delete().eq("id", ledgerEntry.id);
+                  if (delErr) {
+                    console.error("[WalletStore] CRITICAL: Failed to rollback orphan ledger entry during table missing event:", delErr);
+                  }
+                } catch (delCatch) {
+                  console.error("[WalletStore] CRITICAL: Exception rolling back orphan ledger entry:", delCatch);
+                }
               }
             } else {
               console.error("[WalletStore] Authoritative wallet balance update error:", walletErr);
               if (ledgerInserted) {
                 try {
-                  await supabaseAdmin.from("credit_ledger").delete().eq("id", ledgerEntry.id);
-                } catch {}
+                  const { error: delErr } = await supabaseAdmin.from("credit_ledger").delete().eq("id", ledgerEntry.id);
+                  if (delErr) {
+                    console.error("[WalletStore] CRITICAL: Failed to rollback orphan ledger entry:", delErr);
+                  }
+                } catch (delCatch) {
+                  console.error("[WalletStore] CRITICAL: Exception rolling back orphan ledger entry:", delCatch);
+                }
               }
+              // STRICT CLOUD DURABILITY: When authoritative Supabase database is active,
+              // DO NOT silently fall back to ephemeral /tmp storage on runtime mutation failures!
               throw new Error(`Database error updating wallet balance: ${walletErr.message}`);
             }
           } else if (updatedRow) {
@@ -480,8 +514,11 @@ export async function executeCreditMutation(params: CreditMutationParams): Promi
         if (isTableNotFoundError(err)) {
           console.warn("[WalletStore] Supabase table not found in schema cache. Seamlessly using atomic local JSON store.");
           supabaseCreditTablesAvailable = false;
+          lastTableCheckTime = Date.now();
         } else {
-          console.warn("[WalletStore] Cloud mutation error, falling back to atomic local store:", err);
+          // If authoritative cloud failed during an active transaction, bubble the error up
+          // rather than silently writing phantom balance to local disk!
+          throw err;
         }
       }
     }
@@ -517,7 +554,7 @@ export async function executeCreditMutation(params: CreditMutationParams): Promi
 export async function findLedgerEntryByIdempotencyKey(key: string): Promise<LedgerEntry | null> {
   const cleanKey = sanitizeId(key);
 
-  if (isSupabaseConfigured()) {
+  if (shouldCheckSupabase()) {
     try {
       const { data, error } = await supabaseAdmin
         .from("credit_ledger")
@@ -525,7 +562,10 @@ export async function findLedgerEntryByIdempotencyKey(key: string): Promise<Ledg
         .eq("idempotency_key", cleanKey)
         .maybeSingle();
 
-      if (!error && data) {
+      if (error && isTableNotFoundError(error)) {
+        supabaseCreditTablesAvailable = false;
+        lastTableCheckTime = Date.now();
+      } else if (!error && data) {
         return {
           id: data.id,
           walletId: data.wallet_id,
@@ -556,7 +596,7 @@ export async function findLedgerEntryByIdempotencyKey(key: string): Promise<Ledg
 export async function getWalletLedgerHistory(userId: string, limit: number = 50): Promise<LedgerEntry[]> {
   const cleanUid = sanitizeId(userId).toLowerCase();
 
-  if (isSupabaseConfigured()) {
+  if (shouldCheckSupabase()) {
     try {
       const { data, error } = await supabaseAdmin
         .from("credit_ledger")
@@ -565,7 +605,10 @@ export async function getWalletLedgerHistory(userId: string, limit: number = 50)
         .order("created_at", { ascending: false })
         .limit(limit);
 
-      if (!error && Array.isArray(data)) {
+      if (error && isTableNotFoundError(error)) {
+        supabaseCreditTablesAvailable = false;
+        lastTableCheckTime = Date.now();
+      } else if (!error && Array.isArray(data)) {
         return data.map((d) => ({
           id: d.id,
           walletId: d.wallet_id,
