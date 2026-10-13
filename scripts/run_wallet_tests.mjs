@@ -3,6 +3,8 @@
  * Exercises the actual implementation in `src/lib/wallet/` across all 18 scope-locked requirements.
  */
 
+import fs from "fs";
+import path from "path";
 import assert from "assert";
 import crypto from "crypto";
 import {
@@ -21,6 +23,10 @@ import {
   getUserLedgerHistory,
   reconcileUserWallet,
 } from "../src/lib/wallet/walletService.ts";
+import {
+  getEconomyConfig,
+  saveEconomyConfig,
+} from "../src/lib/wallet/economyConfigServer.ts";
 
 let totalTests = 0;
 let passedTests = 0;
@@ -297,6 +303,58 @@ async function runSuite() {
   report(
     "19. Existing record safety: getOrCreateWallet never overwrites existing positive balance with 0 on re-initialization",
     zeroOverwriteMaintained
+  );
+
+  // 20. Multi-step Payment Approval Idempotent Recovery
+  console.log("\n--- 20. Multi-Step Payment Approval Idempotent Recovery ---");
+  const multiStepUser = `multistep_user_${Date.now()}`;
+  const paymentSlipId = `slip_${Date.now()}`;
+  const paymentIdempotencyKey = `pay_coins_${paymentSlipId}`;
+
+  // Step 1: Wallet credited upon initial approval
+  const step1 = await creditUserWallet({
+    userId: multiStepUser,
+    amount: 500,
+    reason: "Coin Purchase Approval (EasyPaisa - Trx: TRX999)",
+    referenceId: paymentSlipId,
+    idempotencyKey: paymentIdempotencyKey,
+    actorId: "admin_approval",
+  });
+  assert.strictEqual(step1.wallet.balance, 500);
+  assert.strictEqual(step1.deduplicated, false);
+
+  // Step 2 simulation: Status persistence fails (API 500).
+  // Step 3: Admin retries the approval with the same payment ID.
+  const step3Retry = await creditUserWallet({
+    userId: multiStepUser,
+    amount: 500,
+    reason: "Coin Purchase Approval (EasyPaisa - Trx: TRX999)",
+    referenceId: paymentSlipId,
+    idempotencyKey: paymentIdempotencyKey,
+    actorId: "admin_approval",
+  });
+  report(
+    "20. Multi-step recovery: Retrying payment approval deduplicates cleanly and avoids double-crediting",
+    step3Retry.deduplicated === true && step3Retry.wallet.balance === 500
+  );
+
+  // 21. getEconomyConfig() Zero Side-Effect Verification
+  console.log("\n--- 21. getEconomyConfig Read-Only Zero Side-Effect Verification ---");
+  const economyFilePath = path.join(process.cwd(), ".data", "economy_config.json");
+  const mtimeBefore = fs.existsSync(economyFilePath) ? fs.statSync(economyFilePath).mtimeMs : 0;
+  const config = getEconomyConfig();
+  const mtimeAfter = fs.existsSync(economyFilePath) ? fs.statSync(economyFilePath).mtimeMs : 0;
+  report(
+    "21. Pure read-only economy queries: getEconomyConfig triggers zero disk write mutations",
+    typeof config.usdtRate === "number" && mtimeBefore === mtimeAfter
+  );
+
+  // 22. saveEconomyConfig Persistence & Consistency
+  console.log("\n--- 22. saveEconomyConfig Persistence & Consistency ---");
+  const updatedEconomy = await saveEconomyConfig({ usdtRate: config.usdtRate });
+  report(
+    "22. Economy save persistence: Successfully saves economy config and returns updated rate",
+    updatedEconomy.usdtRate === config.usdtRate
   );
 
   console.log("\n=======================================================");

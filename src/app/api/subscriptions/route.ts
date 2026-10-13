@@ -209,8 +209,14 @@ export async function PATCH(req: NextRequest) {
       // 3. Mark payment status as approved after wallet credit has succeeded
       const marked = await updatePersistentPaymentStatus(targetId, "approve");
       if (!marked) {
+        console.error(
+          `[Subscriptions CRITICAL] Payment ${targetId} coins credited under idempotency key pay_coins_${targetPayment.id}, but status persistence failed. Operation is idempotent: safe to retry approval without duplicate crediting.`
+        );
         return NextResponse.json(
-          { success: false, error: "Failed to persist approved payment status record." },
+          {
+            success: false,
+            error: "Failed to persist approved payment status record. Credited coins are protected by idempotency key; please retry approval to finalize.",
+          },
           { status: 500 }
         );
       }

@@ -84,7 +84,7 @@ async function syncEconomyFromCloud(): Promise<EconomyConfig> {
           packages: Array.isArray(parsed.packages) && parsed.packages.length > 0 ? parsed.packages : DEFAULT_PACKAGES,
         };
         lastLoadedTime = now;
-        safeWriteJsonFile(getEconomyConfigStoragePath(), cachedEconomyConfig);
+        // Genuinely read-only: Do NOT write to disk during read synchronization
         return cachedEconomyConfig;
       }
     } catch {}
@@ -103,7 +103,7 @@ async function syncEconomyFromCloud(): Promise<EconomyConfig> {
             packages: Array.isArray(data.packages) && data.packages.length > 0 ? data.packages : DEFAULT_PACKAGES,
           };
           lastLoadedTime = now;
-          safeWriteJsonFile(getEconomyConfigStoragePath(), cachedEconomyConfig);
+          // Genuinely read-only: Do NOT write to disk during read synchronization
           return cachedEconomyConfig;
         }
       }
@@ -115,7 +115,8 @@ async function syncEconomyFromCloud(): Promise<EconomyConfig> {
 }
 
 /**
- * Reads persistent economy configuration with memory cache & cloud synchronization
+ * Reads persistent economy configuration with memory cache & cloud synchronization.
+ * Pure read-only query with zero disk file mutations.
  */
 export function getEconomyConfig(): EconomyConfig {
   const now = Date.now();
@@ -127,7 +128,8 @@ export function getEconomyConfig(): EconomyConfig {
 }
 
 /**
- * Saves economy configuration with cross-instance cloud persistence and atomic disk write
+ * Saves economy configuration with cross-instance cloud persistence and atomic disk write.
+ * Inspects returned cloud error to prevent false-positive reporting.
  */
 export async function saveEconomyConfig(updates: Partial<EconomyConfig>): Promise<EconomyConfig> {
   const current = getEconomyConfig();
@@ -159,9 +161,12 @@ export async function saveEconomyConfig(updates: Partial<EconomyConfig>): Promis
   }
 
   // 2. Cross-instance Cloud Persistence: Supabase PostgreSQL app_settings
+  let supabaseSaved = false;
+  let cloudError: string | null = null;
+
   if (isSupabaseConfigured()) {
     try {
-      await supabaseAdmin.from("app_settings").upsert(
+      const { error } = await supabaseAdmin.from("app_settings").upsert(
         {
           key: "economy_config",
           value: JSON.stringify(nextConfig),
@@ -169,17 +174,40 @@ export async function saveEconomyConfig(updates: Partial<EconomyConfig>): Promis
         },
         { onConflict: "key" }
       );
+      if (error) {
+        cloudError = `Supabase error: ${error.message} (${error.code || "UNKNOWN"})`;
+        console.error("[EconomyConfig] Authoritative cloud persist error:", cloudError);
+      } else {
+        supabaseSaved = true;
+      }
     } catch (err) {
+      cloudError = err instanceof Error ? err.message : String(err);
       console.warn("[EconomyConfig] Supabase cloud sync notice:", err);
     }
   }
 
   // 3. Dual-sync to Firestore (if configured)
+  let firestoreSaved = false;
   try {
     if (adminDb && typeof adminDb.collection === "function") {
       await adminDb.collection("config").doc("economy").set(nextConfig, { merge: true });
+      firestoreSaved = true;
     }
-  } catch {}
+  } catch (err) {
+    if (!cloudError) {
+      cloudError = err instanceof Error ? err.message : String(err);
+    }
+  }
+
+  // If cloud storage is configured (especially on Vercel where local files are ephemeral),
+  // fail closed if cloud persistence fails across all configured cloud providers
+  if (isSupabaseConfigured() && !supabaseSaved && !firestoreSaved) {
+    if (process.env.VERCEL) {
+      throw new Error(`Failed to persist economy configuration to authoritative cloud: ${cloudError || "Database error"}`);
+    } else {
+      console.warn("[EconomyConfig] Notice: Running in local environment; cloud write failed but local disk write succeeded:", cloudError);
+    }
+  }
 
   cachedEconomyConfig = nextConfig;
   lastLoadedTime = Date.now();
