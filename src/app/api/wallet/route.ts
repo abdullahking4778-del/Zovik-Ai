@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveServerUser } from "@/lib/authSession";
-import { getUserWallet, getUserLedgerHistory, deductVoiceCallCredits } from "@/lib/wallet/walletService";
+import {
+  getUserWallet,
+  getExistingUserWallet,
+  getUserLedgerHistory,
+  deductVoiceCallCredits,
+} from "@/lib/wallet/walletService";
 import { getEconomyConfig } from "@/lib/wallet/economyConfigServer";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
-
-import { upsertStoredUser } from "@/lib/userStore";
 
 /**
  * GET /api/wallet
@@ -43,9 +46,16 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // Read-only retrieval of user wallet & ledger history
-    const wallet = await getUserWallet(sessionUser.userId, sessionUser.userEmail, true);
-    const history = await getUserLedgerHistory(wallet.userId, 25);
+    // 100% Genuinely read-only lookup of existing wallet (zero write mutations or side-effects on GET)
+    const existingWallet = await getExistingUserWallet(sessionUser.userId);
+    const wallet = existingWallet || {
+      id: `wal_${sessionUser.userId}`,
+      balance: 0,
+      currency: "CREDIT" as const,
+      status: "active" as const,
+      updatedAt: new Date().toISOString(),
+    };
+    const history = existingWallet ? await getUserLedgerHistory(existingWallet.userId, 25) : [];
 
     return NextResponse.json({
       success: true,

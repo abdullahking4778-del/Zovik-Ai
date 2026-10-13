@@ -69,7 +69,7 @@ export async function PUT(req: NextRequest) {
 
   try {
     const body = await req.json().catch(() => ({}));
-    const updated = saveEconomyConfig(body);
+    const updated = await saveEconomyConfig(body);
     return NextResponse.json({ success: true, economy: updated });
   } catch (err: unknown) {
     console.error("[Admin Wallet PUT Error]:", err);

@@ -84,7 +84,7 @@ export async function getUserWallet(userId: string, userEmail?: string, allowCon
                 reason: `Compensatory Reversal: Failed consolidation transfer to ${primaryWallet.userId}`,
               });
             } catch (revErr) {
-              console.error("[WalletService] CRITICAL: Compensatory reversal failed:", revErr);
+              console.error("[WalletService] CRITICAL: Compensatory reversal of consolidation debit failed:", revErr);
             }
             throw creditErr;
           }
@@ -93,7 +93,8 @@ export async function getUserWallet(userId: string, userEmail?: string, allowCon
         }
       }
     } catch (migErr) {
-      console.warn("[WalletService] Auto-migration note:", migErr);
+      console.error("[WalletService] Consolidation workflow error:", migErr);
+      throw migErr;
     }
   }
 

@@ -122,6 +122,18 @@ function isTableNotFoundError(err: unknown): boolean {
   );
 }
 
+function handleTableNotFoundInEnvironment(contextMessage: string): void {
+  supabaseCreditTablesAvailable = false;
+  lastTableCheckTime = Date.now();
+  const isProduction = process.env.NODE_ENV === "production" || !!process.env.VERCEL;
+  if (isProduction && isSupabaseConfigured()) {
+    throw new Error(
+      `[CRITICAL PRODUCTION CONFIGURATION ERROR]: ${contextMessage}. Fallback to ephemeral local storage is disabled in production to protect wallet durability.`
+    );
+  }
+  console.warn(`[WalletStore] ${contextMessage}. Seamlessly using atomic local JSON store (development/test mode).`);
+}
+
 /**
  * Retrieve or initialize a wallet for a verified account.
  * Guarantees a unique wallet per user ID with zero duplication.
@@ -140,8 +152,7 @@ export async function getOrCreateWallet(userId: string): Promise<VirtualWallet> 
         .maybeSingle();
 
       if (error && isTableNotFoundError(error)) {
-        supabaseCreditTablesAvailable = false;
-        lastTableCheckTime = Date.now();
+        handleTableNotFoundInEnvironment("Supabase table 'credit_wallets' not found in schema cache");
       } else if (!error && data) {
         return {
           id: data.id,
@@ -262,8 +273,7 @@ export async function findWalletByUserId(userId: string): Promise<VirtualWallet 
         .maybeSingle();
 
       if (error && isTableNotFoundError(error)) {
-        supabaseCreditTablesAvailable = false;
-        lastTableCheckTime = Date.now();
+        handleTableNotFoundInEnvironment("Supabase table 'credit_wallets' not found in schema cache");
       } else if (!error && data) {
         return {
           id: data.id,
@@ -432,9 +442,7 @@ export async function executeCreditMutation(params: CreditMutationParams): Promi
 
         if (ledgerErr) {
           if (isTableNotFoundError(ledgerErr)) {
-            console.warn("[WalletStore] Supabase 'credit_ledger' table not found in schema cache. Seamlessly using atomic local JSON store.");
-            supabaseCreditTablesAvailable = false;
-            lastTableCheckTime = Date.now();
+            handleTableNotFoundInEnvironment("Supabase 'credit_ledger' table not found in schema cache");
           } else if (ledgerErr.code === "23505") {
             const deduplicated = await findLedgerEntryByIdempotencyKey(cleanIdempotencyKey);
             if (deduplicated) {
@@ -462,9 +470,7 @@ export async function executeCreditMutation(params: CreditMutationParams): Promi
 
           if (walletErr) {
             if (isTableNotFoundError(walletErr)) {
-              console.warn("[WalletStore] Supabase 'credit_wallets' table not found in schema cache. Seamlessly using atomic local JSON store.");
-              supabaseCreditTablesAvailable = false;
-              lastTableCheckTime = Date.now();
+              handleTableNotFoundInEnvironment("Supabase 'credit_wallets' table not found in schema cache");
               if (ledgerInserted) {
                 try {
                   const { error: delErr } = await supabaseAdmin.from("credit_ledger").delete().eq("id", ledgerEntry.id);
@@ -512,9 +518,7 @@ export async function executeCreditMutation(params: CreditMutationParams): Promi
       } catch (err: unknown) {
         if (err instanceof InsufficientCreditsError || err instanceof WalletFrozenError) throw err;
         if (isTableNotFoundError(err)) {
-          console.warn("[WalletStore] Supabase table not found in schema cache. Seamlessly using atomic local JSON store.");
-          supabaseCreditTablesAvailable = false;
-          lastTableCheckTime = Date.now();
+          handleTableNotFoundInEnvironment("Supabase tables not found in schema cache");
         } else {
           // If authoritative cloud failed during an active transaction, bubble the error up
           // rather than silently writing phantom balance to local disk!
@@ -563,8 +567,7 @@ export async function findLedgerEntryByIdempotencyKey(key: string): Promise<Ledg
         .maybeSingle();
 
       if (error && isTableNotFoundError(error)) {
-        supabaseCreditTablesAvailable = false;
-        lastTableCheckTime = Date.now();
+        handleTableNotFoundInEnvironment("Supabase table 'credit_ledger' not found in schema cache");
       } else if (!error && data) {
         return {
           id: data.id,
@@ -606,8 +609,7 @@ export async function getWalletLedgerHistory(userId: string, limit: number = 50)
         .limit(limit);
 
       if (error && isTableNotFoundError(error)) {
-        supabaseCreditTablesAvailable = false;
-        lastTableCheckTime = Date.now();
+        handleTableNotFoundInEnvironment("Supabase table 'credit_ledger' not found in schema cache");
       } else if (!error && Array.isArray(data)) {
         return data.map((d) => ({
           id: d.id,

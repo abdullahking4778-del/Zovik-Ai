@@ -208,7 +208,13 @@ export async function PATCH(req: NextRequest) {
 
       // 3. Mark payment status as approved after wallet credit has succeeded
       const marked = await updatePersistentPaymentStatus(targetId, "approve");
-      if (marked) updatedPayment = marked;
+      if (!marked) {
+        return NextResponse.json(
+          { success: false, error: "Failed to persist approved payment status record." },
+          { status: 500 }
+        );
+      }
+      updatedPayment = marked;
 
       // 4. Plan duration & tier handling (only for VIP / Plus subscription purchases, not pure coin packs)
       const isCoinsOnly = Boolean(
@@ -274,7 +280,13 @@ export async function PATCH(req: NextRequest) {
       }
     } else if (action === "reject") {
       const rejected = await updatePersistentPaymentStatus(targetId, "reject");
-      if (rejected) updatedPayment = rejected;
+      if (!rejected) {
+        return NextResponse.json(
+          { success: false, error: "Failed to persist rejected payment status record." },
+          { status: 500 }
+        );
+      }
+      updatedPayment = rejected;
     }
 
     return NextResponse.json({ success: true, payment: updatedPayment });
