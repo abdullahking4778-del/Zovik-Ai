@@ -320,16 +320,3 @@ export async function deductCompanionCreationCredits(userId: string, characterId
   });
 }
 
-/**
- * Deduct credits for live companion voice calling (2 coins per minute).
- */
-export async function deductVoiceCallCredits(userId: string, minuteIndex: number = 1, callId?: string) {
-  return debitUserWallet({
-    userId,
-    amount: 2,
-    reason: `Live Voice Call 📞 (Minute ${minuteIndex})`,
-    referenceId: callId,
-    idempotencyKey: callId ? `voice_call_${callId}_min_${minuteIndex}` : undefined,
-  });
-}
-

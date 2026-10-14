@@ -30,7 +30,6 @@ import { getSafeImageUrl } from "@/lib/imageHelper";
 import { auth } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
 import { useWallet, notifyWalletUpdated } from "@/hooks/useWallet";
-import { playVoice, stopVoice } from "@/lib/voicePlayer";
 
 interface ChatModalProps {
   character: Character | null;
@@ -166,7 +165,6 @@ export default function ChatModal({
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState("");
   const [isTyping, setIsTyping] = useState(false);
-  const [playingVoiceIdx, setPlayingVoiceIdx] = useState<number | null>(null);
   const { balance: chatCoins } = useWallet();
   const [isCoinsWarningDismissed, setIsCoinsWarningDismissed] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -182,7 +180,6 @@ export default function ChatModal({
     isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
-      stopVoice();
     };
   }, []);
 
@@ -300,34 +297,6 @@ export default function ChatModal({
   }, [messages, isTyping]);
 
   if (!character) return null;
-
-  // Natural Neural & Human Voice for companion voice notes
-  const speakText = (text: string, idx: number) => {
-    if (!character) return;
-
-    if (playingVoiceIdx === idx) {
-      stopVoice();
-      setPlayingVoiceIdx(null);
-      return;
-    }
-
-    stopVoice();
-    setPlayingVoiceIdx(idx);
-
-    playVoice({
-      text,
-      character,
-      onStart: () => {
-        setPlayingVoiceIdx(idx);
-      },
-      onEnd: () => {
-        setPlayingVoiceIdx((current) => (current === idx ? null : current));
-      },
-      onError: () => {
-        setPlayingVoiceIdx((current) => (current === idx ? null : current));
-      },
-    });
-  };
 
   const handleCopyMessage = (text: string, idx: number) => {
     if (typeof navigator !== "undefined" && navigator.clipboard) {
@@ -657,10 +626,7 @@ export default function ChatModal({
         <div className="flex items-center justify-between px-4 py-3 bg-[#130d17] border-b border-white/10 shrink-0">
           <div className="flex items-center space-x-3">
             <button
-              onClick={() => {
-                stopVoice();
-                onClose();
-              }}
+              onClick={onClose}
               className="md:hidden size-8 rounded-full bg-white/5 flex items-center justify-center text-white"
             >
               <ArrowLeft className="size-4" />
@@ -690,7 +656,7 @@ export default function ChatModal({
             </div>
           </div>
 
-          {/* Action Header Buttons: Voice Call & VIP upgrade */}
+          {/* Action Header Buttons: Intro Video & Coins recharge */}
           <div className="flex items-center space-x-2">
             {character.videoUrl && (
               <button
@@ -723,10 +689,7 @@ export default function ChatModal({
             </button>
 
             <button
-              onClick={() => {
-                stopVoice();
-                onClose();
-              }}
+              onClick={onClose}
               className="size-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-[#aeaeae] hover:text-white transition-colors"
             >
               ✕
@@ -781,30 +744,6 @@ export default function ChatModal({
                         <p className="text-xs text-[#e0d6dc] leading-relaxed">
                           {msg.text.replace(/\*[^*]*\*/g, "").trim()}
                         </p>
-                        <button
-                          onClick={() => speakText(msg.text || "", idx)}
-                          className={`px-2.5 py-1 rounded-full text-[10px] font-bold flex items-center space-x-1.5 transition-all active:scale-95 ${
-                            playingVoiceIdx === idx
-                              ? "bg-gradient-to-r from-[#f53b70] to-[#ff457c] text-white shadow-md shadow-pink-600/40 ring-2 ring-pink-500/50"
-                              : "bg-white/5 hover:bg-white/10 text-[#cbb6bf] hover:text-white border border-white/10"
-                          }`}
-                        >
-                          {playingVoiceIdx === idx ? (
-                            <>
-                              <span className="flex items-center space-x-0.5">
-                                <span className="w-0.5 h-2.5 bg-white animate-pulse" />
-                                <span className="w-0.5 h-3.5 bg-white animate-pulse [animation-delay:0.15s]" />
-                                <span className="w-0.5 h-2 bg-white animate-pulse [animation-delay:0.3s]" />
-                              </span>
-                              <span>Playing Voice... ⏸️</span>
-                            </>
-                          ) : (
-                            <>
-                              <Volume2 className="size-3 text-[#f53b70]" />
-                              <span>Play Voice Note 🎧</span>
-                            </>
-                          )}
-                        </button>
                       </div>
                     )}
                     <span className="block text-[10px] text-[#aeaeae] text-right mt-1">{msg.time}</span>
@@ -844,30 +783,6 @@ export default function ChatModal({
                         <p className="text-xs text-[#e0d6dc]">
                           {msg.text.replace(/\*[^*]*\*/g, "").trim()}
                         </p>
-                        <button
-                          onClick={() => speakText(msg.text || "", idx)}
-                          className={`px-2.5 py-1 rounded-full text-[10px] font-bold flex items-center space-x-1.5 transition-all active:scale-95 ${
-                            playingVoiceIdx === idx
-                              ? "bg-gradient-to-r from-[#f53b70] to-[#ff457c] text-white shadow-md shadow-pink-600/40 ring-2 ring-pink-500/50"
-                              : "bg-white/5 hover:bg-white/10 text-[#cbb6bf] hover:text-white border border-white/10"
-                          }`}
-                        >
-                          {playingVoiceIdx === idx ? (
-                            <>
-                              <span className="flex items-center space-x-0.5">
-                                <span className="w-0.5 h-2.5 bg-white animate-pulse" />
-                                <span className="w-0.5 h-3.5 bg-white animate-pulse [animation-delay:0.15s]" />
-                                <span className="w-0.5 h-2 bg-white animate-pulse [animation-delay:0.3s]" />
-                              </span>
-                              <span>Playing Voice... ⏸️</span>
-                            </>
-                          ) : (
-                            <>
-                              <Volume2 className="size-3 text-[#f53b70]" />
-                              <span>Play Voice Note 🎧</span>
-                            </>
-                          )}
-                        </button>
                       </div>
                     )}
                     <span className="block text-[10px] text-[#aeaeae] text-right">{msg.time}</span>
@@ -905,31 +820,6 @@ export default function ChatModal({
                   <div className="flex items-center justify-between space-x-2 mt-1">
                     {isAI ? (
                       <div className="flex items-center space-x-2">
-                        <button
-                          onClick={() => speakText(msg.text || "", idx)}
-                          title="Listen to companion voice note"
-                          className={`px-2.5 py-1 rounded-full text-[10px] font-bold flex items-center space-x-1.5 transition-all active:scale-95 ${
-                            playingVoiceIdx === idx
-                              ? "bg-gradient-to-r from-[#f53b70] to-[#ff457c] text-white shadow-md shadow-pink-600/40 ring-2 ring-pink-500/50"
-                              : "bg-white/5 hover:bg-white/10 text-[#cbb6bf] hover:text-white border border-white/10"
-                          }`}
-                        >
-                          {playingVoiceIdx === idx ? (
-                            <>
-                              <span className="flex items-center space-x-0.5">
-                                <span className="w-0.5 h-2.5 bg-white animate-pulse" />
-                                <span className="w-0.5 h-3.5 bg-white animate-pulse [animation-delay:0.15s]" />
-                                <span className="w-0.5 h-2 bg-white animate-pulse [animation-delay:0.3s]" />
-                              </span>
-                              <span>Playing Voice... ⏸️</span>
-                            </>
-                          ) : (
-                            <>
-                              <Volume2 className="size-3 text-[#f53b70]" />
-                              <span>Play Voice Note 🎧</span>
-                            </>
-                          )}
-                        </button>
                         <button
                           onClick={() => handleCopyMessage(msg.text || "", idx)}
                           title="Copy message"

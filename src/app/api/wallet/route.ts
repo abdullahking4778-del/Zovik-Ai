@@ -4,7 +4,6 @@ import {
   getUserWallet,
   getExistingUserWallet,
   getUserLedgerHistory,
-  deductVoiceCallCredits,
 } from "@/lib/wallet/walletService";
 import { getEconomyConfig } from "@/lib/wallet/economyConfigServer";
 
@@ -87,7 +86,7 @@ export async function GET(req: NextRequest) {
 
 /**
  * POST /api/wallet
- * Authoritative feature billing endpoint (e.g. live voice calling 2 coins/min).
+ * Authoritative feature billing endpoint.
  * Strictly requires verified authentication.
  */
 export async function POST(req: NextRequest) {
@@ -100,37 +99,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const body = await req.json().catch(() => ({}));
-    const action = body.action || "voice_call_minute";
-    const callId = body.callId;
-    const minuteIndex = Number(body.minuteIndex) || 1;
-
-    if (action === "voice_call_minute") {
-      const wallet = await getUserWallet(sessionUser.userId, sessionUser.userEmail);
-      if (wallet.balance < 2) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: "Coins limit reached! Voice call requires at least 2 coins.",
-            coins: wallet.balance,
-            requiredCoins: 2,
-          },
-          { status: 402 }
-        );
-      }
-
-      const debitResult = await deductVoiceCallCredits(sessionUser.userId, minuteIndex, callId);
-      return NextResponse.json({
-        success: true,
-        deducted: 2,
-        balance: debitResult.wallet.balance,
-        callId,
-        minuteIndex,
-      });
-    }
-
     return NextResponse.json(
-      { success: false, error: "Unknown wallet action." },
+      { success: false, error: "No active POST wallet actions required." },
       { status: 400 }
     );
   } catch (err: unknown) {
