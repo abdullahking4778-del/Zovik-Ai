@@ -2,7 +2,7 @@
 
 import React from "react";
 import Image from "next/image";
-import { Search, Crown, HardDrive, Edit3, Trash2, X, Calendar, Check, RefreshCw, Coins, Gift } from "lucide-react";
+import { Search, Crown, HardDrive, Edit3, Trash2, X, Calendar, Check, RefreshCw, Coins, Gift, Download, ChevronLeft, ChevronRight } from "lucide-react";
 import { UserAccount } from "@/types";
 
 interface AdminUsersTabProps {
@@ -19,6 +19,10 @@ export const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
   onRefreshUsers,
 }) => {
   const [userSearchQuery, setUserSearchQuery] = React.useState("");
+  const [tierFilter, setTierFilter] = React.useState<"all" | "free" | "plus" | "vip">("all");
+  const [currentPage, setCurrentPage] = React.useState(1);
+  const itemsPerPage = 15;
+
   const [editingUser, setEditingUser] = React.useState<UserAccount | null>(null);
   const [editUserTier, setEditUserTier] = React.useState<"free" | "plus" | "vip">("free");
   const [editUserDays, setEditUserDays] = React.useState<number>(30);
@@ -243,8 +247,76 @@ export const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
       setIsSavingUser(false);
     }
   };
+
+  const handleExportUsersCsv = () => {
+    if (users.length === 0) {
+      alert("No users to export.");
+      return;
+    }
+    const headers = ["ID", "Name", "Email", "Tier", "VIP", "Coins", "Subscription Days", "Storage Retention Days", "Registered Date"];
+    const rows = users.map((u) => [
+      `"${u.id}"`,
+      `"${(u.name || "").replace(/"/g, '""')}"`,
+      `"${(u.email || "").replace(/"/g, '""')}"`,
+      `"${u.tier || "free"}"`,
+      u.isVip ? "true" : "false",
+      u.coins || 0,
+      u.subscriptionDays || 0,
+      u.storageRetentionDays || 7,
+      `"${new Date(u.createdAt).toISOString()}"`,
+    ]);
+    const csvContent = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", `zovik_users_export_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const filteredUsers = React.useMemo(() => {
+    const q = userSearchQuery.toLowerCase().trim();
+    return users.filter((u) => {
+      if (tierFilter !== "all") {
+        const isUserVip = u.tier === "vip" || u.isVip;
+        const isUserPlus = u.tier === "plus";
+        if (tierFilter === "vip" && !isUserVip) return false;
+        if (tierFilter === "plus" && (!isUserPlus || isUserVip)) return false;
+        if (tierFilter === "free" && (isUserVip || isUserPlus)) return false;
+      }
+      if (!q) return true;
+      return (
+        (u.email || "").toLowerCase().includes(q) ||
+        (u.name || "").toLowerCase().includes(q) ||
+        (u.tier || "").toLowerCase().includes(q)
+      );
+    });
+  }, [users, userSearchQuery, tierFilter]);
+
+  const totalUserPages = Math.max(1, Math.ceil(filteredUsers.length / itemsPerPage));
+  const paginatedUsers = React.useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredUsers.slice(start, start + itemsPerPage);
+  }, [filteredUsers, currentPage]);
+
+  const tierCounts = React.useMemo(() => {
+    let free = 0;
+    let plus = 0;
+    let vip = 0;
+    for (const u of users) {
+      if (u.tier === "vip" || u.isVip) vip++;
+      else if (u.tier === "plus") plus++;
+      else free++;
+    }
+    return { all: users.length, free, plus, vip };
+  }, [users]);
+
   return (
     <div className="space-y-4">
+      {/* 1. Header with Export Button */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 className="text-xl font-black text-white">Registered Users & Subscriptions</h2>
@@ -253,19 +325,69 @@ export const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
           </p>
         </div>
 
+        <button
+          onClick={handleExportUsersCsv}
+          className="px-3.5 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white font-bold text-xs flex items-center space-x-2 transition-all self-start sm:self-auto"
+        >
+          <Download className="size-3.5 text-emerald-400" />
+          <span>Export Users CSV</span>
+        </button>
+      </div>
+
+      {/* 2. Tier Filter Tabs & Search Bar */}
+      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 p-3 rounded-2xl bg-[#140b1c] border border-white/5">
+        <div className="flex items-center space-x-1.5 overflow-x-auto pb-1 md:pb-0 scrollbar-none">
+          {[
+            { id: "all", label: "All Users", count: tierCounts.all },
+            { id: "vip", label: "VIP Only", count: tierCounts.vip },
+            { id: "plus", label: "Plus Only", count: tierCounts.plus },
+            { id: "free", label: "Free Only", count: tierCounts.free },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => {
+                setTierFilter(tab.id as typeof tierFilter);
+                setCurrentPage(1);
+              }}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center space-x-1.5 ${
+                tierFilter === tab.id
+                  ? tab.id === "vip"
+                    ? "bg-amber-500 text-black shadow-md shadow-amber-500/30"
+                    : tab.id === "plus"
+                    ? "bg-pink-500 text-white shadow-md shadow-pink-500/30"
+                    : "bg-white text-black"
+                  : "bg-white/5 text-[#aeaeae] hover:text-white"
+              }`}
+            >
+              <span>{tab.label}</span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                tierFilter === tab.id ? "bg-black/20 text-inherit font-black" : "bg-white/10 text-white/70"
+              }`}>
+                {tab.count}
+              </span>
+            </button>
+          ))}
+        </div>
+
         {/* Email / Name Search Bar */}
         <div className="relative flex items-center min-w-[260px]">
           <Search className="absolute left-3 size-4 text-[#aeaeae] pointer-events-none" />
           <input
             type="text"
-            placeholder="Search by email or name..."
+            placeholder="Search by email, name or tier..."
             value={userSearchQuery}
-            onChange={(e) => setUserSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 rounded-xl bg-[#140b1c] border border-white/10 text-white text-xs placeholder:text-[#666] outline-none focus:border-[#f53b70] transition-colors"
+            onChange={(e) => {
+              setUserSearchQuery(e.target.value);
+              setCurrentPage(1);
+            }}
+            className="w-full pl-9 pr-4 py-2 rounded-xl bg-black/40 border border-white/10 text-white text-xs placeholder:text-[#666] outline-none focus:border-[#f53b70] transition-colors"
           />
           {userSearchQuery && (
             <button
-              onClick={() => setUserSearchQuery("")}
+              onClick={() => {
+                setUserSearchQuery("");
+                setCurrentPage(1);
+              }}
               className="absolute right-3 text-xs text-[#aeaeae] hover:text-white"
             >
               ×
@@ -288,17 +410,7 @@ export const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
             </tr>
           </thead>
           <tbody className="divide-y divide-white/5">
-            {users
-              .filter((u) => {
-                const q = userSearchQuery.toLowerCase().trim();
-                if (!q) return true;
-                return (
-                  (u.email || "").toLowerCase().includes(q) ||
-                  (u.name || "").toLowerCase().includes(q) ||
-                  (u.tier || "").toLowerCase().includes(q)
-                );
-              })
-              .map((u) => {
+            {paginatedUsers.map((u) => {
                 const isUserVip = u.tier === "vip" || u.isVip;
                 const isUserPlus = u.tier === "plus";
                 return (
@@ -428,16 +540,49 @@ export const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                   </tr>
                 );
               })}
-            {users.length === 0 && (
+            {paginatedUsers.length === 0 && (
               <tr>
                 <td colSpan={7} className="p-8 text-center text-[#aeaeae]">
-                  No users registered yet.
+                  {userSearchQuery || tierFilter !== "all"
+                    ? "No users match your search or tier filter."
+                    : "No users registered yet."}
                 </td>
               </tr>
             )}
           </tbody>
         </table>
       </div>
+
+      {/* Pagination Bar */}
+      {totalUserPages > 1 && (
+        <div className="flex items-center justify-between px-2 pt-1 text-xs">
+          <span className="text-[#aeaeae]">
+            Showing <strong className="text-white">{(currentPage - 1) * itemsPerPage + 1}</strong> to{" "}
+            <strong className="text-white">{Math.min(currentPage * itemsPerPage, filteredUsers.length)}</strong> of{" "}
+            <strong className="text-white">{filteredUsers.length}</strong> users
+          </span>
+
+          <div className="flex items-center space-x-1.5">
+            <button
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              className="p-2 rounded-xl bg-[#140b1c] border border-white/10 text-white disabled:opacity-40 hover:bg-white/5 transition-colors"
+            >
+              <ChevronLeft className="size-3.5" />
+            </button>
+            <span className="px-3 py-1 rounded-xl bg-[#140b1c] border border-white/10 text-white font-mono font-bold">
+              {currentPage} / {totalUserPages}
+            </span>
+            <button
+              onClick={() => setCurrentPage((p) => Math.min(totalUserPages, p + 1))}
+              disabled={currentPage === totalUserPages}
+              className="p-2 rounded-xl bg-[#140b1c] border border-white/10 text-white disabled:opacity-40 hover:bg-white/5 transition-colors"
+            >
+              <ChevronRight className="size-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ================= EDIT USER SUBSCRIPTION & STORAGE MODAL ================= */}
       {editingUser && (
@@ -679,8 +824,8 @@ export const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
               {/* Quick Amount Pills */}
               <div>
                 <label className="block text-[11px] font-bold text-white/80 mb-1.5">Quick Preset Amount</label>
-                <div className="grid grid-cols-4 gap-2">
-                  {[50, 100, 200, 500].map((amt) => (
+                <div className="grid grid-cols-5 gap-1.5">
+                  {[50, 100, 250, 500, 1000].map((amt) => (
                     <button
                       key={amt}
                       type="button"

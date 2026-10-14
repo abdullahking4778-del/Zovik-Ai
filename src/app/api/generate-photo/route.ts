@@ -139,7 +139,10 @@ export async function POST(req: NextRequest) {
     ];
 
     const captions = isMale ? maleCaptions : femaleCaptions;
-    const caption = captions[selectedIdx % captions.length];
+    const loopCaption = isMale
+      ? "Aap ne meri saari private photos dekh li hain jaan! Yeh meri favourite picture dobara sirf aapke liye... 😉💕"
+      : "Aap ne meri saari private photos unlock kar li hain jaan! Yeh meri favourite picture dobara sirf aapke liye... 🥰💕";
+    const caption = isLoopReset ? loopCaption : captions[selectedIdx % captions.length];
 
     // Deduct on SUCCESS only
     if (authenticatedUserId) {

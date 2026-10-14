@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { CreditCard, Cpu, Activity, Users, MessageSquare, PhoneCall, Eye, Sparkles, Coins, Clock } from "lucide-react";
+import React, { useState, useEffect, useMemo } from "react";
+import { CreditCard, Cpu, Activity, Users, MessageSquare, PhoneCall, Eye, Sparkles, Coins, Clock, Crown } from "lucide-react";
 import { UserAccount, PaymentRequest } from "@/types";
 
 interface AdminOverviewTabProps {
@@ -21,6 +21,44 @@ export function AdminOverviewTab({
   const approveAction = handleApprovePayment || onApprovePayment || (() => {});
   const pendingPayments = payments.filter((p) => p.status === "pending");
   const totalCirculatingCoins = users.reduce((acc, u) => acc + (u.coins || 0), 0);
+
+  // Real 7-Day Revenue Calculation from Approved Payments
+  const weeklyRevenue = useMemo(() => {
+    const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const now = new Date();
+    // Last 7 days in order
+    const last7Days = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date();
+      d.setDate(now.getDate() - (6 - i));
+      return {
+        label: days[d.getDay()],
+        dateStr: d.toISOString().slice(0, 10),
+        amount: 0,
+      };
+    });
+
+    for (const p of payments) {
+      if (p.status === "approved" && p.createdAt) {
+        const pDate = new Date(p.createdAt).toISOString().slice(0, 10);
+        const dayEntry = last7Days.find((d) => d.dateStr === pDate);
+        if (dayEntry) {
+          const numAmount = Number(p.amount) || 0;
+          const pkr = (p.currency === "USDT" || p.currency === "USD") ? numAmount * 280 : numAmount;
+          dayEntry.amount += pkr;
+        }
+      }
+    }
+
+    const maxAmount = Math.max(...last7Days.map((d) => d.amount), 1);
+    return last7Days.map((d) => ({
+      ...d,
+      heightPercent: d.amount > 0 ? Math.max(18, Math.round((d.amount / maxAmount) * 100)) : 8,
+    }));
+  }, [payments]);
+
+  const vipSubscribersCount = useMemo(() => {
+    return users.filter((u) => u.tier === "vip" || u.tier === "plus" || u.isVip).length;
+  }, [users]);
 
   const [isCleaningCache, setIsCleaningCache] = useState(false);
   const [cleanMessage, setCleanMessage] = useState<string | null>(null);
@@ -83,7 +121,9 @@ export function AdminOverviewTab({
           <div>
             <h4 className="text-sm font-bold text-white flex items-center gap-2">
               <span>System Health & Storage Optimizer</span>
-              <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full font-bold">100% HEALTHY</span>
+              <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-2.5 py-0.5 rounded-full font-bold">
+                Operational & Active
+              </span>
             </h4>
             <p className="text-[11px] text-[#aeaeae]">
               Auto-purges orphaned .tmp files, expired cache, rate-limits, and junk records.
@@ -163,45 +203,47 @@ export function AdminOverviewTab({
           </span>
         </div>
 
-        {/* CARD 5: CHATS EXCHANGED */}
-        <div className="p-5 rounded-3xl bg-[#140b1c] border border-white/5 relative overflow-hidden group hover:border-blue-400/50 transition-colors">
+        {/* CARD 5: SUBSCRIBED MEMBERS */}
+        <div className="p-5 rounded-3xl bg-[#140b1c] border border-white/5 relative overflow-hidden group hover:border-purple-400/50 transition-colors">
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-            <MessageSquare className="size-12 text-blue-400" />
+            <Crown className="size-12 text-purple-400" />
           </div>
-          <span className="text-xs text-[#aeaeae] relative z-10">Total Chats Exchanged</span>
-          <div className="text-2xl sm:text-3xl font-black text-white mt-1 relative z-10">{users.length * 15 + 142}</div>
-          <span className="text-[10px] text-blue-400 font-bold relative z-10">Active Intimate Messages</span>
+          <span className="text-xs text-[#aeaeae] relative z-10">VIP & Plus Users</span>
+          <div className="text-2xl sm:text-3xl font-black text-white mt-1 relative z-10">{vipSubscribersCount}</div>
+          <span className="text-[10px] text-purple-400 font-bold relative z-10">Active Premium Members</span>
         </div>
       </div>
 
       {/* Analytics Graph & Live Monitor */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
-        {/* Live Analytics & Revenue Graph (CSS Mockup) */}
+        {/* Live Analytics & Revenue Graph (Real 7-Day Revenue) */}
         <div className="p-6 rounded-3xl bg-[#140b1c] border border-white/5 flex flex-col">
           <div className="flex items-center justify-between mb-6">
             <h3 className="text-base font-extrabold text-white flex items-center space-x-2">
               <Activity className="size-4 text-emerald-400" />
-              <span>Live Analytics & Revenue</span>
+              <span>7-Day Revenue Trends</span>
             </h3>
-            <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-2 py-1 rounded-md font-bold animate-pulse">
-              LIVE
+            <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-2 py-1 rounded-md font-bold">
+              REAL REVENUE (PKR)
             </span>
           </div>
           
           <div className="flex-1 flex items-end space-x-2 h-40">
-            {[40, 60, 30, 80, 50, 90, 100].map((height, i) => (
+            {weeklyRevenue.map((d, i) => (
               <div key={i} className="flex-1 flex flex-col items-center group">
                 <div 
-                  className="w-full bg-gradient-to-t from-emerald-600 to-emerald-400 rounded-t-sm opacity-80 group-hover:opacity-100 transition-opacity relative"
-                  style={{ height: `${height}%` }}
+                  className={`w-full bg-gradient-to-t ${
+                    d.amount > 0 ? "from-emerald-600 to-emerald-400 opacity-90 group-hover:opacity-100" : "from-white/10 to-white/5 opacity-50"
+                  } rounded-t-sm transition-opacity relative`}
+                  style={{ height: `${d.heightPercent}%` }}
                 >
-                  <span className="absolute -top-6 left-1/2 -translate-x-1/2 text-[10px] font-bold text-white opacity-0 group-hover:opacity-100 transition-opacity">
-                    {height * 15}0
+                  <span className="absolute -top-7 left-1/2 -translate-x-1/2 text-[10px] font-bold text-white bg-black/90 border border-white/10 px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-20 shadow-md">
+                    Rs. {d.amount.toLocaleString()}
                   </span>
                 </div>
-                <span className="text-[9px] text-[#aeaeae] mt-2">
-                  {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][i]}
+                <span className="text-[9px] text-[#aeaeae] mt-2 font-mono">
+                  {d.label}
                 </span>
               </div>
             ))}
@@ -213,10 +255,10 @@ export function AdminOverviewTab({
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-base font-extrabold text-white flex items-center space-x-2">
               <Eye className="size-4 text-[#f53b70]" />
-              <span>Real-time Live Chat Monitor</span>
+              <span>Companion Activity Simulator</span>
             </h3>
             <span className="text-[10px] bg-pink-500/20 text-pink-400 px-2 py-1 rounded-md font-bold">
-              Admin Eye (Interactive Demo / Simulation)
+              Demo Simulation (User Privacy Protected)
             </span>
           </div>
 
