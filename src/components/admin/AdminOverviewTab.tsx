@@ -55,8 +55,36 @@ export function AdminOverviewTab({
   }, [payments]);
 
   const vipSubscribersCount = useMemo(() => {
-    return users.filter((u) => u.tier === "vip" || u.tier === "plus" || u.isVip).length;
+    const now = new Date();
+    return users.filter((u) => {
+      const isTierVip = u.tier === "vip" || u.tier === "plus" || u.isVip;
+      if (!isTierVip) return false;
+      if (!u.subscriptionEndsAt) return true;
+      return new Date(u.subscriptionEndsAt) > now;
+    }).length;
   }, [users]);
+
+  const [healthInfo, setHealthInfo] = useState<{ status: string; label: string }>({
+    status: "healthy",
+    label: "Operational & Active",
+  });
+
+  useEffect(() => {
+    fetch("/api/admin/clean-cache", {
+      headers: { "x-zovik-admin-request": "1" },
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success) {
+          const isHealthy = data.status === "healthy";
+          setHealthInfo({
+            status: isHealthy ? "healthy" : "warning",
+            label: isHealthy ? "Operational & Active" : "Review Services",
+          });
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const [isCleaningCache, setIsCleaningCache] = useState(false);
   const [cleanMessage, setCleanMessage] = useState<string | null>(null);
@@ -119,8 +147,14 @@ export function AdminOverviewTab({
           <div>
             <h4 className="text-sm font-bold text-white flex items-center gap-2">
               <span>System Health & Storage Optimizer</span>
-              <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-2.5 py-0.5 rounded-full font-bold">
-                Operational & Active
+              <span
+                className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold ${
+                  healthInfo.status === "healthy"
+                    ? "bg-emerald-500/20 text-emerald-400"
+                    : "bg-amber-500/20 text-amber-400"
+                }`}
+              >
+                {healthInfo.label}
               </span>
             </h4>
             <p className="text-[11px] text-[#aeaeae]">
@@ -148,12 +182,12 @@ export function AdminOverviewTab({
 
       {/* Stat Cards Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-        {/* CARD 1: DAU */}
+        {/* CARD 1: TOTAL USERS */}
         <div className="p-5 rounded-3xl bg-[#140b1c] border border-white/5 relative overflow-hidden group hover:border-[#f53b70]/50 transition-colors">
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
             <Users className="size-12 text-[#f53b70]" />
           </div>
-          <span className="text-xs text-[#aeaeae] relative z-10">Active Users</span>
+          <span className="text-xs text-[#aeaeae] relative z-10">Total Users</span>
           <div className="text-2xl sm:text-3xl font-black text-white mt-1 relative z-10">{users.length}</div>
           <span className="text-[10px] text-emerald-400 font-bold relative z-10">Registered Accounts</span>
         </div>

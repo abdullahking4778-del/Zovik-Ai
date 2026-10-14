@@ -39,33 +39,33 @@ interface PaymentAccount {
 const DEFAULT_ACCOUNTS: Record<string, PaymentAccount> = {
   easypaisa: {
     name: "EasyPaisa",
-    account: "03427646038",
-    title: "AMINA AKRAM",
+    account: "Loading...",
+    title: "Official Account",
     notes: "EasyPaisa App se Send Money karein. 11-digit Trx ID copy kar ke paste karein.",
     badge: "INSTANT 🇵🇰",
     isActive: true,
   },
   jazzcash: {
     name: "JazzCash",
-    account: "03154761082",
-    title: "AMINA AKRAM",
+    account: "Loading...",
+    title: "Official Account",
     notes: "JazzCash App ya *786# se transfer karein. Transaction ID (TID) copy karein.",
     badge: "FAST 🇵🇰",
     isActive: true,
   },
   nayapay: {
     name: "NayaPay",
-    account: "0317 6127513",
-    title: "ABDULLAH MAHMOOD",
+    account: "Loading...",
+    title: "Official Account",
     notes: "NayaPay mobile number ya NayaPay ID par transfer karein.",
     badge: "0% FEE 🇵🇰",
     isActive: true,
   },
   binance: {
     name: "Binance Pay (USDT)",
-    account: "1204011189",
-    title: "IQ-MALIK",
-    notes: "Binance App → Pay → Send to Pay ID: 1204011189 (Name: IQ-MALIK). Paste Order / Pay ID below.",
+    account: "Loading...",
+    title: "Official Pay ID",
+    notes: "Binance App → Pay → Send to Official Pay ID. Paste Order / Pay ID below.",
     badge: "CRYPTO 🌐",
     isActive: true,
   },
@@ -93,6 +93,7 @@ export default function CoinStoreModal({ isOpen, onClose }: CoinStoreModalProps)
 
   // Live fetch payment receiving accounts from server
   useEffect(() => {
+    if (!isOpen) return;
     fetch("/api/payment-accounts")
       .then((res) => res.json())
       .then((data) => {
@@ -114,7 +115,7 @@ export default function CoinStoreModal({ isOpen, onClose }: CoinStoreModalProps)
         }
       })
       .catch((err) => console.warn("[CoinStoreModal] Live accounts fetch note:", err));
-  }, []);
+  }, [isOpen]);
 
   // Packages from economy config or sensible defaults
   const packages = economy?.packages && economy.packages.length > 0 ? economy.packages : [

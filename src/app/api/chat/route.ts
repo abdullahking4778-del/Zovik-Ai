@@ -8,7 +8,7 @@ import {
   consumeQuotaOnSuccess,
   getAuthoritativeIdentifier,
 } from "@/lib/quotaManager";
-import { getUserWallet, ensureUserWelcomeBonus, deductChatCredits } from "@/lib/wallet/walletService";
+import { getUserWallet, ensureUserWelcomeBonus, deductChatCredits, InsufficientCreditsError } from "@/lib/wallet/walletService";
 import { Character, Message } from "@/types";
 
 interface ChatRequestBody {
@@ -16,6 +16,7 @@ interface ChatRequestBody {
   messages?: Message[];
   token?: string;
   sessionToken?: string;
+  /** @deprecated Client-declared tier is strictly ignored by server for security; tier is authoritatively resolved from session */
   userTier?: "free" | "plus" | "vip";
   userId?: string;
 }
@@ -422,7 +423,21 @@ export async function POST(req: NextRequest) {
         try {
           const debitRes = await deductChatCredits(authenticatedUserId);
           userCoinsRemaining = debitRes.wallet.balance;
-        } catch {}
+        } catch (err: unknown) {
+          if (err instanceof InsufficientCreditsError || (err as { name?: string })?.name === "InsufficientCreditsError") {
+            return NextResponse.json(
+              {
+                error: "Coins limit reached",
+                quotaExceeded: true,
+                coinsExceeded: true,
+                remainingCoins: 0,
+                reply: "Meri jaan, aapke paas chat ke liye coins khatam ho chuke hain! Coin Store se sirf Rs. 50 mein recharge karein aur baat continue rakhein 💕",
+              },
+              { status: 402 }
+            );
+          }
+          console.warn("[Chat Fallback] Deduct credits note:", err);
+        }
       }
       const quotaResult = consumeQuotaOnSuccess("chat", clientId, userTier);
       quotaInfo = { limit: quotaResult.limit, remaining: quotaResult.remaining };
@@ -634,7 +649,19 @@ CRITICAL RULES (ABSOLUTE PRIORITY):
       try {
         const debitRes = await deductChatCredits(authenticatedUserId);
         userCoinsRemaining = debitRes.wallet.balance;
-      } catch (err) {
+      } catch (err: unknown) {
+        if (err instanceof InsufficientCreditsError || (err as { name?: string })?.name === "InsufficientCreditsError") {
+          return NextResponse.json(
+            {
+              error: "Coins limit reached",
+              quotaExceeded: true,
+              coinsExceeded: true,
+              remainingCoins: 0,
+              reply: "Meri jaan, aapke paas chat ke liye coins khatam ho chuke hain! Coin Store se sirf Rs. 50 mein recharge karein aur baat continue rakhein 💕",
+            },
+            { status: 402 }
+          );
+        }
         console.warn("[Chat] Deduct credits note:", err);
       }
     }

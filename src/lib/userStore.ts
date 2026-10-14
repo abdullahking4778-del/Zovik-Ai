@@ -145,22 +145,39 @@ export function upsertStoredUser(
   try {
     const docId = resultUser.id || resultUser.email;
     if (docId) {
-      const userRef = doc(db, "users", docId);
-      setDoc(
-        userRef,
-        {
-          zovik_tier: resultUser.tier,
-          email: resultUser.email,
-          name: resultUser.name,
-          isVip: resultUser.isVip,
-          subscriptionDays: resultUser.subscriptionDays,
-          subscriptionStart: resultUser.subscriptionStart || null,
-          subscriptionEndsAt: resultUser.subscriptionEndsAt || null,
-          storageRetentionDays: resultUser.storageRetentionDays,
-          lastLoginAt: resultUser.lastLoginAt,
-        },
-        { merge: true }
-      ).catch((e) => console.warn("[UserStore] Firestore sync note:", e));
+      if (adminDb && typeof adminDb.collection === "function") {
+        adminDb.collection("users").doc(docId).set(
+          {
+            zovik_tier: resultUser.tier,
+            email: resultUser.email,
+            name: resultUser.name,
+            isVip: resultUser.isVip,
+            subscriptionDays: resultUser.subscriptionDays,
+            subscriptionStart: resultUser.subscriptionStart || null,
+            subscriptionEndsAt: resultUser.subscriptionEndsAt || null,
+            storageRetentionDays: resultUser.storageRetentionDays,
+            lastLoginAt: resultUser.lastLoginAt,
+          },
+          { merge: true }
+        ).catch((e) => console.warn("[UserStore] Firestore admin sync note:", e));
+      } else {
+        const userRef = doc(db, "users", docId);
+        setDoc(
+          userRef,
+          {
+            zovik_tier: resultUser.tier,
+            email: resultUser.email,
+            name: resultUser.name,
+            isVip: resultUser.isVip,
+            subscriptionDays: resultUser.subscriptionDays,
+            subscriptionStart: resultUser.subscriptionStart || null,
+            subscriptionEndsAt: resultUser.subscriptionEndsAt || null,
+            storageRetentionDays: resultUser.storageRetentionDays,
+            lastLoginAt: resultUser.lastLoginAt,
+          },
+          { merge: true }
+        ).catch((e) => console.warn("[UserStore] Firestore sync note:", e));
+      }
     }
   } catch {}
 

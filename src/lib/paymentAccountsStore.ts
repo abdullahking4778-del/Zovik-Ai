@@ -3,6 +3,8 @@ import path from "path";
 import crypto from "crypto";
 import { PaymentAccountConfig } from "@/types";
 import defaultAccounts from "@/data/payment_accounts.json";
+import { supabaseAdmin, isSupabaseConfigured } from "./supabase";
+import { adminDb } from "./firebaseAdmin";
 
 export type PaymentAccountsMap = Record<string, PaymentAccountConfig>;
 
@@ -65,6 +67,27 @@ export function savePersistentPaymentAccounts(update: Partial<PaymentAccountsMap
   if (filePath !== fallbackPath) {
     safeWriteJsonFile(fallbackPath, merged);
   }
+
+  // 1. Authoritative Cloud Persistence: Supabase PostgreSQL app_settings
+  if (isSupabaseConfigured()) {
+    Promise.resolve(
+      supabaseAdmin.from("app_settings").upsert(
+        {
+          key: "payment_accounts",
+          value: JSON.stringify(merged),
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "key" }
+      )
+    ).catch((err) => console.warn("[PaymentAccounts] Supabase cloud sync notice:", err));
+  }
+
+  // 2. Mirror to Firestore config
+  try {
+    if (adminDb && typeof adminDb.collection === "function") {
+      adminDb.collection("config").doc("payment_accounts").set(merged, { merge: true }).catch(() => {});
+    }
+  } catch {}
 
   return merged;
 }

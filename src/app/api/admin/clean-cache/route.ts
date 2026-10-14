@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdminRequest } from "@/lib/adminAuth";
 import { cleanAppCacheAndJunk } from "@/lib/maintenanceCleaner";
+import { isSupabaseConfigured } from "@/lib/supabase";
 
 export async function POST(req: NextRequest) {
   if (!verifyAdminRequest(req)) {
@@ -34,9 +35,17 @@ export async function GET(req: NextRequest) {
     );
   }
 
+  const groqReady = Boolean(process.env.GROQ_API_KEY);
+  const supabaseReady = isSupabaseConfigured();
+
   return NextResponse.json({
     success: true,
-    status: "healthy",
+    status: groqReady ? "healthy" : "warning",
+    services: {
+      groq: groqReady ? "ready" : "unconfigured",
+      supabase: supabaseReady ? "ready" : "unconfigured",
+      storage: "ready",
+    },
     timestamp: new Date().toISOString(),
   });
 }
