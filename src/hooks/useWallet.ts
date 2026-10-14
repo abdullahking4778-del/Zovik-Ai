@@ -13,7 +13,7 @@ export interface WalletState {
     minPurchaseCoins: number;
     costPerMessage: number;
     costPerPhoto: number;
-    costPerVoice: number;
+    costPerVoice?: number;
     packages: any[];
   };
   loading: boolean;

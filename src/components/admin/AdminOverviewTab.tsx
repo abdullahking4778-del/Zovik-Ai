@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { CreditCard, Cpu, Activity, Users, MessageSquare, PhoneCall, Eye, Sparkles, Coins, Clock, Crown } from "lucide-react";
+import { CreditCard, Cpu, Activity, Users, MessageSquare, Eye, Sparkles, Coins, Clock, Crown } from "lucide-react";
 import { UserAccount, PaymentRequest } from "@/types";
 
 interface AdminOverviewTabProps {
@@ -7,7 +7,6 @@ interface AdminOverviewTabProps {
   payments: PaymentRequest[];
   totalRevenuePKR: number;
   handleApprovePayment?: (paymentId: string) => void;
-  onApprovePayment?: (paymentId: string) => void;
   getAuthHeaders?: () => Record<string, string>;
 }
 
@@ -16,9 +15,8 @@ export function AdminOverviewTab({
   payments,
   totalRevenuePKR,
   handleApprovePayment,
-  onApprovePayment,
 }: AdminOverviewTabProps) {
-  const approveAction = handleApprovePayment || onApprovePayment || (() => {});
+  const approveAction = handleApprovePayment || (() => {});
   const pendingPayments = payments.filter((p) => p.status === "pending");
   const totalCirculatingCoins = users.reduce((acc, u) => acc + (u.coins || 0), 0);
 
@@ -92,7 +90,7 @@ export function AdminOverviewTab({
     { id: 1, user: "guest_982", companion: "Aria Solis", time: "Just now", status: "typing..." },
     { id: 2, user: "ali_khan", companion: "Raven Steele", time: "1 min ago", status: "active" },
     { id: 3, user: "vip_user_4", companion: "Genevieve Claire", time: "3 mins ago", status: "photo sent" },
-    { id: 4, user: "john_doe", companion: "Roxie Stone", time: "5 mins ago", status: "voice call" },
+    { id: 4, user: "john_doe", companion: "Roxie Stone", time: "5 mins ago", status: "chatting" },
   ]);
 
   // Simulate real-time updates for the monitor
@@ -280,7 +278,7 @@ export function AdminOverviewTab({
                       <span>•</span>
                       <span className={
                         chat.status === 'typing...' ? 'text-amber-400 animate-pulse' :
-                        chat.status === 'voice call' ? 'text-emerald-400' :
+                        chat.status === 'chatting' ? 'text-emerald-400' :
                         'text-blue-400'
                       }>
                         {chat.status}
@@ -353,10 +351,10 @@ export function AdminOverviewTab({
               <strong className="text-emerald-400 font-mono">Turbo Photorealism</strong>
             </li>
             <li className="flex items-center justify-between p-2 rounded-xl bg-black/20 border border-white/5">
-              <span>Voice Engine:</span>
-              <strong className="text-emerald-400 flex items-center space-x-1">
-                <PhoneCall className="size-3" />
-                <span>Active (Pitch 1.25)</span>
+              <span>Companion Chat Engine:</span>
+              <strong className="text-emerald-400 flex items-center space-x-1 font-mono">
+                <MessageSquare className="size-3" />
+                <span>Stream Optimized</span>
               </strong>
             </li>
           </ul>

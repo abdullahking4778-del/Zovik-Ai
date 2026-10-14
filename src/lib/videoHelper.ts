@@ -1,7 +1,34 @@
-// Safe Video Stream & Blob URL Helper
-// Prevents download managers (like IDM) from intercepting video playback
-
+const MAX_BLOB_CACHE_SIZE = 8;
 const blobCache = new Map<string, string>();
+
+/**
+ * Revokes and deletes a specific blob URL from browser memory
+ */
+export function revokeVideoBlob(src: string): void {
+  if (!src) return;
+  const streamUrl = getSafeStreamUrl(src);
+  const blobUrl = blobCache.get(streamUrl);
+  if (blobUrl && typeof window !== "undefined" && window.URL) {
+    try {
+      URL.revokeObjectURL(blobUrl);
+    } catch {}
+    blobCache.delete(streamUrl);
+  }
+}
+
+/**
+ * Clears all cached video blobs and releases browser memory
+ */
+export function clearVideoBlobCache(): void {
+  if (typeof window !== "undefined" && window.URL) {
+    blobCache.forEach((blobUrl) => {
+      try {
+        URL.revokeObjectURL(blobUrl);
+      } catch {}
+    });
+  }
+  blobCache.clear();
+}
 
 /**
  * Converts a raw .mp4 file path or external CDN URL into a streaming API endpoint without .mp4 extension
@@ -37,6 +64,7 @@ export function getSafeStreamUrl(src: string): string {
 /**
  * Fetches the video stream into browser memory and returns a private blob: URL.
  * IDM and external downloaders CANNOT intercept blob: URLs because they are internal RAM references.
+ * Implements bounded LRU eviction to prevent memory leaks.
  */
 export async function fetchVideoBlobUrl(src: string): Promise<string> {
   if (!src) return "";
@@ -53,6 +81,21 @@ export async function fetchVideoBlobUrl(src: string): Promise<string> {
     if (!res.ok) return streamUrl;
     const blob = await res.blob();
     const blobUrl = URL.createObjectURL(blob);
+
+    // Evict oldest blob if cache exceeds limit
+    if (blobCache.size >= MAX_BLOB_CACHE_SIZE) {
+      const oldestKey = blobCache.keys().next().value;
+      if (oldestKey) {
+        const oldestBlob = blobCache.get(oldestKey);
+        if (oldestBlob && typeof window !== "undefined" && window.URL) {
+          try {
+            URL.revokeObjectURL(oldestBlob);
+          } catch {}
+        }
+        blobCache.delete(oldestKey);
+      }
+    }
+
     blobCache.set(streamUrl, blobUrl);
     return blobUrl;
   } catch {

@@ -41,7 +41,6 @@ export const AdminWalletTab: React.FC<AdminWalletTabProps> = ({ users }) => {
   const [minCoins, setMinCoins] = useState<number>(50);
   const [costChat, setCostChat] = useState<number>(1);
   const [costPhoto, setCostPhoto] = useState<number>(5);
-  const [costVoice, setCostVoice] = useState<number>(2);
   const [isSavingEconomy, setIsSavingEconomy] = useState(false);
   const [economyMsg, setEconomyMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
@@ -57,7 +56,6 @@ export const AdminWalletTab: React.FC<AdminWalletTabProps> = ({ users }) => {
           setMinCoins(data.economy.minPurchaseCoins || 50);
           setCostChat(data.economy.costPerMessage || 1);
           setCostPhoto(data.economy.costPerPhoto || 5);
-          setCostVoice(data.economy.costPerVoice || 2);
         }
       })
       .catch((err) => console.warn("[AdminWalletTab] Load economy note:", err));
@@ -168,7 +166,6 @@ export const AdminWalletTab: React.FC<AdminWalletTabProps> = ({ users }) => {
           minPurchaseCoins: Number(minCoins),
           costPerMessage: Number(costChat),
           costPerPhoto: Number(costPhoto),
-          costPerVoice: Number(costVoice),
         }),
       });
 
@@ -373,7 +370,7 @@ export const AdminWalletTab: React.FC<AdminWalletTabProps> = ({ users }) => {
               <label className="block text-xs font-extrabold text-amber-300 uppercase tracking-wider mb-2">
                 Action Deduction Costs (Per Use)
               </label>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <span className="text-[11px] text-white/60 block mb-1">Chat Msg</span>
                   <input
@@ -392,17 +389,6 @@ export const AdminWalletTab: React.FC<AdminWalletTabProps> = ({ users }) => {
                     min="0"
                     value={costPhoto}
                     onChange={(e) => setCostPhoto(Number(e.target.value))}
-                    className="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-white font-bold text-xs"
-                    required
-                  />
-                </div>
-                <div>
-                  <span className="text-[11px] text-white/60 block mb-1">Voice Note</span>
-                  <input
-                    type="number"
-                    min="0"
-                    value={costVoice}
-                    onChange={(e) => setCostVoice(Number(e.target.value))}
                     className="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-white font-bold text-xs"
                     required
                   />

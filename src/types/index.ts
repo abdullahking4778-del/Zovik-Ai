@@ -1,8 +1,7 @@
 export interface Message {
   sender: "ai" | "user";
   text?: string;
-  type?: "text" | "voice" | "image" | "video";
-  duration?: string;
+  type?: "text" | "image" | "video";
   imageUrl?: string;
   videoUrl?: string;
   time: string;

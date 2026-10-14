@@ -16,7 +16,7 @@ export interface EconomyConfig {
   minPurchaseCoins: number; // e.g. 50
   costPerMessage: number; // 1
   costPerPhoto: number; // 5
-  costPerVoice: number; // 2
+  costPerVoice?: number; // legacy optional
   welcomeBonusCoins: number; // 20
   packages: CoinPackage[];
 }
@@ -43,7 +43,7 @@ export const DEFAULT_PACKAGES: CoinPackage[] = [
     badge: "POPULAR 🔥",
     badgeColor: "orange",
     isPopular: true,
-    description: "200 Messages + 40 HD Photos + 100 Voice Notes",
+    description: "200 Messages + 40 HD Photos",
   },
   {
     id: "pack_1000",
