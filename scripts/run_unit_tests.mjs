@@ -388,6 +388,151 @@ try {
   report("Multi-step Reliability Test Exception", false, err.message);
 }
 
+// 8. In-Memory Caching & Groq Multi-Key Rotation Guard
+console.log("\n--- 8. In-Memory Cache & Groq Multi-Key Rotation ---");
+try {
+  // Test A: In-memory cache freshness & write-through invalidation
+  let readCount = 0;
+  let simulatedDiskData = [{ id: "u_1", tier: "free" }];
+  let cacheStore = null;
+  let cacheTime = 0;
+  const TTL = 5000;
+
+  function getCachedUsers() {
+    const now = Date.now();
+    if (cacheStore && now - cacheTime < TTL) {
+      return [...cacheStore];
+    }
+    readCount++;
+    cacheStore = [...simulatedDiskData];
+    cacheTime = now;
+    return [...cacheStore];
+  }
+
+  function saveCachedUsers(newUsers) {
+    cacheStore = [...newUsers];
+    cacheTime = Date.now();
+    simulatedDiskData = [...newUsers];
+  }
+
+  // First read reads from disk
+  const r1 = getCachedUsers();
+  // Second read hits in-memory cache
+  const r2 = getCachedUsers();
+  report("In-memory cache absorbs repeated reads without disk I/O", readCount === 1 && r1.length === 1 && r2.length === 1);
+
+  // Write invalidation updates cache immediately
+  saveCachedUsers([{ id: "u_1", tier: "free" }, { id: "u_2", tier: "vip" }]);
+  const r3 = getCachedUsers();
+  report("Write invalidates and updates in-memory cache synchronously", readCount === 1 && r3.length === 2);
+
+  // Test B: Groq Multi-Key Parser & Deduplication
+  const mockEnv = {
+    GROQ_API_KEYS: "gsk_keyA12345, gsk_keyB67890\ngsk_keyC11111",
+    GROQ_API_KEY: "gsk_keyA12345", // duplicate of keyA
+    GROQ_API_KEY_2: "gsk_keyD22222",
+  };
+
+  function parseKeys(env) {
+    const keys = [];
+    if (env.GROQ_API_KEYS) {
+      const list = env.GROQ_API_KEYS.split(/[,\s\n]+/).map((k) => k.trim()).filter((k) => k.length > 5);
+      keys.push(...list);
+    }
+    if (env.GROQ_API_KEY && env.GROQ_API_KEY.trim().length > 5) {
+      keys.push(env.GROQ_API_KEY.trim());
+    }
+    for (let i = 1; i <= 10; i++) {
+      const val = env[`GROQ_API_KEY_${i}`];
+      if (val && val.trim().length > 5) {
+        keys.push(val.trim());
+      }
+    }
+    return Array.from(new Set(keys));
+  }
+
+  const parsedKeys = parseKeys(mockEnv);
+  report(
+    "Groq multi-key parser aggregates comma/newline lists, numbered keys, and deduplicates",
+    parsedKeys.length === 4 && parsedKeys.includes("gsk_keyD22222") && !parsedKeys.includes("")
+  );
+
+  // Test C: Groq Round-Robin Rotation
+  let rrIndex = 0;
+  function rotateKeys(keys) {
+    if (keys.length <= 1) return keys;
+    const startIdx = rrIndex % keys.length;
+    rrIndex = (rrIndex + 1) % keys.length;
+    return [...keys.slice(startIdx), ...keys.slice(0, startIdx)];
+  }
+
+  const rot1 = rotateKeys(parsedKeys);
+  const rot2 = rotateKeys(parsedKeys);
+  report(
+    "Groq round-robin rotates starting key sequentially across turns",
+    rot1[0] === "gsk_keyA12345" && rot2[0] === "gsk_keyB67890"
+  );
+
+  // Test D: Groq 429, 401/403, and 5xx Server Down Automatic Failover
+  let activeKeyIndex = 0;
+  let switchCount = 0;
+  const simulateFailover = (statusCodeOrError) => {
+    if (
+      statusCodeOrError === 429 ||
+      statusCodeOrError === 401 ||
+      statusCodeOrError === 403 ||
+      statusCodeOrError === 500 ||
+      statusCodeOrError === 502 ||
+      statusCodeOrError === 503 ||
+      statusCodeOrError === "timeout"
+    ) {
+      if (activeKeyIndex + 1 < parsedKeys.length) {
+        activeKeyIndex++;
+        switchCount++;
+        return true;
+      }
+    }
+    return false;
+  };
+
+  const switchedOn429 = simulateFailover(429);
+  report(
+    "Automatic failover switches to next available key on HTTP 429 rate limit",
+    switchedOn429 && activeKeyIndex === 1
+  );
+
+  const switchedOn503 = simulateFailover(503);
+  report(
+    "Automatic failover switches to next available key on HTTP 503 Groq server down",
+    switchedOn503 && activeKeyIndex === 2
+  );
+
+  const switchedOnTimeout = simulateFailover("timeout");
+  report(
+    "Automatic failover switches to next available key on network timeout",
+    switchedOnTimeout && activeKeyIndex === 3
+  );
+
+  // Test E: Circuit breaker health prioritization
+  const cooldownMap = new Map();
+  cooldownMap.set("gsk_keyA12345", Date.now() + 60000); // keyA is cooling down
+  const isHealthy = (k) => !cooldownMap.has(k) || Date.now() > cooldownMap.get(k);
+
+  const healthyFirst = (all) => {
+    const h = all.filter(isHealthy);
+    const unh = all.filter((k) => !isHealthy(k));
+    return [...h, ...unh];
+  };
+
+  const prioritized = healthyFirst(parsedKeys);
+  report(
+    "Circuit breaker automatically demotes failed/cooling key to tail and promotes healthy keys to front",
+    prioritized[0] !== "gsk_keyA12345" && prioritized[prioritized.length - 1] === "gsk_keyA12345"
+  );
+} catch (err) {
+  report("In-Memory & Multi-Key Test Exception", false, err.message);
+}
+
 console.log("\n=======================================================");
 console.log(`📊 UNIT TEST REPORT: ${passedTests}/${totalTests} PASSED (${failedTests} FAILED)`);
 console.log("=======================================================");

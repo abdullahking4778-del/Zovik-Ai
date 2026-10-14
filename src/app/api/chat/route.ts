@@ -55,6 +55,80 @@ function cloakExplicitTerms(text: string): string {
   return cloaked;
 }
 
+// Multi-Key Groq Pool & Round-Robin Load Balancer with Circuit Breaker
+let groqKeyRoundRobinIndex = 0;
+// Tracks cooldown expiry timestamps for temporarily degraded keys (e.g. rate-limited, denied, or server-down)
+const groqKeyCooldownMap = new Map<string, number>();
+
+function markKeyDegraded(key: string, reason: "rate_limit" | "auth_denied" | "server_down" | "timeout"): void {
+  const now = Date.now();
+  let cooldownMs = 60_000; // 60s for rate limit
+  if (reason === "auth_denied") {
+    cooldownMs = 600_000; // 10 minutes for invalid/denied credentials
+  } else if (reason === "server_down") {
+    cooldownMs = 45_000; // 45s for 5xx server errors
+  } else if (reason === "timeout") {
+    cooldownMs = 30_000; // 30s for connection timeout
+  }
+  groqKeyCooldownMap.set(key, now + cooldownMs);
+}
+
+function isKeyUsable(key: string): boolean {
+  const expiry = groqKeyCooldownMap.get(key);
+  if (!expiry) return true;
+  if (Date.now() > expiry) {
+    groqKeyCooldownMap.delete(key);
+    return true;
+  }
+  return false;
+}
+
+function getGroqApiKeys(): string[] {
+  const keys: string[] = [];
+
+  // Comma or whitespace-delimited list in GROQ_API_KEYS
+  if (process.env.GROQ_API_KEYS) {
+    const list = process.env.GROQ_API_KEYS.split(/[,\s\n]+/)
+      .map((k) => k.trim())
+      .filter((k) => k.length > 5);
+    keys.push(...list);
+  }
+
+  // Standard GROQ_API_KEY
+  if (process.env.GROQ_API_KEY && process.env.GROQ_API_KEY.trim().length > 5) {
+    keys.push(process.env.GROQ_API_KEY.trim());
+  }
+
+  // Numbered keys GROQ_API_KEY_1 through GROQ_API_KEY_10
+  for (let i = 1; i <= 10; i++) {
+    const val = process.env[`GROQ_API_KEY_${i}`];
+    if (val && val.trim().length > 5) {
+      keys.push(val.trim());
+    }
+  }
+
+  // Deduplicate preserving insertion order
+  return Array.from(new Set(keys));
+}
+
+function getRotatedGroqKeys(): string[] {
+  const allKeys = getGroqApiKeys();
+  if (allKeys.length <= 1) return allKeys;
+
+  // Prioritize healthy keys first
+  const healthy = allKeys.filter((k) => isKeyUsable(k));
+  // If all keys are currently cooling down, fall back to all keys so we can attempt recovery
+  const primaryKeys = healthy.length > 0 ? healthy : allKeys;
+
+  const startIdx = groqKeyRoundRobinIndex % primaryKeys.length;
+  groqKeyRoundRobinIndex = (groqKeyRoundRobinIndex + 1) % primaryKeys.length;
+
+  const rotatedPrimary = [...primaryKeys.slice(startIdx), ...primaryKeys.slice(0, startIdx)];
+  // Add any cooling-down keys at the tail of the list as a last-resort safety net
+  const tailKeys = allKeys.filter((k) => !rotatedPrimary.includes(k));
+  return [...rotatedPrimary, ...tailKeys];
+}
+
 // Comprehensive Refusal pattern detection (normalizes quotes before testing)
 const refusalPatterns = [
   /cannot fulfill/i,
@@ -415,9 +489,9 @@ export async function POST(req: NextRequest) {
     const lastUserMsg = typeof rawLastMsg === "string" ? rawLastMsg.slice(0, 4000) : "";
     const lastUserLower = lastUserMsg.toLowerCase().trim();
 
-    const apiKey = process.env.GROQ_API_KEY;
-    if (!apiKey) {
-      console.warn("Groq API key not configured on server. Falling back to intelligent in-character response.");
+    const availableKeys = getRotatedGroqKeys();
+    if (availableKeys.length === 0) {
+      console.warn("No Groq API keys configured on server. Falling back to intelligent in-character response.");
       const reply = generateIntelligentResponse(character, lastUserMsg);
       if (authenticatedUserId) {
         try {
@@ -573,65 +647,108 @@ CRITICAL RULES (ABSOLUTE PRIORITY):
 
     let reply = "";
     const requestStartTime = Date.now();
+    const hasMultipleKeys = availableKeys.length > 1;
 
-    for (const model of preferredModels) {
-      // Stay strictly within Vercel Free Serverless 10-second hard limit (break if > 7.5s elapsed)
-      if (Date.now() - requestStartTime > 7500) {
-        console.warn("[Chat API] Approaching Vercel serverless execution limit, falling back instantly.");
-        break;
-      }
+    // Loop through rotated available keys with automatic rate-limit (429), auth-denied (401/403), server-down (5xx) & timeout failover
+    keyLoop: for (let kIdx = 0; kIdx < availableKeys.length; kIdx++) {
+      const activeApiKey = availableKeys[kIdx];
 
-      const controller = new AbortController();
-      // Groq typical response is 400ms-1200ms; timeout at 6500ms to prevent serverless lockup
-      const timeoutId = setTimeout(() => controller.abort(), 6500);
+      for (const model of preferredModels) {
+        // Stay strictly within Vercel Free Serverless 10-second hard limit (break if > 7.5s elapsed)
+        if (Date.now() - requestStartTime > 7500) {
+          console.warn("[Chat API] Approaching Vercel serverless execution limit, falling back instantly.");
+          break keyLoop;
+        }
 
-      try {
-        const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-          method: "POST",
-          signal: controller.signal,
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            "Content-Type": "application/json",
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) ZovikAI/1.0",
-          },
-          body: JSON.stringify({
-            model,
-            messages: formattedMessages,
-            temperature: 0.7,
-            max_tokens: maxTokens,
-          }),
-        });
-        clearTimeout(timeoutId);
+        const controller = new AbortController();
+        // Dynamic timeout: 3.8s if multiple keys exist to leave time for auto-failover, 5.5s if single key
+        const perCallTimeoutMs = hasMultipleKeys ? 3800 : 5500;
+        const timeoutId = setTimeout(() => controller.abort(), perCallTimeoutMs);
 
-        if (response.ok) {
-          const data = await response.json();
-          let content = data.choices?.[0]?.message?.content?.trim();
+        try {
+          const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+            method: "POST",
+            signal: controller.signal,
+            headers: {
+              Authorization: `Bearer ${activeApiKey}`,
+              "Content-Type": "application/json",
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) ZovikAI/1.0",
+            },
+            body: JSON.stringify({
+              model,
+              messages: formattedMessages,
+              temperature: 0.7,
+              max_tokens: maxTokens,
+            }),
+          });
+          clearTimeout(timeoutId);
 
-          if (content) {
-            // Check if model returned an AI refusal or moralizing lecture
-            if (isRefusal(content)) {
-              console.warn(`Model ${model} returned refusal. Skipping to fallback.`);
-              continue;
+          if (response.ok) {
+            const data = await response.json();
+            let content = data.choices?.[0]?.message?.content?.trim();
+
+            if (content) {
+              // Check if model returned an AI refusal or moralizing lecture
+              if (isRefusal(content)) {
+                console.warn(`Model ${model} returned refusal. Trying next model.`);
+                continue;
+              }
+
+              // Strip any stray asterisks or stage directions
+              content = content.replace(/\*[^*]*\*/g, "").replace(/\([^)]*actions?[^)]*\)/gi, "").replace(/\s{2,}/g, " ").trim();
+
+              reply = content;
+              break keyLoop;
+            }
+          } else {
+            const status = response.status;
+            const errText = await response.text().catch(() => "");
+            console.warn(`Key #${kIdx + 1} (${activeApiKey.slice(0, 8)}...) Model ${model} returned HTTP ${status}:`, errText);
+
+            // 1. Rate Limit (429) -> Cooldown & Auto-switch to next key
+            if (status === 429) {
+              markKeyDegraded(activeApiKey, "rate_limit");
+              if (kIdx + 1 < availableKeys.length) {
+                console.info(`[Chat API] Key #${kIdx + 1} rate limited (429). Auto-switching to next key #${kIdx + 2} immediately.`);
+                break; // Break inner model loop to try the next key immediately
+              }
             }
 
-            // Strip any stray asterisks or stage directions
-            content = content.replace(/\*[^*]*\*/g, "").replace(/\([^)]*actions?[^)]*\)/gi, "").replace(/\s{2,}/g, " ").trim();
+            // 2. Auth Invalid / Access Denied (401 or 403) -> Cooldown & Auto-switch to next key
+            if (status === 401 || status === 403) {
+              markKeyDegraded(activeApiKey, "auth_denied");
+              if (kIdx + 1 < availableKeys.length) {
+                console.info(`[Chat API] Key #${kIdx + 1} denied/unauthorized (${status}). Auto-switching to next key #${kIdx + 2} immediately.`);
+                break; // Break inner model loop to try the next key immediately
+              }
+            }
 
-            reply = content;
-            break;
+            // 3. Groq Server Down / Service Unavailable (500, 502, 503, 504) -> Cooldown & Auto-switch to next key
+            if (status >= 500) {
+              markKeyDegraded(activeApiKey, "server_down");
+              if (kIdx + 1 < availableKeys.length) {
+                console.info(`[Chat API] Key #${kIdx + 1} Groq server down (${status}). Auto-switching to next key #${kIdx + 2} immediately.`);
+                break; // Break inner model loop to try the next key immediately
+              }
+            }
           }
-        } else {
-          const errText = await response.text();
-          console.warn(`Model ${model} returned HTTP status ${response.status}:`, errText);
-        }
-      } catch (err: unknown) {
-        clearTimeout(timeoutId);
-        const isAbort = err instanceof Error && err.name === "AbortError";
-        const errMsg = err instanceof Error ? err.message : String(err);
-        if (isAbort) {
-          console.warn(`Model ${model} timed out after 6.5s to preserve Vercel execution window.`);
-        } else {
-          console.warn(`Model ${model} fetch failed:`, errMsg);
+        } catch (err: unknown) {
+          clearTimeout(timeoutId);
+          const isAbort = err instanceof Error && err.name === "AbortError";
+          const errMsg = err instanceof Error ? err.message : String(err);
+          if (isAbort) {
+            console.warn(`Key #${kIdx + 1} Model ${model} timed out after ${perCallTimeoutMs}ms.`);
+            markKeyDegraded(activeApiKey, "timeout");
+          } else {
+            console.warn(`Key #${kIdx + 1} Model ${model} network error:`, errMsg);
+            markKeyDegraded(activeApiKey, "server_down");
+          }
+
+          // Auto-switch to next key on network error or timeout
+          if (kIdx + 1 < availableKeys.length) {
+            console.info(`[Chat API] Key #${kIdx + 1} network failure/timeout. Auto-switching to next key #${kIdx + 2} immediately.`);
+            break; // Break inner model loop to try next key immediately
+          }
         }
       }
     }

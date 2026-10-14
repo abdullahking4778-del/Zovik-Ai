@@ -28,20 +28,45 @@ function getUsersFilePath(): string {
   return path.join(process.cwd(), ".data", "users.json");
 }
 
+let memoryCachedUsers: StoredUser[] | null = null;
+let lastCacheTimestamp = 0;
+const CACHE_TTL_MS = 5000; // 5 seconds in-memory TTL
+
+export function clearUserStoreCache(): void {
+  memoryCachedUsers = null;
+  lastCacheTimestamp = 0;
+}
+
 export function getAllStoredUsers(): StoredUser[] {
+  const now = Date.now();
+  if (memoryCachedUsers && now - lastCacheTimestamp < CACHE_TTL_MS) {
+    return [...memoryCachedUsers];
+  }
+
   try {
     const filePath = getUsersFilePath();
-    if (!fs.existsSync(filePath)) return [];
+    if (!fs.existsSync(filePath)) {
+      memoryCachedUsers = [];
+      lastCacheTimestamp = now;
+      return [];
+    }
     const raw = fs.readFileSync(filePath, "utf-8");
     const parsed = JSON.parse(raw || "[]");
-    return Array.isArray(parsed) ? parsed : [];
+    const users = Array.isArray(parsed) ? parsed : [];
+    memoryCachedUsers = users;
+    lastCacheTimestamp = now;
+    return [...users];
   } catch (err) {
     console.warn("[UserStore] Error reading users file:", err);
-    return [];
+    return memoryCachedUsers ? [...memoryCachedUsers] : [];
   }
 }
 
 export function saveAllStoredUsers(users: StoredUser[]): void {
+  // Update cache immediately on write so subsequent calls have zero-latency fresh data
+  memoryCachedUsers = [...users];
+  lastCacheTimestamp = Date.now();
+
   const filePath = getUsersFilePath();
   const tmpPath = `${filePath}.${Date.now()}.${crypto.randomUUID()}.tmp`;
   try {

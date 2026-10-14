@@ -35,7 +35,12 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const groqReady = Boolean(process.env.GROQ_API_KEY);
+  const groqReady = Boolean(
+    process.env.GROQ_API_KEY ||
+    process.env.GROQ_API_KEYS ||
+    process.env.GROQ_API_KEY_1 ||
+    process.env.GROQ_API_KEY_2
+  );
   const supabaseReady = isSupabaseConfigured();
 
   return NextResponse.json({

@@ -28,8 +28,10 @@ Vercel ke **Project Settings -> Environment Variables** me yeh zaroori keys add 
 
 | Variable Name | Description | Example / Required Value |
 | :--- | :--- | :--- |
-| `GROQ_API_KEY` | Groq Cloud AI Engine API Key | `gsk_...` |
-| `GROQ_MODEL` | Primary AI LLM Model | `qwen/qwen3.8-27b` |
+| `GROQ_API_KEY` | Groq Cloud AI Engine Primary API Key | `gsk_...` |
+| `GROQ_API_KEYS` | *(Optional)* Multiple Groq Keys (Comma-separated for auto-rotation & 429 failover) | `gsk_key1,gsk_key2,gsk_key3` |
+| `GROQ_API_KEY_2`, `_3` | *(Optional)* Additional backup keys (Auto-rotated round-robin) | `gsk_...` |
+| `GROQ_MODEL` | Primary AI LLM Model | `llama3-70b-8192` |
 | `GROQ_FALLBACK_MODEL` | Fallback AI LLM Model | `openai/gpt-oss-120b` |
 | `ADMIN_PASSWORD` | Owner Control Room Master Password | `#Abdullah786099#` |
 | `ADMIN_JWT_SECRET` | 32+ char Cryptographic Secret for Admin JWT | `zovik_admin_sec_8a7f9c2d1e4b5678_hash_key_99` |
