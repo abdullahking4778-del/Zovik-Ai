@@ -409,3 +409,10 @@ export async function recordOfferRedemption(rawCode: string, userEmail: string =
 
   return true;
 }
+
+/**
+ * Retrieves all stored redemption records
+ */
+export async function getRedemptionRecords(): Promise<RedemptionRecord[]> {
+  return safeReadJsonFile<RedemptionRecord[]>(getRedemptionsStoragePath(), []);
+}

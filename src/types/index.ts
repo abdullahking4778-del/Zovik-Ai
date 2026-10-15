@@ -330,6 +330,124 @@ export interface PromoModalConfig {
   updatedAt: string;
 }
 
+// ============================================================================
+// PHASE 4: INTELLIGENCE, ANALYTICS, CONTENT CALENDAR & A/B EXPERIMENTS
+// ============================================================================
+
+export interface TopCompanionMetric {
+  id: string;
+  name: string;
+  image: string;
+  category: string;
+  gender: string;
+  chatCount: number;
+  messageCount: number;
+  likesCount: number;
+  engagementScore: number;
+  tagline: string;
+  isVipOnly?: boolean;
+}
+
+export interface PromoROIMetric {
+  code: string;
+  title: string;
+  discount: string;
+  discountType: DiscountType;
+  redemptionsCount: number;
+  estimatedDiscountPKR: number;
+  estimatedRevenuePKR: number;
+  isActive: boolean;
+}
+
+export interface UserCohortMetric {
+  id: "new_users" | "vip_subscribers" | "power_users" | "inactive_users" | "general_users";
+  name: string;
+  description: string;
+  count: number;
+  percentage: number;
+  badge: string;
+  accentColor: string;
+  recommendedAction: string;
+}
+
+export interface AnalyticsOverview {
+  revenue: {
+    totalApprovedPKR: number;
+    totalApprovedUSD: number;
+    pendingCount: number;
+    approvedCount: number;
+    last7DaysPKR: number;
+    last30DaysPKR: number;
+  };
+  activity: {
+    estimatedActiveUsers: number;
+    totalRegisteredUsers: number;
+    totalChatMessages: number;
+    totalCharacters: number;
+    coinsInCirculation: number;
+    coinsBurned24h: number;
+    avgSessionMinutes: number;
+  };
+  topCompanions: TopCompanionMetric[];
+  promoROI: PromoROIMetric[];
+  userCohorts: UserCohortMetric[];
+  systemHealth: {
+    groqPoolKeysCount: number;
+    supabaseStatus: "connected" | "fallback_local";
+    firebaseStatus: "connected" | "degraded";
+    memoryCacheActive: boolean;
+    timestamp: string;
+  };
+}
+
+export type CalendarItemType = "event" | "offer" | "drop";
+
+export interface ContentCalendarItem {
+  id: string;
+  title: string;
+  subtitle?: string;
+  type: CalendarItemType;
+  startDate: string; // ISO
+  endDate: string; // ISO
+  status: "live" | "scheduled" | "ended" | "draft";
+  badge?: string;
+  color: string;
+  description?: string;
+  linkUrl?: string;
+  metadata?: Record<string, any>;
+}
+
+export interface CalendarConflict {
+  id: string;
+  itemA: ContentCalendarItem;
+  itemB: ContentCalendarItem;
+  reason: string;
+  severity: "warning" | "high";
+  recommendation: string;
+}
+
+export interface ABVariant {
+  id: "A" | "B";
+  label: string;
+  value: string;
+  impressions: number;
+  conversions: number;
+}
+
+export interface ABExperimentConfig {
+  id: string;
+  name: string;
+  description: string;
+  metric: string;
+  variantA: ABVariant;
+  variantB: ABVariant;
+  status: "running" | "paused" | "completed";
+  winner?: "A" | "B" | "none";
+  createdAt: string;
+  updatedAt: string;
+}
+
+
 
 
 

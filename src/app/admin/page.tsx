@@ -23,8 +23,10 @@ import {
   ChevronUp,
   LayoutGrid,
   Calendar,
+  CalendarDays,
   Sliders,
   Bell,
+  TrendingUp,
 } from "lucide-react";
 import { Character, ShortReel, PaymentRequest, UserAccount, PricingPlan, AppEvent, FeatureFlag, Offer } from "@/types";
 import { AdminOverviewTab } from "@/components/admin/AdminOverviewTab";
@@ -40,6 +42,8 @@ import { AdminEventsTab } from "@/components/admin/AdminEventsTab";
 import { AdminFeatureFlagsTab } from "@/components/admin/AdminFeatureFlagsTab";
 import { AdminOffersTab } from "@/components/admin/AdminOffersTab";
 import { AdminEngagementTab } from "@/components/admin/AdminEngagementTab";
+import AdminAnalyticsTab from "@/components/admin/AdminAnalyticsTab";
+import AdminCalendarTab from "@/components/admin/AdminCalendarTab";
 
 export default function AdminPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -62,8 +66,11 @@ export default function AdminPage() {
     | "events"
     | "flags"
     | "engagement"
+    | "intelligence"
+    | "calendar"
   >("overview");
   const [activeFolder, setActiveFolder] = useState<"all" | "finance" | "content" | "platform">("all");
+
   const [isFolderBarFolded, setIsFolderBarFolded] = useState(false);
 
   // Admin Data State
@@ -537,10 +544,12 @@ export default function AdminPage() {
           const activeOffersCount = offers.filter((o) => o.isActive).length;
           const allTabs = [
             { id: "overview", label: "Overview & Metrics", icon: Flame, folder: "finance" },
+            { id: "intelligence", label: "Intelligence & Analytics 📊", icon: TrendingUp, folder: "finance" },
             { id: "wallet", label: "Coins & Wallet 🪙", icon: Coins, folder: "finance" },
             { id: "subscriptions", label: `Payments (${pendingCount})`, icon: CreditCard, folder: "finance", badge: pendingCount },
             { id: "plans", label: "Coin Packages & Rates 🪙", icon: Tag, folder: "finance" },
             { id: "offers", label: `Promo Codes & Deals (${activeOffersCount}) 🎁`, icon: Tag, folder: "finance", badge: activeOffersCount },
+            { id: "calendar", label: "Content Calendar 🗓️", icon: CalendarDays, folder: "content" },
             { id: "events", label: `Events & Drops (${events.length}) 🎪`, icon: Calendar, folder: "content", badge: liveEventsCount },
             { id: "companions", label: `Companions (${characters.length})`, icon: Sparkles, folder: "content" },
             { id: "galleries", label: "Photo Sequence & Re-Order 📸", icon: Camera, folder: "content" },
@@ -777,6 +786,16 @@ export default function AdminPage() {
             onRefreshCharacters={fetchAdminData}
             getAuthHeaders={getAuthHeaders}
           />
+        )}
+
+        {/* TAB 12: INTELLIGENCE & TELEMETRY ANALYTICS (Phase 4) */}
+        {activeTab === "intelligence" && (
+          <AdminAnalyticsTab onNavigateToTab={(tabId) => setActiveTab(tabId as any)} />
+        )}
+
+        {/* TAB 13: VISUAL CONTENT CALENDAR (Phase 4) */}
+        {activeTab === "calendar" && (
+          <AdminCalendarTab onNavigateToTab={(tabId) => setActiveTab(tabId as any)} />
         )}
       </div>
     </div>
