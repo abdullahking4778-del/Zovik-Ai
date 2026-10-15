@@ -19,6 +19,8 @@ import ShortsModal from "@/components/ShortsModal";
 import PwaInstallModal from "@/components/PwaInstallModal";
 import UserProfileModal from "@/components/UserProfileModal";
 import CompanionToast from "@/components/CompanionToast";
+import SmartBanner from "@/components/SmartBanner";
+import PromoModalPopup from "@/components/PromoModalPopup";
 import rawCharacters from "@/data/characters.json";
 import { Character, Message, SavedPhoto } from "@/types";
 import Image from "next/image";
@@ -584,6 +586,9 @@ export default function Home() {
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 pb-20 lg:pb-8">
+        {/* Phase 3: Smart Live Banner with Countdown Ticker */}
+        <SmartBanner />
+
         {/* Top Sticky Header */}
         <Header
           genderFilter={genderFilter}
@@ -1277,6 +1282,9 @@ export default function Home() {
           }
         }}
       />
+
+      {/* Phase 3: High Conversion Promo Modal Popup */}
+      <PromoModalPopup />
     </div>
   );
 }

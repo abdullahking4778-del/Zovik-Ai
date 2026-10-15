@@ -17,10 +17,12 @@ import {
   Flame,
   Star,
   Info,
+  Tag,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useWallet, notifyWalletUpdated } from "@/hooks/useWallet";
 import { calculateCoins } from "@/lib/wallet/economyConfig";
+import { OfferValidationResult } from "@/types";
 
 interface CoinStoreModalProps {
   isOpen: boolean;
@@ -91,6 +93,12 @@ export default function CoinStoreModal({ isOpen, onClose }: CoinStoreModalProps)
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
 
+  // Promo Code & Live Pricing State (Phase 2)
+  const [promoCodeInput, setPromoCodeInput] = useState("");
+  const [appliedPromo, setAppliedPromo] = useState<OfferValidationResult | null>(null);
+  const [isValidatingPromo, setIsValidatingPromo] = useState(false);
+  const [promoError, setPromoError] = useState<string | null>(null);
+
   // Live fetch payment receiving accounts from server
   useEffect(() => {
     if (!isOpen) return;
@@ -152,6 +160,13 @@ export default function CoinStoreModal({ isOpen, onClose }: CoinStoreModalProps)
     activePriceUSDT = Number((matched.pricePKR / usdtRate).toFixed(2));
   }
 
+  // Phase 2: Live Pricing Engine & Promo Code Calculations
+  const finalPricePKR = appliedPromo?.valid && appliedPromo.offer ? appliedPromo.offer.finalPricePKR : activePricePKR;
+  const finalPriceUSDT = appliedPromo?.valid && appliedPromo.offer ? appliedPromo.offer.finalPriceUSD : activePriceUSDT;
+  const finalTotalCoins = appliedPromo?.valid && appliedPromo.offer?.bonusCoins
+    ? activeTotal + appliedPromo.offer.bonusCoins
+    : activeTotal;
+
   // Handle Slip Upload
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -187,6 +202,48 @@ export default function CoinStoreModal({ isOpen, onClose }: CoinStoreModalProps)
     setTimeout(() => setCopiedAccount(false), 2000);
   };
 
+  // Phase 2: Promo Code Validation
+  const handleApplyPromo = async () => {
+    const code = promoCodeInput.trim().toUpperCase();
+    if (!code) {
+      setPromoError("Please enter a promo code");
+      return;
+    }
+    setIsValidatingPromo(true);
+    setPromoError(null);
+    try {
+      const emailToUse = userEmail.trim() || user?.email || "";
+      const res = await fetch("/api/offers/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code,
+          amountPKR: activePricePKR,
+          userEmail: emailToUse,
+          isVip: (user as any)?.isVip || false,
+        }),
+      });
+      const data: OfferValidationResult = await res.json();
+      if (res.ok && data.valid) {
+        setAppliedPromo(data);
+        setPromoError(null);
+      } else {
+        setAppliedPromo(null);
+        setPromoError(data.error || "Invalid or expired promo code");
+      }
+    } catch {
+      setPromoError("Could not validate promo code. Please check your connection.");
+    } finally {
+      setIsValidatingPromo(false);
+    }
+  };
+
+  const handleRemovePromo = () => {
+    setAppliedPromo(null);
+    setPromoCodeInput("");
+    setPromoError(null);
+  };
+
   // Submit Payment
   const handleSubmitPayment = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -213,14 +270,15 @@ export default function CoinStoreModal({ isOpen, onClose }: CoinStoreModalProps)
           userId: user?.uid || "",
           userEmail: emailToUse,
           plan: selectedPackId,
-          planName: `${activeTotal.toLocaleString()} Coins Pack`,
-          coins: activeTotal,
+          planName: `${finalTotalCoins.toLocaleString()} Coins Pack`,
+          coins: finalTotalCoins,
           currency,
-          amount: currency === "PKR" ? activePricePKR : activePriceUSDT,
+          amount: currency === "PKR" ? finalPricePKR : finalPriceUSDT,
           method: activeMethod.name,
           trxId: trxId.trim(),
           senderName: senderName.trim(),
           screenshot: screenshotData,
+          promoCode: appliedPromo?.offer?.code || undefined,
         }),
       });
 
@@ -482,17 +540,88 @@ export default function CoinStoreModal({ isOpen, onClose }: CoinStoreModalProps)
             ) : (
               /* Checkout Form */
               <form onSubmit={handleSubmitPayment} className="space-y-5">
-                {/* Order Summary Pill */}
-                <div className="flex items-center justify-between p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30">
-                  <div>
-                    <span className="text-[10px] text-amber-300 font-black uppercase tracking-wider block">Selected Package</span>
-                    <h4 className="text-base font-black text-white">🪙 {activeTotal.toLocaleString()} Coins</h4>
+                {/* Order Summary Pill with Live Pricing & Promo Details */}
+                <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-[10px] text-amber-300 font-black uppercase tracking-wider block">Selected Package</span>
+                      <h4 className="text-base font-black text-white flex items-center space-x-1.5">
+                        <span>🪙 {finalTotalCoins.toLocaleString()} Coins</span>
+                        {appliedPromo?.offer?.bonusCoins ? (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-mono font-bold">
+                            +{appliedPromo.offer.bonusCoins} Bonus
+                          </span>
+                        ) : null}
+                      </h4>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[10px] text-white/40 block">Amount to Pay</span>
+                      <div className="flex items-baseline space-x-1.5 justify-end">
+                        {appliedPromo?.valid && (appliedPromo.offer?.discountAmountPKR || 0) > 0 && (
+                          <span className="text-xs text-white/40 line-through">
+                            {currency === "PKR" ? `Rs. ${activePricePKR.toLocaleString()}` : `$${activePriceUSDT}`}
+                          </span>
+                        )}
+                        <span className="text-lg font-black text-amber-400">
+                          {currency === "PKR" ? `Rs. ${finalPricePKR.toLocaleString()}` : `$${finalPriceUSDT} USDT`}
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <span className="text-[10px] text-white/40 block">Amount to Pay</span>
-                    <span className="text-lg font-black text-amber-400">
-                      {currency === "PKR" ? `Rs. ${activePricePKR.toLocaleString()}` : `$${activePriceUSDT} USDT`}
-                    </span>
+
+                  {/* Promo Code Input / Applied Badge (Phase 2) */}
+                  <div className="pt-2.5 border-t border-amber-500/20">
+                    {appliedPromo?.valid ? (
+                      <div className="flex items-center justify-between bg-emerald-500/15 border border-emerald-500/30 rounded-xl px-3 py-2 text-xs">
+                        <div className="flex items-center space-x-2">
+                          <Tag className="size-3.5 text-emerald-400 shrink-0" />
+                          <div>
+                            <span className="font-black text-emerald-400 font-mono">{appliedPromo.offer?.code}</span>
+                            <span className="text-emerald-200/80 text-[11px] ml-1.5">
+                              ({appliedPromo.offer?.title})
+                            </span>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleRemovePromo}
+                          className="text-[11px] text-red-300 hover:text-red-200 underline font-semibold ml-2 cursor-pointer"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="space-y-1">
+                        <div className="flex items-center space-x-2">
+                          <div className="relative flex-1">
+                            <Tag className="absolute left-3 top-2.5 size-3.5 text-white/40" />
+                            <input
+                              type="text"
+                              value={promoCodeInput}
+                              onChange={(e) => {
+                                setPromoCodeInput(e.target.value.toUpperCase());
+                                setPromoError(null);
+                              }}
+                              placeholder="Promo Code (e.g. WELCOME50)"
+                              className="w-full pl-8 pr-3 py-1.5 rounded-xl bg-black/40 border border-white/10 text-white text-xs font-mono uppercase focus:outline-none focus:border-amber-400 placeholder:normal-case placeholder:text-white/30"
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleApplyPromo}
+                            disabled={isValidatingPromo || !promoCodeInput.trim()}
+                            className="px-4 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 text-xs font-bold transition-all disabled:opacity-40 cursor-pointer"
+                          >
+                            {isValidatingPromo ? "Checking..." : "Apply"}
+                          </button>
+                        </div>
+                        {promoError && (
+                          <p className="text-[11px] text-rose-400 font-medium pl-1">
+                            ⚠️ {promoError}
+                          </p>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
 

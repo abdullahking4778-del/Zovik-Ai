@@ -22,8 +22,11 @@ import {
   ChevronDown,
   ChevronUp,
   LayoutGrid,
+  Calendar,
+  Sliders,
+  Bell,
 } from "lucide-react";
-import { Character, ShortReel, PaymentRequest, UserAccount, PricingPlan } from "@/types";
+import { Character, ShortReel, PaymentRequest, UserAccount, PricingPlan, AppEvent, FeatureFlag, Offer } from "@/types";
 import { AdminOverviewTab } from "@/components/admin/AdminOverviewTab";
 import { AdminSubscriptionsTab } from "@/components/admin/AdminSubscriptionsTab";
 import { AdminPlansTab } from "@/components/admin/AdminPlansTab";
@@ -33,6 +36,10 @@ import { AdminCompanionsTab } from "@/components/admin/AdminCompanionsTab";
 import { AdminGalleriesTab } from "@/components/admin/AdminGalleriesTab";
 import { AdminShortsTab } from "@/components/admin/AdminShortsTab";
 import { AdminWalletTab } from "@/components/admin/AdminWalletTab";
+import { AdminEventsTab } from "@/components/admin/AdminEventsTab";
+import { AdminFeatureFlagsTab } from "@/components/admin/AdminFeatureFlagsTab";
+import { AdminOffersTab } from "@/components/admin/AdminOffersTab";
+import { AdminEngagementTab } from "@/components/admin/AdminEngagementTab";
 
 export default function AdminPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -42,7 +49,19 @@ export default function AdminPage() {
 
   // Active Admin Tab
   const [activeTab, setActiveTab] = useState<
-    "overview" | "companions" | "galleries" | "users" | "subscriptions" | "plans" | "shorts" | "settings" | "wallet"
+    | "overview"
+    | "companions"
+    | "galleries"
+    | "users"
+    | "subscriptions"
+    | "plans"
+    | "offers"
+    | "shorts"
+    | "settings"
+    | "wallet"
+    | "events"
+    | "flags"
+    | "engagement"
   >("overview");
   const [activeFolder, setActiveFolder] = useState<"all" | "finance" | "content" | "platform">("all");
   const [isFolderBarFolded, setIsFolderBarFolded] = useState(false);
@@ -54,6 +73,9 @@ export default function AdminPage() {
   const [payments, setPayments] = useState<PaymentRequest[]>([]);
   const [plans, setPlans] = useState<PricingPlan[]>([]);
   const [shorts, setShorts] = useState<ShortReel[]>([]);
+  const [events, setEvents] = useState<AppEvent[]>([]);
+  const [featureFlags, setFeatureFlags] = useState<FeatureFlag[]>([]);
+  const [offers, setOffers] = useState<Offer[]>([]);
   const [loadingData, setLoadingData] = useState(false);
   const [previewSlip, setPreviewSlip] = useState<string | null>(null);
 
@@ -223,6 +245,33 @@ export default function AdminPage() {
         const sData = await sRes.json();
         if (Array.isArray(sData.shorts)) {
           setShorts(sData.shorts);
+        }
+      }
+
+      // 6. Fetch Events & Calendar
+      const eRes = await fetch("/api/admin/events", { headers, cache: "no-store" });
+      if (eRes.ok) {
+        const eData = await eRes.json();
+        if (Array.isArray(eData.events)) {
+          setEvents(eData.events);
+        }
+      }
+
+      // 7. Fetch Feature Flags
+      const fRes = await fetch("/api/admin/feature-flags", { headers, cache: "no-store" });
+      if (fRes.ok) {
+        const fData = await fRes.json();
+        if (Array.isArray(fData.flags)) {
+          setFeatureFlags(fData.flags);
+        }
+      }
+
+      // 8. Fetch Promo Codes & Offers (Phase 2)
+      const oRes = await fetch("/api/admin/offers", { headers, cache: "no-store" });
+      if (oRes.ok) {
+        const oData = await oRes.json();
+        if (Array.isArray(oData.offers)) {
+          setOffers(oData.offers);
         }
       }
     } catch (e) {
@@ -484,14 +533,20 @@ export default function AdminPage() {
         {/* Folders & Categories Bar (Foldable & Clean) */}
         {(() => {
           const pendingCount = payments.filter((p) => p.status === "pending").length;
+          const liveEventsCount = events.filter((e) => e.status === "live").length;
+          const activeOffersCount = offers.filter((o) => o.isActive).length;
           const allTabs = [
             { id: "overview", label: "Overview & Metrics", icon: Flame, folder: "finance" },
             { id: "wallet", label: "Coins & Wallet 🪙", icon: Coins, folder: "finance" },
             { id: "subscriptions", label: `Payments (${pendingCount})`, icon: CreditCard, folder: "finance", badge: pendingCount },
             { id: "plans", label: "Coin Packages & Rates 🪙", icon: Tag, folder: "finance" },
+            { id: "offers", label: `Promo Codes & Deals (${activeOffersCount}) 🎁`, icon: Tag, folder: "finance", badge: activeOffersCount },
+            { id: "events", label: `Events & Drops (${events.length}) 🎪`, icon: Calendar, folder: "content", badge: liveEventsCount },
             { id: "companions", label: `Companions (${characters.length})`, icon: Sparkles, folder: "content" },
             { id: "galleries", label: "Photo Sequence & Re-Order 📸", icon: Camera, folder: "content" },
             { id: "shorts", label: `Shorts Reels (${shorts.length})`, icon: Film, folder: "content" },
+            { id: "engagement", label: "Engagement & Alerts 🔔", icon: Bell, folder: "content" },
+            { id: "flags", label: "Feature Flags 🛡️", icon: Sliders, folder: "platform" },
             { id: "users", label: `Users (${users.length})`, icon: Users, folder: "platform" },
             { id: "settings", label: "Settings & Accounts ⚙️", icon: Cpu, folder: "platform" },
           ];
@@ -587,6 +642,8 @@ export default function AdminPage() {
             totalRevenuePKR={totalRevenuePKR}
             payments={payments}
             handleApprovePayment={handleApprovePayment}
+            events={events}
+            featureFlags={featureFlags}
           />
         )}
 
@@ -659,6 +716,15 @@ export default function AdminPage() {
           />
         )}
 
+        {/* TAB: PROMO CODES & OFFERS (Phase 2) */}
+        {activeTab === "offers" && (
+          <AdminOffersTab
+            offers={offers}
+            onRefresh={fetchAdminData}
+            getAuthHeaders={getAuthHeaders}
+          />
+        )}
+
         {/* TAB 7: USERS */}
         {activeTab === "users" && (
           <AdminUsersTab
@@ -683,6 +749,33 @@ export default function AdminPage() {
             setConfirmMasterPassword={setConfirmMasterPassword}
             isUpdatingPassword={isUpdatingPassword}
             handleChangePassword={handleChangePassword}
+          />
+        )}
+
+        {/* TAB 9: EVENTS & SEASONAL DROPS */}
+        {activeTab === "events" && (
+          <AdminEventsTab
+            events={events}
+            onRefresh={fetchAdminData}
+            getAuthHeaders={getAuthHeaders}
+          />
+        )}
+
+        {/* TAB 10: FEATURE FLAGS & KILL SWITCHES */}
+        {activeTab === "flags" && (
+          <AdminFeatureFlagsTab
+            flags={featureFlags}
+            onRefresh={fetchAdminData}
+            getAuthHeaders={getAuthHeaders}
+          />
+        )}
+
+        {/* TAB 11: ENGAGEMENT & RETENTION ENGINE (Phase 3) */}
+        {activeTab === "engagement" && (
+          <AdminEngagementTab
+            characters={characters}
+            onRefreshCharacters={fetchAdminData}
+            getAuthHeaders={getAuthHeaders}
           />
         )}
       </div>

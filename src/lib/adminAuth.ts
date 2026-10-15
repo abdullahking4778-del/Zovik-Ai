@@ -536,8 +536,8 @@ export function verifyAdminRequest(req: NextRequest): boolean {
   // 2. Check HttpOnly cookie
   if (!isAuthorized) {
     const cookieSession =
-      req.cookies.get("zovik_admin_session")?.value ||
-      req.cookies.get("zovik_admin_token")?.value;
+      req.cookies?.get?.("zovik_admin_session")?.value ||
+      req.cookies?.get?.("zovik_admin_token")?.value;
 
     if (cookieSession && verifyAdminToken(cookieSession)) {
       isAuthorized = true;

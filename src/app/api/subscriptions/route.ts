@@ -16,6 +16,7 @@ import {
 import { getPersistentPlans } from "@/lib/plansStore";
 import { PaymentRequest } from "@/types";
 import { creditUserWallet } from "@/lib/wallet/walletService";
+import { recordOfferRedemption } from "@/lib/offersStore";
 
 interface PaymentSubmissionPayload {
   userId?: string;
@@ -29,6 +30,7 @@ interface PaymentSubmissionPayload {
   trxId: string;
   senderName?: string;
   screenshot?: string;
+  promoCode?: string;
 }
 
 // GET /api/subscriptions -> Get all payment requests (Admin protected)
@@ -123,15 +125,25 @@ export async function POST(req: NextRequest) {
       senderName: senderName ? String(senderName).trim() : "Customer",
       screenshot: screenshotUrl,
       status: "pending",
+      promoCode: body.promoCode ? String(body.promoCode).trim().toUpperCase() : undefined,
       createdAt: new Date().toISOString(),
     };
 
     await savePersistentPayment(newRequest);
 
+    if (body.promoCode) {
+      try {
+        await recordOfferRedemption(body.promoCode, userEmail);
+      } catch (rErr) {
+        console.warn("[Subscriptions] Promo code redemption tracking note:", rErr);
+      }
+    }
+
     return NextResponse.json({
       success: true,
       message: "Payment submitted successfully. Your request is now under review.",
       request: newRequest,
+      payment: newRequest,
     });
   } catch (err: unknown) {
     console.error("[Subscriptions POST Error]:", err);

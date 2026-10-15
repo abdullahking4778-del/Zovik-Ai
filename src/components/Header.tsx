@@ -8,6 +8,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useWallet } from "@/hooks/useWallet";
 import { getCurrentLanguage, setLanguage, getT, LanguageCode } from "@/lib/translations";
 import { sendCompanionNotification } from "@/lib/notificationHelper";
+import NotificationBell from "@/components/NotificationBell";
 
 interface HeaderProps {
   genderFilter: "female" | "male" | "anime";
@@ -192,19 +193,8 @@ export default function Header({
             )}
           </div>
 
-          {/* Option 3: Companion Intimate Alert Bell Trigger */}
-          <button
-            onClick={handleTriggerCompanionNotification}
-            className={`relative size-8 rounded-xl border flex items-center justify-center transition-all active:scale-95 ${
-              notifSent
-                ? "bg-pink-500/20 border-[#f53b70] text-[#f53b70]"
-                : "bg-white/5 hover:bg-white/10 border-white/10 text-[#aeaeae] hover:text-white"
-            }`}
-            title="Companion Intimate Alerts / ساتھی الرٹ"
-          >
-            <Bell className="size-3.5" />
-            <span className="absolute top-1 right-1 size-2 rounded-full bg-[#f53b70] animate-ping" />
-          </button>
+          {/* Option 3: Real-Time In-App Notification Bell & Inbox (Phase 3) */}
+          <NotificationBell />
 
           {/* Get App PWA Button */}
           <button

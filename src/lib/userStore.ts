@@ -19,6 +19,7 @@ export interface StoredUser {
   storageRetentionDays: number;
   createdAt: string;
   lastLoginAt?: string | null;
+  coins?: number;
 }
 
 function getUsersFilePath(): string {

@@ -3,15 +3,17 @@
 import React, { useState, useEffect } from "react";
 import { Sparkles, X, ChevronRight } from "lucide-react";
 import { useRouter, usePathname } from "next/navigation";
-import { AnnouncementConfig } from "@/types";
+import { AnnouncementConfig, AppEvent } from "@/types";
 
 export function AnnouncementBar() {
   const [config, setConfig] = useState<AnnouncementConfig | null>(null);
+  const [liveEvent, setLiveEvent] = useState<AppEvent | null>(null);
   const [dismissed, setDismissed] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
 
-  const fetchAnnouncement = () => {
+  const fetchAnnouncementAndEvents = () => {
+    // 1. Fetch Announcement
     fetch("/api/announcement", { cache: "no-store" })
       .then((res) => res.json())
       .then((data) => {
@@ -20,43 +22,46 @@ export function AnnouncementBar() {
         }
       })
       .catch(() => {});
+
+    // 2. Fetch Live Events
+    fetch("/api/events", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.events) && data.events.length > 0) {
+          setLiveEvent(data.events[0]);
+        } else {
+          setLiveEvent(null);
+        }
+      })
+      .catch(() => {});
   };
 
   useEffect(() => {
-    // Clean up any old persistent dismissal blockers from previous sessions
     try {
       sessionStorage.removeItem("zovik_announcement_dismissed");
       localStorage.removeItem("zovik_announcement_dismissed");
     } catch {}
 
-    // Fetch initial live announcement
-    fetchAnnouncement();
+    fetchAnnouncementAndEvents();
 
-    // Listen for live updates from admin panel or other tabs
-    const handleAnnouncementUpdated = () => {
-      setDismissed(false); // Reset dismissal on any new admin update
-      fetchAnnouncement();
+    const handleUpdated = () => {
+      setDismissed(false);
+      fetchAnnouncementAndEvents();
     };
 
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === "zovik_announcement_updated_at") {
-        setDismissed(false);
-        fetchAnnouncement();
-      }
-    };
-
-    window.addEventListener("zovik_announcement_updated", handleAnnouncementUpdated);
-    window.addEventListener("storage", handleStorageChange);
-    window.addEventListener("focus", fetchAnnouncement);
+    window.addEventListener("zovik_announcement_updated", handleUpdated);
+    window.addEventListener("focus", fetchAnnouncementAndEvents);
 
     return () => {
-      window.removeEventListener("zovik_announcement_updated", handleAnnouncementUpdated);
-      window.removeEventListener("storage", handleStorageChange);
-      window.removeEventListener("focus", fetchAnnouncement);
+      window.removeEventListener("zovik_announcement_updated", handleUpdated);
+      window.removeEventListener("focus", fetchAnnouncementAndEvents);
     };
   }, []);
 
-  if (dismissed || !config || !config.enabled || !config.text || pathname?.startsWith("/admin")) {
+  const hasEvent = Boolean(liveEvent && liveEvent.status === "live");
+  const hasAnnouncement = Boolean(config && config.enabled && config.text);
+
+  if (dismissed || (!hasEvent && !hasAnnouncement) || pathname?.startsWith("/admin")) {
     return null;
   }
 
@@ -68,7 +73,26 @@ export function AnnouncementBar() {
   };
 
   const handleClick = () => {
-    if (config.actionType === "custom_link" && config.linkUrl) {
+    if (liveEvent) {
+      if (liveEvent.actionType === "open_premium") {
+        if (pathname === "/app") {
+          window.dispatchEvent(new CustomEvent("open-premium-modal"));
+        } else {
+          router.push("/app?openPremium=true");
+        }
+        return;
+      }
+      if (liveEvent.actionType === "open_character" && liveEvent.actionTarget) {
+        router.push(`/chat/${liveEvent.actionTarget}`);
+        return;
+      }
+      if (liveEvent.actionType === "open_link" && liveEvent.actionTarget) {
+        router.push(liveEvent.actionTarget);
+        return;
+      }
+    }
+
+    if (config?.actionType === "custom_link" && config.linkUrl) {
       router.push(config.linkUrl);
       return;
     }
@@ -81,6 +105,12 @@ export function AnnouncementBar() {
     }
   };
 
+  const badgeText = liveEvent?.badge || config?.badge;
+  const displayText = liveEvent
+    ? `${liveEvent.title}${liveEvent.subtitle ? ` — ${liveEvent.subtitle}` : ""}`
+    : config?.text;
+  const buttonText = liveEvent?.actionText || "Unlock Now";
+
   return (
     <div
       onClick={handleClick}
@@ -89,22 +119,22 @@ export function AnnouncementBar() {
       <div className="max-w-7xl mx-auto px-3 sm:px-6 py-2 sm:py-2.5 flex items-center justify-between gap-2 text-xs sm:text-sm font-semibold">
         {/* Left Badge & Marquee/Text */}
         <div className="flex items-center space-x-2.5 overflow-hidden flex-1">
-          {config.badge && (
+          {badgeText && (
             <span className="shrink-0 px-2 py-0.5 rounded-full bg-black/30 backdrop-blur-md border border-white/20 text-[10px] sm:text-xs font-black tracking-wider uppercase text-yellow-300 animate-pulse shadow-sm">
-              {config.badge}
+              {badgeText}
             </span>
           )}
 
           <div className="truncate flex items-center space-x-1.5 font-medium tracking-wide">
             <Sparkles className="size-3.5 text-yellow-300 shrink-0 hidden sm:inline-block" />
-            <span className="truncate">{config.text}</span>
+            <span className="truncate">{displayText}</span>
           </div>
         </div>
 
         {/* Right CTA & Dismiss */}
         <div className="flex items-center space-x-2 shrink-0">
           <span className="hidden md:inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-lg bg-white/20 group-hover:bg-white/30 text-white font-bold text-[11px] backdrop-blur-md transition-all">
-            <span>Unlock Now</span>
+            <span>{buttonText}</span>
             <ChevronRight className="size-3.5 group-hover:translate-x-0.5 transition-transform" />
           </span>
 

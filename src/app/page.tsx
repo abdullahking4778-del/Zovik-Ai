@@ -22,6 +22,8 @@ import {
 import rawCharacters from "@/data/characters.json";
 import { Character } from "@/types";
 import PwaInstallModal from "@/components/PwaInstallModal";
+import SmartBanner from "@/components/SmartBanner";
+import PromoModalPopup from "@/components/PromoModalPopup";
 import { useAuth } from "@/context/AuthContext";
 import { normalizeTags } from "@/lib/tagHelper";
 
@@ -184,6 +186,9 @@ export default function LandingPage() {
           }}
         />
       </div>
+
+      {/* Phase 3: Smart Live Banner with Countdown Ticker */}
+      <SmartBanner />
 
       {/* Modern Sticky Navigation Bar — App Favicon Squircle & Title */}
       <header className="sticky top-0 z-50 bg-[#07040a]/85 backdrop-blur-2xl border-b border-white/5 transition-all">
@@ -931,6 +936,9 @@ export default function LandingPage() {
       {isPwaModalOpen && (
         <PwaInstallModal isOpen={isPwaModalOpen} onClose={() => setIsPwaModalOpen(false)} />
       )}
+
+      {/* Phase 3: High Conversion Promo Modal Popup */}
+      <PromoModalPopup />
     </div>
   );
 }

@@ -44,9 +44,22 @@ export default function CharacterCard({
         <div className="absolute inset-x-0 bottom-0 h-3/5 bg-gradient-to-t from-[#08060a] via-[#08060a]/75 to-transparent" />
       </div>
 
-      {/* Top Left Badge (e.g. VIP, NEW, HOT, ANIME) */}
+      {/* Top Left Badge (e.g. VIP, NEW, HOT, ANIME, LIMITED) */}
       <div className="absolute top-2.5 left-2.5 z-20 flex items-center space-x-1">
-        {isVipChar ? (
+        {character.dropBadge === "HOT" || character.badge === "HOT" ? (
+          <div className="flex items-center space-x-1 px-2.5 py-1 rounded-full bg-gradient-to-r from-orange-500 via-red-500 to-pink-500 text-white text-[10px] md:text-[11px] font-black tracking-wider uppercase shadow-md shadow-red-600/30">
+            <span>🔥 HOT</span>
+          </div>
+        ) : character.dropBadge === "NEW" || character.badge === "NEW" ? (
+          <div className="flex items-center space-x-1 px-2.5 py-1 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 text-white text-[10px] md:text-[11px] font-black tracking-wider uppercase shadow-md shadow-emerald-600/30">
+            <Sparkles className="size-2.5" />
+            <span>NEW</span>
+          </div>
+        ) : character.dropBadge === "LIMITED" || character.badge === "LIMITED" ? (
+          <div className="flex items-center space-x-1 px-2.5 py-1 rounded-full bg-gradient-to-r from-purple-500 to-indigo-500 text-white text-[10px] md:text-[11px] font-black tracking-wider uppercase shadow-md shadow-purple-600/30">
+            <span>💎 LIMITED</span>
+          </div>
+        ) : isVipChar ? (
           <div className="flex items-center space-x-1 px-2.5 py-1 rounded-full bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 text-black text-[10px] md:text-[11px] font-black tracking-wider uppercase shadow-md shadow-yellow-500/30">
             <Crown className="size-3 fill-black text-black" />
             <span>VIP</span>

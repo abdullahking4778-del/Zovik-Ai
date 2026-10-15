@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { CreditCard, Cpu, Activity, Users, MessageSquare, Eye, Sparkles, Coins, Clock, Crown } from "lucide-react";
-import { UserAccount, PaymentRequest } from "@/types";
+import { CreditCard, Cpu, Activity, Users, MessageSquare, Eye, Sparkles, Coins, Clock, Crown, Calendar, Sliders, Zap } from "lucide-react";
+import { UserAccount, PaymentRequest, AppEvent, FeatureFlag } from "@/types";
 
 interface AdminOverviewTabProps {
   users: UserAccount[];
@@ -8,6 +8,8 @@ interface AdminOverviewTabProps {
   totalRevenuePKR: number;
   handleApprovePayment?: (paymentId: string) => void;
   getAuthHeaders?: () => Record<string, string>;
+  events?: AppEvent[];
+  featureFlags?: FeatureFlag[];
 }
 
 export function AdminOverviewTab({
@@ -15,6 +17,8 @@ export function AdminOverviewTab({
   payments,
   totalRevenuePKR,
   handleApprovePayment,
+  events = [],
+  featureFlags = [],
 }: AdminOverviewTabProps) {
   const approveAction = handleApprovePayment || (() => {});
   const pendingPayments = payments.filter((p) => p.status === "pending");
@@ -243,6 +247,47 @@ export function AdminOverviewTab({
           <span className="text-xs text-[#aeaeae] relative z-10">VIP & Plus Users</span>
           <div className="text-2xl sm:text-3xl font-black text-white mt-1 relative z-10">{vipSubscribersCount}</div>
           <span className="text-[10px] text-purple-400 font-bold relative z-10">Active Premium Members</span>
+        </div>
+      </div>
+
+      {/* PHASE 1: DYNAMIC EVENTS & FEATURE FLAGS STATUS BAR */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="p-4 rounded-2xl bg-[#140b1a] border border-pink-500/20 flex items-center justify-between shadow-sm">
+          <div className="flex items-center space-x-3">
+            <div className="size-10 rounded-xl bg-pink-500/20 text-pink-400 flex items-center justify-center">
+              <Calendar className="size-5" />
+            </div>
+            <div>
+              <div className="text-sm font-black text-white flex items-center space-x-2">
+                <span>Seasonal Events & Drops</span>
+                <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] font-black uppercase">
+                  {events.filter((e) => e.status === "live").length} Live Now
+                </span>
+              </div>
+              <p className="text-[11px] text-[#aeaeae]">
+                {events.length} configured promotions, weekly deals & limited drops
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="p-4 rounded-2xl bg-[#140b1a] border border-purple-500/20 flex items-center justify-between shadow-sm">
+          <div className="flex items-center space-x-3">
+            <div className="size-10 rounded-xl bg-purple-500/20 text-purple-400 flex items-center justify-center">
+              <Sliders className="size-5" />
+            </div>
+            <div>
+              <div className="text-sm font-black text-white flex items-center space-x-2">
+                <span>Runtime Feature Flags</span>
+                <span className="px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 text-[10px] font-black uppercase">
+                  {featureFlags.filter((f) => f.enabled).length} / {featureFlags.length} Enabled
+                </span>
+              </div>
+              <p className="text-[11px] text-[#aeaeae]">
+                Instant kill-switches, AI reasoning toggles & zero-downtime controls
+              </p>
+            </div>
+          </div>
         </div>
       </div>
 
