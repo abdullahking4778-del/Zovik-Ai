@@ -311,6 +311,7 @@ async function runPhase4Tests() {
   if (failed > 0) {
     process.exit(1);
   }
+  process.exit(0);
 }
 
 runPhase4Tests().catch((err) => {

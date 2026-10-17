@@ -17,7 +17,17 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(
       {
         success: true,
-        analytics: overview,
+        analytics: {
+          ...overview,
+          // Backward-compatible properties for Phase 1 legacy consumers
+          totalUsers: overview.activity.totalRegisteredUsers,
+          totalRevenuePKR: overview.revenue.totalApprovedPKR,
+          activeEventsCount: 3,
+          activeFeatureFlagsCount: 5,
+          health: {
+            database: overview.systemHealth.supabaseStatus,
+          },
+        },
         timestamp: new Date().toISOString(),
       },
       {

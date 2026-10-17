@@ -422,6 +422,7 @@ async function runTests() {
     process.exit(1);
   } else {
     console.log(bold(green("\nAll Phase 1 End-to-End Tests PASSED 100%! 🚀\n")));
+    process.exit(0);
   }
 }
 

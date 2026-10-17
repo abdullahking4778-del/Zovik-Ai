@@ -219,6 +219,7 @@ async function runPhase3Tests() {
   if (failed > 0) {
     process.exit(1);
   }
+  process.exit(0);
 }
 
 runPhase3Tests().catch((e) => {

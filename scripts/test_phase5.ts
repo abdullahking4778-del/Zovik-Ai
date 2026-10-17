@@ -227,6 +227,7 @@ async function runPhase5Tests() {
   if (failed > 0) {
     process.exit(1);
   }
+  process.exit(0);
 }
 
 runPhase5Tests().catch((err) => {
