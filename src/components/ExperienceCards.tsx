@@ -60,17 +60,17 @@ export default function ExperienceCards({
         </h3>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4 2xl:gap-6">
         {experiences.map((exp) => {
           const Icon = exp.icon;
           return (
             <div
               key={exp.id}
               onClick={exp.action}
-              className={`group relative flex flex-col justify-between h-44 md:h-48 p-4 md:p-5 rounded-2xl bg-gradient-to-br ${exp.bg} border border-white/10 hover:border-[#f53b70]/60 transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl hover:shadow-pink-950/40 cursor-pointer overflow-hidden select-none`}
+              className={`group relative flex flex-col justify-between h-36 sm:h-44 md:h-48 2xl:h-52 p-3.5 sm:p-4 md:p-5 2xl:p-6 rounded-xl sm:rounded-2xl bg-gradient-to-br ${exp.bg} border border-white/10 hover:border-[#f53b70]/60 transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl hover:shadow-pink-950/40 cursor-pointer overflow-hidden select-none`}
             >
               {/* Ultra-Realistic Background Art */}
-              <div className="absolute right-0 bottom-0 top-0 w-36 md:w-44 opacity-85 group-hover:opacity-100 transition-all duration-500 group-hover:scale-105 pointer-events-none">
+              <div className="absolute right-0 bottom-0 top-0 w-32 sm:w-36 md:w-44 opacity-85 group-hover:opacity-100 transition-all duration-500 group-hover:scale-105 pointer-events-none">
                 <Image
                   src={exp.image}
                   alt={exp.title}
@@ -86,20 +86,20 @@ export default function ExperienceCards({
 
               {/* Top Row: Icon & Badge */}
               <div className="relative z-10 flex items-center justify-between">
-                <div className="size-9 rounded-xl bg-white/10 backdrop-blur-md flex items-center justify-center text-white border border-white/15 group-hover:scale-110 group-hover:border-[#f53b70]/50 transition-all">
-                  <Icon className="size-4 text-[#f53b70]" />
+                <div className="size-8 sm:size-9 rounded-lg sm:rounded-xl bg-white/10 backdrop-blur-md flex items-center justify-center text-white border border-white/15 group-hover:scale-110 group-hover:border-[#f53b70]/50 transition-all">
+                  <Icon className="size-3.5 sm:size-4 text-[#f53b70]" />
                 </div>
-                <span className="px-2.5 py-0.5 rounded-full bg-[#f53b70] text-white text-[9px] font-black tracking-wider uppercase shadow-md shadow-pink-900/40">
+                <span className="px-2 sm:px-2.5 py-0.5 rounded-full bg-[#f53b70] text-white text-[8px] sm:text-[9px] font-black tracking-wider uppercase shadow-md shadow-pink-900/40">
                   {exp.badge}
                 </span>
               </div>
 
               {/* Bottom Content */}
-              <div className="relative z-10 mt-auto max-w-[65%]">
-                <h4 className="text-base md:text-lg font-black text-white group-hover:text-[#f53b70] transition-colors leading-tight drop-shadow-sm">
+              <div className="relative z-10 mt-auto max-w-[70%] sm:max-w-[65%]">
+                <h4 className="text-sm sm:text-base md:text-lg font-black text-white group-hover:text-[#f53b70] transition-colors leading-tight drop-shadow-sm">
                   {exp.title}
                 </h4>
-                <p className="text-[12px] text-[#cbb6bf] line-clamp-1 mt-1 font-medium">
+                <p className="text-[11px] sm:text-[12px] text-[#cbb6bf] line-clamp-1 mt-0.5 sm:mt-1 font-medium">
                   {exp.subtitle}
                 </p>
               </div>

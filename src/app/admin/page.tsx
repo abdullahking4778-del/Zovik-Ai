@@ -538,7 +538,7 @@ export default function AdminPage() {
       </header>
 
       {/* Main Body */}
-      <div className="flex-1 flex flex-col max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
+      <div className="flex-1 flex flex-col max-w-7xl 2xl:max-w-[1600px] w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
         {/* Folders & Categories Bar (Foldable & Clean) */}
         {(() => {
           const pendingCount = payments.filter((p) => p.status === "pending").length;

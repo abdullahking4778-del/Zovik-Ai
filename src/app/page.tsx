@@ -192,7 +192,7 @@ export default function LandingPage() {
 
       {/* Modern Sticky Navigation Bar — App Favicon Squircle & Title */}
       <header className="sticky top-0 z-50 bg-[#07040a]/85 backdrop-blur-2xl border-b border-white/5 transition-all">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+        <div className="max-w-7xl 2xl:max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           {/* Brand Logo - Favicon squircle + ZOVIK.AI + AI COMPANIONS */}
           <Link
             href="/"
@@ -297,7 +297,7 @@ export default function LandingPage() {
       {/* ========================================================= */}
       {/* HERO SECTION — 3D HOLOGRAPHIC PERSONA SHOWCASE */}
       {/* ========================================================= */}
-      <section className="relative min-h-[calc(100vh-4rem)] flex items-center py-12 lg:py-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto z-10">
+      <section className="relative min-h-[calc(100vh-4rem)] flex items-center py-12 lg:py-16 px-4 sm:px-6 lg:px-8 max-w-7xl 2xl:max-w-[1600px] mx-auto z-10">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8 items-center w-full">
           
           {/* LEFT COLUMN: HIGH-END EDITORIAL COPYWRITING */}
@@ -520,7 +520,7 @@ export default function LandingPage() {
       </section>
 
       {/* Active Labs Experiments Section */}
-      <section id="experiments" className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
+      <section id="experiments" className="relative z-10 max-w-7xl 2xl:max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 pt-8">
         <div className="flex items-center justify-between pb-6 border-b border-white/5">
           <div>
             <div className="inline-flex items-center space-x-1.5 text-xs font-mono text-[#f53b70] uppercase tracking-wider mb-1">
@@ -667,7 +667,7 @@ export default function LandingPage() {
       </section>
 
       {/* Featured Companions Spotlight Section */}
-      <section id="companions" className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
+      <section id="companions" className="relative z-10 max-w-7xl 2xl:max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-20">
         <div className="text-center max-w-2xl mx-auto mb-12">
           <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-pink-500/10 text-pink-400 text-xs font-bold uppercase mb-3 border border-pink-500/20">
             <Heart className="size-3" />
@@ -758,7 +758,7 @@ export default function LandingPage() {
       </section>
 
       {/* Community Love / Testimonials Section */}
-      <section id="reviews" className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 border-t border-white/5">
+      <section id="reviews" className="relative z-10 max-w-7xl 2xl:max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-16 border-t border-white/5">
         <div className="text-center max-w-xl mx-auto mb-12">
           <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-pink-500/10 text-pink-400 text-xs font-bold uppercase mb-2 border border-pink-500/20">
             <Heart className="size-3" />
@@ -881,7 +881,7 @@ export default function LandingPage() {
 
       {/* Minimalist Footer — App Favicon Squircle & Title */}
       <footer className="relative z-10 border-t border-white/5 py-10 bg-[#050608] text-center text-xs text-[#71717a]">
-        <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="max-w-7xl 2xl:max-w-[1600px] mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4">
           <Link
             href="/"
             onClick={(e) => {

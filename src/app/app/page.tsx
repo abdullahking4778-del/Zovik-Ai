@@ -585,7 +585,7 @@ export default function Home() {
       />
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 pb-20 lg:pb-8">
+      <div className="flex-1 flex flex-col min-w-0 pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] lg:pb-8">
         {/* Phase 3: Smart Live Banner with Countdown Ticker */}
         <SmartBanner />
 
@@ -609,7 +609,7 @@ export default function Home() {
         )}
 
         {/* Content Body Based on Active Tab */}
-        <main className="px-3.5 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full">
+        <main className="px-3.5 sm:px-6 lg:px-8 max-w-7xl 2xl:max-w-[1600px] mx-auto w-full">
           {/* ================= VIEW: HOME ================= */}
           {activeTab === "home" && (
             <>
@@ -736,7 +736,7 @@ export default function Home() {
                 /* Display Mode 2: Grid View */
                 <div>
                   {filteredCharacters.length > 0 ? (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-3.5 sm:gap-5 md:gap-6">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-5 gap-3.5 sm:gap-5 md:gap-6">
                       {filteredCharacters.map((character) => (
                         <CharacterCard
                           key={character.id}
@@ -787,7 +787,7 @@ export default function Home() {
                 characterCount={filteredCharacters.length}
               />
 
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-3.5 sm:gap-5 md:gap-6 mt-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-5 gap-3.5 sm:gap-5 md:gap-6 mt-4">
                 {filteredCharacters.map((character) => (
                   <CharacterCard
                     key={character.id}
@@ -935,7 +935,7 @@ export default function Home() {
               </div>
 
               {myAiChars.length > 0 ? (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-5 gap-3.5 sm:gap-5 md:gap-6">
                   {myAiChars.map((character) => (
                     <div key={character.id} className="relative group">
                       <CharacterCard
@@ -993,7 +993,7 @@ export default function Home() {
               <p className="text-xs text-[#aeaeae] mb-6">Your favorite saved AI companions.</p>
 
               {collectionChars.length > 0 ? (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-5 gap-3.5 sm:gap-5 md:gap-6">
                   {collectionChars.map((character) => (
                     <CharacterCard
                       key={character.id}
@@ -1062,7 +1062,7 @@ export default function Home() {
                   </button>
                 </div>
               ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-5 gap-3.5 sm:gap-5 md:gap-6">
                   {generatedPhotos.map((photo, i) => (
                     <div
                       key={photo.id || i}

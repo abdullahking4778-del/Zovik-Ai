@@ -65,70 +65,73 @@ export default function Header({
   const t = getT(currentLang);
 
   return (
-    <header className="sticky top-0 z-30 flex flex-col px-4 lg:px-8 py-3 bg-[#0d0a0f]/95 backdrop-blur-xl border-b border-white/5 transition-all">
-      <div className="flex items-center justify-between">
+    <header className="sticky top-0 z-30 flex flex-col px-2.5 sm:px-4 lg:px-8 py-2.5 sm:py-3 bg-[#0d0a0f]/95 backdrop-blur-xl border-b border-white/5 transition-all max-w-full overflow-hidden">
+      <div className="flex items-center justify-between gap-1.5 sm:gap-3 w-full">
         {/* Mobile Brand Title — links back to Landing Page */}
-        <Link href="/" className="flex lg:hidden items-center space-x-2 group" title="Back to Zovik AI Home">
-          <div className="w-8 h-8 min-w-[32px] min-h-[32px] max-w-[32px] max-h-[32px] rounded-lg overflow-hidden relative shadow-md shadow-pink-500/20 group-hover:scale-105 transition-transform flex-shrink-0 flex items-center justify-center bg-[#07040a]">
-            <Image src="/favicon.svg" alt="Zovik AI" width={32} height={32} className="w-full h-full object-contain" priority />
+        <Link href="/" className="flex lg:hidden items-center space-x-1.5 sm:space-x-2 group shrink-0" title="Back to Zovik AI Home">
+          <div className="w-7 h-7 sm:w-8 sm:h-8 min-w-[28px] min-h-[28px] max-w-[32px] max-h-[32px] rounded-lg overflow-hidden relative shadow-md shadow-pink-500/20 group-hover:scale-105 transition-transform flex-shrink-0 flex items-center justify-center bg-[#07040a]">
+            <Image src="/favicon.svg" alt="Zovik AI" width={28} height={28} className="w-full h-full object-contain" priority />
           </div>
-          <span className="text-lg font-black text-white tracking-wide">
+          <span className="hidden min-[420px]:inline text-base sm:text-lg font-black text-white tracking-wide">
             ZOVIK<span className="text-[#f53b70]">.AI</span>
           </span>
         </Link>
 
         {/* Center Style Switcher: Girls, Boys, Anime */}
-        <div className="flex items-center p-1 rounded-2xl bg-[#17101e] border border-white/10 shadow-inner">
+        <div className="flex items-center p-0.5 sm:p-1 rounded-xl sm:rounded-2xl bg-[#17101e] border border-white/10 shadow-inner shrink-0">
           <button
             onClick={() => setGenderFilter("female")}
-            className={`flex items-center space-x-1.5 px-3 md:px-3.5 py-1.5 rounded-xl text-xs md:text-sm font-extrabold transition-all ${
+            className={`flex items-center space-x-1 px-2.5 sm:px-3.5 py-1.5 rounded-lg sm:rounded-xl text-xs sm:text-sm font-extrabold min-h-[34px] min-w-[34px] justify-center transition-all ${
               genderFilter === "female"
                 ? "bg-[#f53b70] text-white shadow-md shadow-pink-600/30"
                 : "text-[#cbb6bf] hover:text-white"
             }`}
+            title={t.girls}
           >
             <span>👩</span>
-            <span className="hidden sm:inline">{t.girls}</span>
+            <span className="hidden md:inline">{t.girls}</span>
           </button>
 
           <button
             onClick={() => setGenderFilter("male")}
-            className={`flex items-center space-x-1.5 px-3 md:px-3.5 py-1.5 rounded-xl text-xs md:text-sm font-extrabold transition-all ${
+            className={`flex items-center space-x-1 px-2.5 sm:px-3.5 py-1.5 rounded-lg sm:rounded-xl text-xs sm:text-sm font-extrabold min-h-[34px] min-w-[34px] justify-center transition-all ${
               genderFilter === "male"
                 ? "bg-[#f53b70] text-white shadow-md shadow-pink-600/30"
                 : "text-[#cbb6bf] hover:text-white"
             }`}
+            title={t.boys}
           >
             <span>👨</span>
-            <span className="hidden sm:inline">{t.boys}</span>
+            <span className="hidden md:inline">{t.boys}</span>
           </button>
 
           <button
             onClick={() => setGenderFilter("anime")}
-            className={`flex items-center space-x-1.5 px-3 md:px-3.5 py-1.5 rounded-xl text-xs md:text-sm font-extrabold transition-all ${
+            className={`flex items-center space-x-1 px-2.5 sm:px-3.5 py-1.5 rounded-lg sm:rounded-xl text-xs sm:text-sm font-extrabold min-h-[34px] min-w-[34px] justify-center transition-all ${
               genderFilter === "anime"
                 ? "bg-[#f53b70] text-white shadow-md shadow-pink-600/30"
                 : "text-[#cbb6bf] hover:text-white"
             }`}
+            title={t.anime}
           >
             <span>🌸</span>
-            <span className="hidden sm:inline">{t.anime}</span>
+            <span className="hidden md:inline">{t.anime}</span>
           </button>
         </div>
 
         {/* Right Action Icons & Search */}
-        <div className="flex items-center space-x-2 sm:space-x-3">
-          {/* Mobile Search Toggle Icon */}
+        <div className="flex items-center space-x-1 sm:space-x-2 shrink-0">
+          {/* Mobile & Tablet Search Toggle Icon */}
           <button
             onClick={() => setIsMobileSearchOpen(!isMobileSearchOpen)}
-            className="flex md:hidden size-8 rounded-xl bg-white/5 border border-white/10 items-center justify-center text-[#aeaeae] hover:text-white transition-colors"
+            className="flex lg:hidden size-8 sm:size-9 rounded-lg sm:rounded-xl bg-white/5 border border-white/10 items-center justify-center text-[#aeaeae] hover:text-white transition-colors"
             title="Search"
           >
             <Search className="size-4" />
           </button>
 
-          {/* Desktop Search Input Box */}
-          <div className="relative hidden md:flex items-center w-40 lg:w-56">
+          {/* Desktop Search Input Box — only on lg+ (1024px+) to prevent tablet 768px overflow */}
+          <div className="relative hidden lg:flex items-center w-40 xl:w-56">
             <Search className="absolute left-3 size-4 text-[#aeaeae] pointer-events-none" />
             <input
               type="text"
@@ -147,16 +150,16 @@ export default function Header({
             )}
           </div>
 
-          {/* Option 4: Language Switcher Dropdown */}
+          {/* Language Switcher Dropdown */}
           <div className="relative">
             <button
               onClick={() => setIsLangMenuOpen(!isLangMenuOpen)}
-              className="flex items-center space-x-1 px-2.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-bold text-white transition-all active:scale-95"
+              className="flex items-center space-x-1 px-2 sm:px-2.5 py-1.5 rounded-lg sm:rounded-xl min-h-[34px] bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-bold text-white transition-all active:scale-95"
               title="Change Language / زبان تبدیل کریں"
             >
               <Globe className="size-3.5 text-[#f53b70]" />
-              <span className="uppercase text-[11px]">
-                {currentLang === "ru" ? "Roman" : currentLang === "ur" ? "اردو" : "EN"}
+              <span className="uppercase text-[10px] sm:text-[11px]">
+                {currentLang === "ru" ? "RU" : currentLang === "ur" ? "اردو" : "EN"}
               </span>
             </button>
 
@@ -193,13 +196,13 @@ export default function Header({
             )}
           </div>
 
-          {/* Option 3: Real-Time In-App Notification Bell & Inbox (Phase 3) */}
+          {/* Real-Time In-App Notification Bell & Inbox (Phase 3) */}
           <NotificationBell />
 
-          {/* Get App PWA Button */}
+          {/* Get App PWA Button — hidden on small/medium mobile */}
           <button
             onClick={openPwaModal}
-            className="hidden sm:flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-xs font-semibold text-white transition-all active:scale-95"
+            className="hidden md:flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-xs font-semibold text-white transition-all active:scale-95"
             title="Install Zovik AI as App"
           >
             <Smartphone className="size-3.5 text-[#f53b70]" />
@@ -208,27 +211,27 @@ export default function Header({
 
           {/* User Auth: Login or Profile */}
           {(currentUser || isLocallyLoggedIn) ? (
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-1 sm:space-x-2">
               {/* Real-Time Live Coins Badge */}
               <button
                 onClick={openPremiumModal}
-                className="flex items-center space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500/20 via-yellow-500/15 to-amber-500/10 hover:from-amber-500/30 hover:to-amber-500/20 border border-amber-500/40 hover:border-amber-400 text-amber-300 text-xs font-black transition-all active:scale-95 shadow-sm shadow-amber-500/10 group"
+                className="flex items-center space-x-1 sm:space-x-1.5 px-1.5 sm:px-2.5 py-1 sm:py-1.5 rounded-lg sm:rounded-xl bg-gradient-to-r from-amber-500/20 via-yellow-500/15 to-amber-500/10 hover:from-amber-500/30 hover:to-amber-500/20 border border-amber-500/40 hover:border-amber-400 text-amber-300 text-xs font-black transition-all active:scale-95 shadow-sm shadow-amber-500/10 group"
                 title="Coin Store • 1 PKR = 1 Coin (Click to Recharge)"
               >
-                <Coins className="size-3.5 text-amber-400 group-hover:rotate-12 transition-transform" />
-                <span>{walletBalance.toLocaleString()}</span>
+                <Coins className="size-3 sm:size-3.5 text-amber-400 group-hover:rotate-12 transition-transform" />
+                <span className="text-[11px] sm:text-xs">{walletBalance.toLocaleString()}</span>
                 <span className="hidden sm:inline text-[10px] text-amber-400/80 font-normal">Coins</span>
-                <span className="size-3.5 sm:size-4 rounded-full bg-amber-400 text-black text-[10px] sm:text-[11px] font-black flex items-center justify-center ml-0.5 shadow-sm">
+                <span className="size-3 sm:size-3.5 rounded-full bg-amber-400 text-black text-[9px] sm:text-[10px] font-black flex items-center justify-center shadow-sm">
                   +
                 </span>
               </button>
 
               <button
                 onClick={openProfileModal}
-                className="flex items-center space-x-2 px-2.5 py-1.5 rounded-xl bg-[#1d1425] hover:bg-[#251930] border border-white/10 text-xs font-semibold text-white max-w-[170px] truncate transition-colors active:scale-95 shadow-sm group"
+                className="flex items-center space-x-1 sm:space-x-1.5 px-1.5 sm:px-2.5 py-1 sm:py-1.5 rounded-lg sm:rounded-xl bg-[#1d1425] hover:bg-[#251930] border border-white/10 text-xs font-semibold text-white max-w-[140px] truncate transition-colors active:scale-95 shadow-sm group"
                 title="View Account Profile"
               >
-                <div className="relative size-6 rounded-lg overflow-hidden bg-gradient-to-tr from-[#f53b70] to-[#8b5cf6] flex items-center justify-center shrink-0 border border-white/10">
+                <div className="relative size-5 sm:size-6 rounded-lg overflow-hidden bg-gradient-to-tr from-[#f53b70] to-[#8b5cf6] flex items-center justify-center shrink-0 border border-white/10">
                   {userData?.photoURL || currentUser?.photoURL ? (
                     <Image
                       src={userData?.photoURL || currentUser?.photoURL!}
@@ -238,31 +241,31 @@ export default function Header({
                       unoptimized
                     />
                   ) : (
-                    <User className="size-3.5 text-white" />
+                    <User className="size-3 sm:size-3.5 text-white" />
                   )}
                 </div>
-                <span className="truncate text-xs font-bold text-white">
+                <span className="hidden md:inline truncate text-xs font-bold text-white">
                   {userData?.name || currentUser?.displayName || (currentUser?.email ? currentUser.email.split("@")[0] : "User")}
                 </span>
               </button>
               <button
                 onClick={onLogout}
                 title="Log Out"
-                className="size-8 rounded-xl bg-white/5 hover:bg-red-500/20 hover:text-red-400 border border-white/10 flex items-center justify-center text-[#aeaeae] transition-colors"
+                className="size-7 sm:size-8 rounded-lg sm:rounded-xl bg-white/5 hover:bg-red-500/20 hover:text-red-400 border border-white/10 flex items-center justify-center text-[#aeaeae] transition-colors"
               >
-                <LogOut className="size-3.5" />
+                <LogOut className="size-3 sm:size-3.5" />
               </button>
             </div>
           ) : loading ? (
-            <div className="flex items-center justify-center px-3 py-1.5 h-8">
-              <div className="size-4 border-2 border-white/20 border-t-[#f53b70] rounded-full animate-spin"></div>
+            <div className="flex items-center justify-center px-2 py-1 h-7 sm:h-8">
+              <div className="size-3.5 sm:size-4 border-2 border-white/20 border-t-[#f53b70] rounded-full animate-spin"></div>
             </div>
           ) : (
             <button
               onClick={openLoginModal}
-              className="flex items-center space-x-1.5 px-3.5 sm:px-4 py-2 rounded-xl bg-gradient-to-r from-[#f53b70] to-[#ff457c] text-white text-xs md:text-sm font-bold hover:brightness-110 shadow-md shadow-pink-600/20 active:scale-95 transition-all"
+              className="flex items-center space-x-1 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl bg-gradient-to-r from-[#f53b70] to-[#ff457c] text-white text-xs sm:text-sm font-bold hover:brightness-110 shadow-md shadow-pink-600/20 active:scale-95 transition-all"
             >
-              <LogIn className="size-4" />
+              <LogIn className="size-3.5 sm:size-4" />
               <span>{t.login}</span>
             </button>
           )}

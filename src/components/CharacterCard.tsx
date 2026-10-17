@@ -75,7 +75,7 @@ export default function CharacterCard({
       {/* Top Right Badges: In Series / Like button */}
       <div className="absolute top-2.5 right-2.5 z-20 flex flex-col items-end space-y-1.5">
         {character.series && (
-          <div className="size-7 rounded-full bg-black/60 backdrop-blur-md border border-white/10 flex items-center justify-center text-white shadow-sm" title="In Series / Shorts">
+          <div className="size-7 sm:size-8 rounded-full bg-black/60 backdrop-blur-md border border-white/10 flex items-center justify-center text-white shadow-sm" title="In Series / Shorts">
             <Film className="size-3.5 text-[#f53b70]" />
           </div>
         )}
@@ -87,7 +87,7 @@ export default function CharacterCard({
             }
           }}
           title={isLiked ? "Remove from Collection" : "Save to Collection"}
-          className={`size-7 rounded-full bg-black/60 backdrop-blur-md border border-white/10 flex items-center justify-center transition-all hover:scale-110 active:scale-95 ${
+          className={`size-7 sm:size-8 rounded-full bg-black/60 backdrop-blur-md border border-white/10 flex items-center justify-center transition-all hover:scale-110 active:scale-95 ${
             isLiked ? "text-[#f53b70] border-[#f53b70]/40" : "text-white/70 hover:text-white"
           }`}
         >
@@ -96,41 +96,41 @@ export default function CharacterCard({
       </div>
 
       {/* Bottom Content Area */}
-      <div className="relative z-20 mt-auto p-3.5 md:p-4 flex flex-col justify-end" onClick={() => onSelect(character)}>
+      <div className="relative z-20 mt-auto p-2.5 sm:p-3.5 md:p-4 flex flex-col justify-end" onClick={() => onSelect(character)}>
         {/* Name, Age, Status */}
-        <div className="flex items-center justify-between mb-1">
-          <div className="flex items-center space-x-1.5 min-w-0">
-            <h3 className="text-base md:text-lg font-black text-white truncate group-hover:text-[#f53b70] transition-colors">
+        <div className="flex items-center justify-between mb-1 gap-1">
+          <div className="flex items-center space-x-1 sm:space-x-1.5 min-w-0">
+            <h3 className="text-sm sm:text-base md:text-lg font-black text-white truncate group-hover:text-[#f53b70] transition-colors">
               {character.name}
             </h3>
             {character.verified && (
-              <CheckCircle2 className="size-4 text-[#8b5cf6] shrink-0" />
+              <CheckCircle2 className="size-3.5 sm:size-4 text-[#8b5cf6] shrink-0" />
             )}
-            <span className="text-xs md:text-sm font-bold text-[#cbb6bf] shrink-0">
+            <span className="text-[11px] sm:text-xs md:text-sm font-bold text-[#cbb6bf] shrink-0">
               {character.age}
             </span>
           </div>
 
           {/* Online status indicator */}
-          <div className="flex items-center space-x-1 shrink-0 bg-black/40 px-2 py-0.5 rounded-full border border-white/5">
+          <div className="flex items-center space-x-1 shrink-0 bg-black/50 px-1.5 sm:px-2 py-0.5 rounded-full border border-white/10">
             <span className="size-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-[10px] text-emerald-300 font-semibold">Online</span>
+            <span className="hidden min-[420px]:inline text-[10px] text-emerald-300 font-semibold">Online</span>
           </div>
         </div>
 
         {/* 2-Line Hook / Description */}
-        <p className="text-[11px] md:text-xs text-[#aeaeae] line-clamp-2 leading-relaxed mb-3">
+        <p className="text-[10px] sm:text-[11px] md:text-xs text-[#aeaeae] line-clamp-2 leading-relaxed mb-2 sm:mb-3">
           {character.desc}
         </p>
 
         {/* Quick Action Button */}
-        <div className="pt-1">
+        <div className="pt-0.5 sm:pt-1">
           <button
             onClick={(e) => {
               e.stopPropagation();
               onStartChat(character);
             }}
-            className="w-full flex items-center justify-center space-x-2 py-2.5 rounded-xl text-xs font-bold transition-all shadow-md active:scale-95 bg-gradient-to-r from-[#f53b70] to-[#ff457c] text-white shadow-pink-600/25 hover:brightness-110"
+            className="w-full flex items-center justify-center space-x-1.5 sm:space-x-2 py-2 sm:py-2.5 rounded-xl text-xs font-bold transition-all shadow-md active:scale-95 bg-gradient-to-r from-[#f53b70] to-[#ff457c] text-white shadow-pink-600/25 hover:brightness-110 min-h-[38px]"
           >
             <MessageCircle className="size-3.5" />
             <span>Chat</span>

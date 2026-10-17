@@ -621,7 +621,7 @@ export default function ChatModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-0 md:p-4 bg-black/85 backdrop-blur-md">
-      <div className="relative flex flex-col w-full h-full md:max-w-3xl md:h-[90vh] bg-[#0d0a0f] md:rounded-3xl border border-white/10 shadow-2xl overflow-hidden">
+      <div className="relative flex flex-col w-full h-[100dvh] md:max-w-3xl md:h-[90vh] bg-[#0d0a0f] md:rounded-3xl border border-white/10 shadow-2xl overflow-hidden">
         {/* Chat Header */}
         <div className="flex items-center justify-between px-4 py-3 bg-[#130d17] border-b border-white/10 shrink-0">
           <div className="flex items-center space-x-3">
@@ -908,7 +908,7 @@ export default function ChatModal({
         ) : null}
 
         {/* Input Bar */}
-        <div className="p-3 md:p-4 bg-[#130d17] border-t border-white/10 shrink-0">
+        <div className="p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] md:p-4 md:pb-4 bg-[#130d17] border-t border-white/10 shrink-0">
           <form
             onSubmit={(e) => {
               e.preventDefault();

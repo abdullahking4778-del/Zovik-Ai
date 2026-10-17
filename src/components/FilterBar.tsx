@@ -24,9 +24,9 @@ export default function FilterBar({
   ];
 
   return (
-    <div className="flex items-center justify-between py-3 border-b border-white/5 mb-6 overflow-x-auto no-scrollbar">
+    <div className="flex items-center justify-between py-2.5 sm:py-3 border-b border-white/5 mb-4 sm:mb-6 overflow-x-auto no-scrollbar touch-pan-x">
       {/* Category Pills */}
-      <div className="flex items-center space-x-2 shrink-0">
+      <div className="flex items-center space-x-1.5 sm:space-x-2 shrink-0">
         {categories.map((cat) => {
           const Icon = cat.icon;
           const isSelected = selectedCategory === cat.id;
@@ -34,7 +34,7 @@ export default function FilterBar({
             <button
               key={cat.id}
               onClick={() => setSelectedCategory(cat.id)}
-              className={`flex items-center space-x-1.5 px-4 py-2 rounded-2xl text-xs md:text-sm font-bold transition-all ${
+              className={`flex items-center space-x-1.5 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl sm:rounded-2xl text-xs md:text-sm font-bold transition-all shrink-0 active:scale-95 ${
                 isSelected
                   ? "bg-white text-black shadow-md shadow-white/10"
                   : "bg-[#17101e] text-[#aeaeae] hover:text-white hover:bg-white/5 border border-white/5"
@@ -47,8 +47,8 @@ export default function FilterBar({
         })}
       </div>
 
-      {/* Model Count Badge */}
-      <div className="flex items-center text-xs font-semibold text-[#aeaeae] pl-3 shrink-0">
+      {/* Model Count Badge — visible on sm+ screens */}
+      <div className="hidden sm:flex items-center text-xs font-semibold text-[#aeaeae] pl-3 shrink-0">
         <span>Showing <strong className="text-white">{characterCount}</strong> companions</span>
       </div>
     </div>

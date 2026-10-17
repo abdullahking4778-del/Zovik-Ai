@@ -279,7 +279,7 @@ export default function ShortsModal({
       </button>
 
       {/* Main Vertical Reel Phone Player Container */}
-      <div className="relative flex flex-col w-full h-full md:max-w-md md:h-[92vh] bg-black md:rounded-3xl border border-white/10 shadow-2xl overflow-hidden">
+      <div className="relative flex flex-col w-full h-[100dvh] md:max-w-md md:h-[92vh] bg-black md:rounded-3xl border border-white/10 shadow-2xl overflow-hidden">
         {/* Buttery-Smooth Vertical Slide Track (TikTok / Instagram Reels style) */}
         <div className="relative size-full overflow-hidden">
           {reels.map((reel, idx) => {
@@ -410,7 +410,7 @@ export default function ShortsModal({
         </div>
 
         {/* Bottom Official Brand Identity & Caption */}
-        <div className="absolute inset-x-0 bottom-0 z-30 p-5 bg-gradient-to-t from-black via-black/70 to-transparent flex flex-col space-y-2 pointer-events-none">
+        <div className="absolute inset-x-0 bottom-0 z-30 p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))] md:pb-5 bg-gradient-to-t from-black via-black/70 to-transparent flex flex-col space-y-2 pointer-events-none">
           <div className="flex items-center space-x-3 pointer-events-auto">
             <div className="relative w-12 h-12 min-w-[48px] min-h-[48px] max-w-[48px] max-h-[48px] rounded-2xl overflow-hidden border-2 border-[#f53b70] shadow-lg shadow-pink-600/40 shrink-0 bg-[#12081a] flex items-center justify-center p-1">
               <Image
