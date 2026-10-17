@@ -447,8 +447,104 @@ export interface ABExperimentConfig {
   updatedAt: string;
 }
 
+// ============================================================================
+// PHASE 5: OPERATIONS, SECURITY, MULTI-ADMIN RBAC & AUDIT LOGS
+// ============================================================================
 
+export type AdminRole = "super_admin" | "support_admin" | "marketing_admin";
 
+export type AdminPermission =
+  | "manage_settings"
+  | "manage_admins"
+  | "manage_payments"
+  | "manage_characters"
+  | "manage_events"
+  | "manage_offers"
+  | "manage_banners"
+  | "view_analytics"
+  | "export_data"
+  | "manage_fraud";
 
+export interface AdminUser {
+  id: string;
+  email: string;
+  name: string;
+  role: AdminRole;
+  status: "active" | "suspended";
+  avatar?: string;
+  createdAt: string;
+  lastLoginAt?: string;
+  invitedBy?: string;
+}
 
+export type AuditLogAction =
+  | "PAYMENT_APPROVED"
+  | "PAYMENT_REJECTED"
+  | "PLAN_UPDATED"
+  | "OFFER_CREATED"
+  | "OFFER_UPDATED"
+  | "OFFER_DELETED"
+  | "EVENT_CREATED"
+  | "EVENT_UPDATED"
+  | "BANNER_UPDATED"
+  | "NOTIFICATION_BROADCAST"
+  | "PASSWORD_CHANGED"
+  | "USER_SUSPENDED"
+  | "USER_COIN_GRANT"
+  | "ADMIN_INVITED"
+  | "ADMIN_ROLE_UPDATED"
+  | "ADMIN_REMOVED"
+  | "FRAUD_ACTION"
+  | "BACKUP_EXPORTED";
+
+export type AuditLogSeverity = "info" | "warning" | "critical";
+
+export interface AuditLog {
+  id: string;
+  timestamp: string; // ISO
+  actorEmail: string;
+  actorRole: AdminRole;
+  action: AuditLogAction;
+  resourceType: string;
+  resourceId?: string;
+  details: string;
+  ipAddress?: string;
+  severity: AuditLogSeverity;
+}
+
+export type FraudAlertCategory =
+  | "multi_account"
+  | "rapid_chat_spam"
+  | "trx_duplicate"
+  | "promo_abuse"
+  | "abnormal_coin_velocity";
+
+export type FraudAlertSeverity = "low" | "medium" | "high" | "critical";
+
+export interface FraudAlert {
+  id: string;
+  category: FraudAlertCategory;
+  severity: FraudAlertSeverity;
+  riskScore: number; // 0 - 100
+  identifier: string; // email, ip, or trxId
+  description: string;
+  status: "open" | "investigating" | "resolved" | "dismissed";
+  occurrences: number;
+  firstDetectedAt: string;
+  lastDetectedAt: string;
+  recommendedAction: string;
+}
+
+export interface BackupSnapshotMetadata {
+  timestamp: string;
+  version: string;
+  counts: {
+    users: number;
+    payments: number;
+    characters: number;
+    events: number;
+    offers: number;
+    auditLogs: number;
+  };
+}
 

@@ -44,6 +44,7 @@ import { AdminOffersTab } from "@/components/admin/AdminOffersTab";
 import { AdminEngagementTab } from "@/components/admin/AdminEngagementTab";
 import AdminAnalyticsTab from "@/components/admin/AdminAnalyticsTab";
 import AdminCalendarTab from "@/components/admin/AdminCalendarTab";
+import AdminGovernanceTab from "@/components/admin/AdminGovernanceTab";
 
 export default function AdminPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -68,6 +69,7 @@ export default function AdminPage() {
     | "engagement"
     | "intelligence"
     | "calendar"
+    | "governance"
   >("overview");
   const [activeFolder, setActiveFolder] = useState<"all" | "finance" | "content" | "platform">("all");
 
@@ -557,6 +559,7 @@ export default function AdminPage() {
             { id: "engagement", label: "Engagement & Alerts 🔔", icon: Bell, folder: "content" },
             { id: "flags", label: "Feature Flags 🛡️", icon: Sliders, folder: "platform" },
             { id: "users", label: `Users (${users.length})`, icon: Users, folder: "platform" },
+            { id: "governance", label: "Security & Governance 🛡️", icon: ShieldCheck, folder: "platform" },
             { id: "settings", label: "Settings & Accounts ⚙️", icon: Cpu, folder: "platform" },
           ];
           const filteredTabs = activeFolder === "all" ? allTabs : allTabs.filter((t) => t.folder === activeFolder);
@@ -796,6 +799,11 @@ export default function AdminPage() {
         {/* TAB 13: VISUAL CONTENT CALENDAR (Phase 4) */}
         {activeTab === "calendar" && (
           <AdminCalendarTab onNavigateToTab={(tabId) => setActiveTab(tabId as any)} />
+        )}
+
+        {/* TAB 14: OPERATIONS, SECURITY & GOVERNANCE (Phase 5) */}
+        {activeTab === "governance" && (
+          <AdminGovernanceTab getAuthHeaders={getAuthHeaders} />
         )}
       </div>
     </div>
